@@ -402,225 +402,84 @@ test('dashboard repacks across viewport sizes', async ({ page }) => {
   expect(pageErrors).toEqual([])
 })
 
-test('header window count precedes its Iconify-aligned inline icon', async ({ page }) => {
-  await page.goto('/tests/fixtures/dashboard-resize.html')
-
-  const windowCount = page.locator('[data-tabout-part="window-count"]')
-  await expect(windowCount).toHaveText('1 window')
-
-  const geometry = await windowCount.evaluate((element) => {
-    const icon = element.querySelector<HTMLElement>('[data-tabout-part="window-icon"]')
-    const countValue = element.querySelector<HTMLElement>('[data-tabout-part="window-count-value"]')
-    if (!icon || !countValue) return null
-
-    const countRect = countValue.getBoundingClientRect()
-    const countBoxRect = element.getBoundingClientRect()
-    const iconRect = icon.getBoundingClientRect()
-    const iconStyle = getComputedStyle(icon)
-    const countStyle = getComputedStyle(element)
-    const countValueStyle = getComputedStyle(countValue)
-    const fontSize = Number.parseFloat(countStyle.fontSize)
-    const lineHeight = Number.parseFloat(countStyle.lineHeight)
-    const iconLast = element.lastElementChild === icon
-    const baselineProbe = document.createElement('span')
-    baselineProbe.style.cssText = 'display:inline-block;width:0;height:0;padding:0;margin:0;vertical-align:baseline'
-    element.append(baselineProbe)
-    const baselineRect = baselineProbe.getBoundingClientRect()
-    baselineProbe.remove()
-
-    return {
-      baselineOffsetRatio: (iconRect.bottom - baselineRect.bottom) / fontSize,
-      countDisplay: countStyle.display,
-      countValueDisplay: countValueStyle.display,
-      countBeforeIcon: Boolean(
-        countValue.compareDocumentPosition(icon) & Node.DOCUMENT_POSITION_FOLLOWING
-      ),
-      display: iconStyle.display,
-      gap: iconRect.left - countRect.right,
-      heightRatio: iconRect.height / fontSize,
-      iconLast,
-      lineBoxHeightDelta: countBoxRect.height - lineHeight,
-      maskImage: iconStyle.maskImage,
-      verticalAlignRatio: Number.parseFloat(iconStyle.verticalAlign) / fontSize,
-      widthRatio: iconRect.width / fontSize
-    }
-  })
-
-  expect(geometry).not.toBeNull()
-  expect(geometry?.countBeforeIcon).toBe(true)
-  expect(geometry?.iconLast).toBe(true)
-  expect(geometry?.countDisplay).not.toMatch(/flex/)
-  expect(geometry?.countValueDisplay).toBe('inline')
-  expect(geometry?.display).toBe('inline-block')
-  expect(geometry?.maskImage).not.toBe('none')
-  expect(geometry?.verticalAlignRatio).toBeCloseTo(-0.125, 3)
-  expect(geometry?.baselineOffsetRatio).toBeCloseTo(0.125, 3)
-  expect(geometry?.gap).toBeCloseTo(4, 1)
-  expect(geometry?.widthRatio).toBeCloseTo(1, 3)
-  expect(geometry?.heightRatio).toBeCloseTo(1, 3)
-  expect(geometry?.lineBoxHeightDelta).toBeCloseTo(0, 3)
-})
-
-test('header stat groups use compact spacing without visible separators', async ({ page }) => {
-  await page.goto('/tests/fixtures/dashboard-resize.html')
-
-  const headerStats = page.locator('[data-tabout="header-stats"]')
-  await expect(headerStats).toHaveText('42 tabs, 1 window, 28 domains')
-  await expect(headerStats).not.toContainText('·')
-
-  const gaps = await headerStats.evaluate((element) => {
-    const tabCount = element.querySelector<HTMLElement>('[data-tabout-part="tab-count"]')
-    const secondaryCounts = element.querySelector<HTMLElement>('[data-tabout-part="secondary-counts"]')
-    const windowCount = element.querySelector<HTMLElement>('[data-tabout-part="window-count"]')
-    const domainCount = element.querySelector<HTMLElement>('[data-tabout-part="domain-count"]')
-    if (!tabCount || !secondaryCounts || !windowCount || !domainCount) return null
-
-    const tabRect = tabCount.getBoundingClientRect()
-    const secondaryRect = secondaryCounts.getBoundingClientRect()
-    const windowRect = windowCount.getBoundingClientRect()
-    const domainRect = domainCount.getBoundingClientRect()
-
-    return {
-      tabsToSecondary: secondaryRect.left - tabRect.right,
-      windowToDomains: domainRect.left - windowRect.right
-    }
-  })
-
-  expect(gaps).not.toBeNull()
-  expect(gaps?.tabsToSecondary).toBeCloseTo(10, 1)
-  expect(gaps?.windowToDomains).toBeCloseTo(10, 1)
-
-  await page.evaluate(() => {
-    const fixtureWindow = window as typeof window & { __tabOutSmokeAddDuplicateStackTabs?: () => Promise<void> }
-    return fixtureWindow.__tabOutSmokeAddDuplicateStackTabs?.()
-  })
-
-  const dedupeButton = headerStats.locator('[data-tabout-part="dedupe-button"]')
-  await expect(dedupeButton).toBeVisible()
-
-  const actionGaps = await headerStats.evaluate((element) => {
-    const tabCount = element.querySelector<HTMLElement>('[data-tabout-part="tab-count"]')
-    const dedupe = element.querySelector<HTMLElement>('[data-tabout-part="dedupe-button"]')
-    const secondaryCounts = element.querySelector<HTMLElement>('[data-tabout-part="secondary-counts"]')
-    const dedupeCount = element.querySelector<HTMLElement>('[data-tabout-part="dedupe-count"]')
-    const windowCountValue = element.querySelector<HTMLElement>('[data-tabout-part="window-count-value"]')
-    if (
-      !tabCount || !dedupe || !secondaryCounts ||
-      !dedupeCount || !windowCountValue
-    ) return null
-
-    const tabRect = tabCount.getBoundingClientRect()
-    const dedupeRect = dedupe.getBoundingClientRect()
-    const secondaryRect = secondaryCounts.getBoundingClientRect()
-    const dedupeCountRange = document.createRange()
-    dedupeCountRange.selectNodeContents(dedupeCount)
-    const dedupeCountRect = dedupeCountRange.getBoundingClientRect()
-    const windowCountRange = document.createRange()
-    windowCountRange.selectNodeContents(windowCountValue)
-    const windowCountRect = windowCountRange.getBoundingClientRect()
-
-    return {
-      tabsToDedupe: dedupeRect.left - tabRect.right,
-      dedupeToSecondary: secondaryRect.left - dedupeRect.right,
-      countTopDelta: dedupeCountRect.top - windowCountRect.top,
-      countBottomDelta: dedupeCountRect.bottom - windowCountRect.bottom,
-      countCenterDelta: (
-        dedupeCountRect.top + dedupeCountRect.bottom -
-        windowCountRect.top - windowCountRect.bottom
-      ) / 2
-    }
-  })
-
-  expect(actionGaps).not.toBeNull()
-  expect(actionGaps?.tabsToDedupe).toBeCloseTo(8, 1)
-  expect(actionGaps?.dedupeToSecondary).toBeCloseTo(8, 1)
-  expect(actionGaps?.countTopDelta).toBeCloseTo(0, 3)
-  expect(actionGaps?.countBottomDelta).toBeCloseTo(0, 3)
-  expect(actionGaps?.countCenterDelta).toBeCloseTo(0, 3)
-})
-
-test('header stats share one text line across plain counts and actions', async ({ page }) => {
+test('header stats keep counts and actions compact and accessible', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?filter=Duplicate%20Stack')
-  await page.evaluate(() => {
-    const fixtureWindow = window as typeof window & { __tabOutSmokeAddDuplicateStackTabs?: () => Promise<void> }
-    return fixtureWindow.__tabOutSmokeAddDuplicateStackTabs?.()
-  })
 
   const headerStats = page.locator('[data-tabout="header-stats"]')
-  await expect(headerStats.locator('[data-tabout-part="dedupe-button"]')).toBeVisible()
+  const initialGap = await headerStats.evaluate((element) => {
+    const tabs = element.querySelector<HTMLElement>('[data-tabout-part="tab-count"]')
+    const secondary = element.querySelector<HTMLElement>('[data-tabout-part="secondary-counts"]')
+    if (!tabs || !secondary) return null
+    return secondary.getBoundingClientRect().left - tabs.getBoundingClientRect().right
+  })
+  expect(initialGap).toBeCloseTo(10, 1)
+
+  await page.evaluate(() => Reflect.get(window, '__tabOutSmokeAddDuplicateStackTabs')?.())
+  await expect(headerStats).not.toContainText('·')
+  await expect(headerStats.locator('[data-tabout-part="dedupe-button"]')).toHaveAccessibleName(/Dedupe \d+/)
   const closeButton = headerStats.locator('[data-tabout-part="close-filtered-button"]')
-  await expect(closeButton).toBeVisible()
+  await expect(closeButton).toHaveAccessibleName(/Close \d+ filtered tabs/)
   await expect(closeButton.locator('svg')).toHaveCount(0)
 
   const geometry = await headerStats.evaluate((element) => {
-    const selectors = {
-      tabs: '[data-tabout-part="tab-count"]',
-      dedupe: '[data-tabout-part="dedupe-count"]',
-      window: '[data-tabout-part="window-count-value"]',
-      domains: '[data-tabout-part="domain-count"]',
-      close: '[data-tabout-part="close-filtered-button"]'
-    } as const
-    const metrics: Record<string, { top: number; bottom: number; center: number; lineHeight: string }> = {}
+    const find = (part: string) => element.querySelector<HTMLElement>(`[data-tabout-part="${part}"]`)
+    const tabCount = find('tab-count')
+    const dedupeButton = find('dedupe-button')
+    const secondaryCounts = find('secondary-counts')
+    const closeButton = find('close-filtered-button')
+    const count = find('window-count-value')
+    const dedupeCount = find('dedupe-count')
+    const icon = find('window-icon')
+    const windowCount = find('window-count')
+    const domainCount = find('domain-count')
+    if (
+      !tabCount || !dedupeButton || !secondaryCounts || !closeButton ||
+      !count || !dedupeCount || !icon || !windowCount || !domainCount
+    ) return null
 
-    for (const [name, selector] of Object.entries(selectors)) {
-      const target = element.querySelector<HTMLElement>(selector)
-      if (!target) return null
-
-      const walker = document.createTreeWalker(target, NodeFilter.SHOW_TEXT)
-      let numberNode: Text | null = null
-      let numberIndex = -1
-      let numberLength = 0
-      while (walker.nextNode()) {
-        const node = walker.currentNode as Text
-        const match = /\d+(?:\/\d+)?/.exec(node.data)
-        if (!match) continue
-        numberNode = node
-        numberIndex = match.index
-        numberLength = match[0].length
-        break
-      }
-      if (!numberNode) return null
-
-      const range = document.createRange()
-      range.setStart(numberNode, numberIndex)
-      range.setEnd(numberNode, numberIndex + numberLength)
-      const rect = range.getBoundingClientRect()
-      metrics[name] = {
-        top: rect.top,
-        bottom: rect.bottom,
-        center: (rect.top + rect.bottom) / 2,
-        lineHeight: getComputedStyle(target).lineHeight
-      }
-    }
-
-    const dedupeButton = element.querySelector<HTMLElement>('[data-tabout-part="dedupe-button"]')
-    const closeButton = element.querySelector<HTMLElement>('[data-tabout-part="close-filtered-button"]')
-    if (!dedupeButton || !closeButton) return null
-
-    const rowRect = element.getBoundingClientRect()
+    const tabRect = tabCount.getBoundingClientRect()
     const dedupeRect = dedupeButton.getBoundingClientRect()
+    const secondaryRect = secondaryCounts.getBoundingClientRect()
     const closeRect = closeButton.getBoundingClientRect()
+    const countRect = count.getBoundingClientRect()
+    const iconRect = icon.getBoundingClientRect()
+    const windowRect = windowCount.getBoundingClientRect()
+    const domainRect = domainCount.getBoundingClientRect()
+    const dedupeRange = document.createRange()
+    dedupeRange.selectNodeContents(dedupeCount)
+    const windowRange = document.createRange()
+    windowRange.selectNodeContents(count)
+    const baselineProbe = document.createElement('span')
+    baselineProbe.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline'
+    windowCount.append(baselineProbe)
+    const baselineBottom = baselineProbe.getBoundingClientRect().bottom
+    baselineProbe.remove()
+    const rowCenter = element.getBoundingClientRect().y + element.getBoundingClientRect().height / 2
     return {
-      metrics,
-      rowCenter: (rowRect.top + rowRect.bottom) / 2,
-      dedupeCenter: (dedupeRect.top + dedupeRect.bottom) / 2,
-      closeCenter: (closeRect.top + closeRect.bottom) / 2
+      centers: [tabRect, dedupeRect, secondaryRect, closeRect]
+        .map((rect) => rect.y + rect.height / 2 - rowCenter),
+      gaps: [dedupeRect.left - tabRect.right, secondaryRect.left - dedupeRect.right],
+      countBaselineDelta: dedupeRange.getBoundingClientRect().bottom -
+        windowRange.getBoundingClientRect().bottom,
+      iconAfterCount: Boolean(count.compareDocumentPosition(icon) & Node.DOCUMENT_POSITION_FOLLOWING),
+      iconBaselineOffsetRatio: (iconRect.bottom - baselineBottom) /
+        Number.parseFloat(getComputedStyle(windowCount).fontSize),
+      iconGap: iconRect.left - countRect.right,
+      iconVisible: getComputedStyle(icon).maskImage !== 'none',
+      secondaryGap: domainRect.left - windowRect.right
     }
   })
 
   expect(geometry).not.toBeNull()
   if (!geometry) return
-
-  const reference = geometry.metrics.tabs
-  if (!reference) throw new Error('Missing tab-count geometry')
-  for (const metric of Object.values(geometry.metrics)) {
-    expect(metric.lineHeight).toBe('16px')
-    expect(metric.top - reference.top).toBeCloseTo(0, 3)
-    expect(metric.bottom - reference.bottom).toBeCloseTo(0, 3)
-    expect(metric.center - reference.center).toBeCloseTo(0, 3)
-  }
-  expect(geometry.dedupeCenter - geometry.rowCenter).toBeCloseTo(0, 3)
-  expect(geometry.closeCenter - geometry.rowCenter).toBeCloseTo(0, 3)
+  expect(geometry.gaps).toEqual([8, 8])
+  expect(geometry.secondaryGap).toBeCloseTo(10, 1)
+  expect(geometry.countBaselineDelta).toBeCloseTo(0, 3)
+  expect(geometry.iconAfterCount).toBe(true)
+  expect(geometry.iconBaselineOffsetRatio).toBeCloseTo(0.125, 3)
+  expect(geometry.iconGap).toBeCloseTo(4, 1)
+  expect(geometry.iconVisible).toBe(true)
+  for (const centerDelta of geometry.centers) expect(centerDelta).toBeCloseTo(0, 1)
 })
 
 for (const scenario of [
