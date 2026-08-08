@@ -58,10 +58,11 @@ test('HeaderStats renders compact accessible counts without visible separators',
     hasCards: true
   }))
 
+  assert.match(html, /data-tabout="header-stats" class="[^"]*leading-\(--header-control-line-height\)/)
   assert.match(html, /data-tabout-part="tab-count"/)
   assert.match(html, /data-tabout-part="secondary-counts" class="[^"]*gap-2\.5[^"]*ml-0\.5[^"]*"><span class="sr-only">, <\/span>/)
-  assert.match(html, /data-tabout-part="window-count" class="inline-flex items-center gap-1 whitespace-nowrap">2\/3<span class="sr-only"> windows<\/span><span data-tabout-part="window-icon"/)
-  assert.match(html, /data-tabout-part="window-icon" class="icon-\[lucide--app-window-mac\]"/)
+  assert.match(html, /data-tabout-part="window-count" class="whitespace-nowrap"><span data-tabout-part="window-count-value">2\/3<\/span><span class="sr-only"> windows<\/span><span data-tabout-part="window-icon"/)
+  assert.match(html, /data-tabout-part="window-icon" class="icon-\[lucide--app-window-mac\] ml-1 align-\[-0\.125em\]"/)
   assert.match(html, /<span class="sr-only">, <\/span><span data-tabout-part="domain-count"[^>]*>2 domains<\/span>/)
   assert.doesNotMatch(html, /·/)
 })
@@ -76,7 +77,24 @@ test('HeaderStats preserves the standard gap beside its dedupe action', () => {
   }))
 
   assert.match(html, /data-tabout-part="dedupe-button"/)
+  assert.match(html, /data-tabout-part="dedupe-label">Dedupe <span data-tabout-part="dedupe-count">1<\/span><\/span>/)
+  assert.match(html, /data-tabout-part="dedupe-button"[^>]*leading-\(--header-control-line-height\)/)
   assert.match(html, /data-tabout-part="secondary-counts" class="inline-flex items-center gap-2\.5"/)
   assert.doesNotMatch(html, /data-tabout-part="secondary-counts" class="[^"]*ml-0\.5/)
-  assert.match(html, /data-tabout-part="window-count" class="inline-flex items-center gap-1 whitespace-nowrap"/)
+  assert.match(html, /data-tabout-part="window-count" class="whitespace-nowrap"/)
+})
+
+test('HeaderStats renders the filtered close action without an icon gap', () => {
+  const html = renderHeaderStats(makeStats({
+    totalTabs: 3,
+    activeTabs: 3,
+    visibleTabs: 2,
+    filteredCloseCount: 2,
+    filtering: true
+  }))
+
+  assert.match(html, /data-tabout-part="close-filtered-button"/)
+  assert.match(html, /aria-label="Close 2 filtered tabs">Close 2<\/button>/)
+  assert.doesNotMatch(html, /data-tabout-part="close-filtered-button"[^>]*gap-1\.25/)
+  assert.doesNotMatch(html, /<svg/)
 })
