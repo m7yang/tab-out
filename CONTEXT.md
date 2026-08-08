@@ -26,6 +26,7 @@
 - **Activation History**: The chronological open-tab focus path plus the bounded queue of background link tabs that have not yet been activated, used for previous/next tab switching and close-recovery behavior.
 - **Pending History Tab**: An inactive tab Chrome created with an opener that has not yet been activated; it remains a distinct, indexed next target even when another pending tab has the same page URL.
 - **Working Set**: A ranking signal over open-tab Dashboard Items that the user is likely to return to before scanning Domain Cards or using a Filter Query.
+- **Working Set Activity**: Device-local, bounded, rebuildable evidence of meaningful page activation and navigation used to rank open-tab Dashboard Items. It is neither user-authored content nor visible Dashboard state; an unavailable read remains unknown rather than a known-empty value for Startup Frame admission.
 - **Warm Snapshot**: The newest compact in-session continuity seed: generation metadata, card order, URL-keyed Working Set priority and epoch, and session-only title-retention data. It never supplies visible first-paint content by itself.
 - **Durable Checkpoint**: The restart-surviving continuity seed containing card order and URL-keyed Working Set priority; it may intentionally trail the Warm Snapshot within a target checkpoint window and never supplies visible content by itself.
 - **Startup Generation**: One coherent capture of every input that determines the Dashboard's first dynamic-content state.
