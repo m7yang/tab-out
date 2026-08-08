@@ -4,6 +4,7 @@ import test from 'node:test'
 import { Effect } from 'effect'
 
 import { createLatestRefreshRunner, fetchDashboardSnapshot, fetchDashboardStartupSnapshot } from '../src/extension/dashboard-intake.js'
+import { encodeDashboardRetainedPagesWire } from '../src/extension/dashboard-retained-pages-wire.js'
 import { loadDashboardLocalState, loadDashboardLocalStateResult } from '../src/hooks/useDashboardLocalState.js'
 import { DOMAIN_PIN_STORAGE_KEY } from '../src/extension/domain-pins.js'
 import { DEFAULT_HISTORY_RANGE } from '../src/extension/history-source.js'
@@ -175,7 +176,9 @@ test('page startup snapshot gathers one coherent view without writing the shared
                 tab.url,
                 activityRecord(String(tab.url), String(tab.title), now - index)
               ]))
-            }
+            },
+            retainedPages: await encodeDashboardRetainedPagesWire([]),
+            retentionHealth: null
           }
         }
         return { ok: false }
@@ -282,7 +285,9 @@ test('page startup snapshot includes the latest filter companion authorities', a
           windows: [{ id: 1, focused: true, type: 'normal' }]
         },
         tabHistory: { entries: [], maxSize: 48 },
-        workingSetActivity: { version: 1, records: {} }
+        workingSetActivity: { version: 1, records: {} },
+        retainedPages: await encodeDashboardRetainedPagesWire([]),
+        retentionHealth: null
       })
     },
     tabs: { query: async () => openTabs },
@@ -357,7 +362,9 @@ test('fresh page startup captures do not share browser reads or write the orderi
           activeWasInserted: false,
           entries: []
         },
-        workingSetActivity: { version: 1, records: {} }
+        workingSetActivity: { version: 1, records: {} },
+        retainedPages: await encodeDashboardRetainedPagesWire([]),
+        retentionHealth: null
       })
     },
     tabs: {
@@ -436,7 +443,9 @@ test('concurrent page startup fetches remain read-only when an older read finish
           activeWasInserted: false,
           entries: []
         },
-        workingSetActivity: { version: 1, records: {} }
+        workingSetActivity: { version: 1, records: {} },
+        retainedPages: await encodeDashboardRetainedPagesWire([]),
+        retentionHealth: null
       })
     },
     tabs: {
@@ -665,7 +674,9 @@ test('startup path reads ordering before saved pages without losing saved rows',
           activeWasInserted: false,
           entries: []
         },
-        workingSetActivity: { version: 1, records: {} }
+        workingSetActivity: { version: 1, records: {} },
+        retainedPages: await encodeDashboardRetainedPagesWire([]),
+        retentionHealth: null
       })
     },
     tabs: {
@@ -770,7 +781,9 @@ test('tabs refresh snapshot derives dashboard and working set from the same open
             records: {
               'https://example.com/docs': activityRecord('https://example.com/docs', 'Example Docs', now)
             }
-          }
+          },
+          retainedPages: await encodeDashboardRetainedPagesWire([]),
+          retentionHealth: null
         }
       }
     },
@@ -849,7 +862,9 @@ test('tabs refresh rejects unknown required state instead of committing an empty
           windows: [{ id: 1, focused: true, type: 'normal' }]
         },
         tabHistory: { entries: [], maxSize: 48 },
-        workingSetActivity: { version: 1, records: {} }
+        workingSetActivity: { version: 1, records: {} },
+        retainedPages: await encodeDashboardRetainedPagesWire([]),
+        retentionHealth: null
       })
     },
     tabs: { query: async () => openTabs },

@@ -51,8 +51,16 @@ export function pageChipPinKeyForUrl(url: string): string {
   return `url:${url}`
 }
 
+export function pageChipFoldRepresentativeUrl(urls: readonly string[]): string {
+  let representative: string | null = null
+  for (const url of urls) {
+    if (representative === null || url < representative) representative = url
+  }
+  return representative ?? ''
+}
+
 export function pageChipPinKeyForFoldUrls(urls: readonly string[]): string {
-  return `fold:${urls.toSorted().join('\u0000')}`
+  return `fold:${pageChipFoldRepresentativeUrl(urls)}`
 }
 
 export function pageChipPinId(source: string, scopeId: string, chipKey: string): string {
@@ -80,11 +88,17 @@ function parsePageChipPinId(id: unknown): ParsedPageChipPinId | null {
   if (!VALID_PAGE_CHIP_PIN_SOURCES.has(source)) return null
   if (!scopeId.startsWith('scope|')) return null
   if (!(chipKey.startsWith('url:') || chipKey.startsWith('fold:'))) return null
+  if (chipKey.startsWith('fold:')) {
+    chipKey = pageChipPinKeyForFoldUrls(chipKey.slice('fold:'.length).split('\u0000'))
+  }
   return { source, scopeId, chipKey }
 }
 
-function isPinnablePageChipId(id: unknown): id is string {
-  return parsePageChipPinId(id) !== null
+function normalizedPageChipPinId(id: unknown): string | null {
+  const parsed = parsePageChipPinId(id)
+  return parsed
+    ? pageChipPinId(parsed.source, parsed.scopeId, parsed.chipKey)
+    : null
 }
 
 export function normalizePinnedPageChips(ids: unknown = []): string[] {
@@ -92,19 +106,23 @@ export function normalizePinnedPageChips(ids: unknown = []): string[] {
   const seen = new Set<string>()
   const normalized: string[] = []
   for (const id of ids) {
-    if (!isPinnablePageChipId(id) || seen.has(id)) continue
-    seen.add(id)
-    normalized.push(id)
+    const normalizedId = normalizedPageChipPinId(id)
+    if (!normalizedId || seen.has(normalizedId)) continue
+    seen.add(normalizedId)
+    normalized.push(normalizedId)
   }
   return normalized
 }
 
 function setPinnedPageChipInList(ids: unknown = [], id: unknown, pinned: boolean): string[] {
   const normalized = normalizePinnedPageChips(ids)
-  if (!isPinnablePageChipId(id)) return normalized
-  const isPinned = normalized.includes(id)
+  const normalizedId = normalizedPageChipPinId(id)
+  if (!normalizedId) return normalized
+  const isPinned = normalized.includes(normalizedId)
   if (isPinned === pinned) return normalized
-  return pinned ? [...normalized, id] : normalized.filter((existing) => existing !== id)
+  return pinned
+    ? [...normalized, normalizedId]
+    : normalized.filter((existing) => existing !== normalizedId)
 }
 
 export function applyPinnedPageChipMutation(ids: unknown, mutation: PinnedPageChipMutation): string[] {

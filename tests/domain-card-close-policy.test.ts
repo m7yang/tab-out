@@ -27,13 +27,13 @@ function group(tabs: DashboardTab[]): DomainGroup {
   return { domain: 'example.test', tabs }
 }
 
-test('domain card removal animation requires every rendered item to close', () => {
+test('domain card removal animation never hides eligible tabs that settle into retained pages', () => {
   assert.equal(domainCardCloseRemovesAllItems({
     closableCount: 2,
     filter: '',
     group: group([tab(1), tab(2)]),
     removedCount: 2
-  }), true)
+  }), false)
   assert.equal(domainCardCloseRemovesAllItems({
     closableCount: 2,
     filter: '',
@@ -46,6 +46,13 @@ test('domain card removal animation requires every rendered item to close', () =
     group: group([tab(1), tab(2, { groupId: 4 })]),
     removedCount: 1
   }), false)
+
+  assert.equal(domainCardCloseRemovesAllItems({
+    closableCount: 1,
+    filter: '',
+    group: group([tab(1, { url: 'blob:https://example.test/temporary', rawUrl: 'blob:https://example.test/temporary' })]),
+    removedCount: 1
+  }), true)
 })
 
 test('domain card removal animation preserves filtered and Saved Page surfaces', () => {

@@ -6,6 +6,7 @@ import {
   historyDeleteFullyRemoved,
   variantClosable,
   partitionVariantCloseTargets,
+  foldedTabCloseTargets,
   groupCloseActionLabel,
   titleVariantGroupRemovalConfirmed,
 } from '../src/components/chip-close-targets.js'
@@ -48,6 +49,32 @@ test('partitionVariantCloseTargets: empty when nothing is closable', () => {
   ])
   assert.deepEqual(result.historyUrls, [])
   assert.deepEqual(result.tabEnvs, [])
+})
+
+test('foldedTabCloseTargets excludes closed Saved and retained envs in either display order', () => {
+  const open = {
+    prefix: 'open',
+    tabUrl: 'https://open.example.test/page',
+    rawUrl: 'https://open.example.test/page',
+    sourceType: 'tab' as const
+  }
+  const saved = {
+    prefix: 'saved',
+    tabUrl: 'https://saved.example.test/page',
+    rawUrl: 'https://saved.example.test/page',
+    sourceType: 'saved-page' as const,
+    closedSaved: true
+  }
+  const retained = {
+    prefix: 'retained',
+    tabUrl: 'https://retained.example.test/page',
+    rawUrl: 'https://retained.example.test/page',
+    sourceType: 'retained-page' as const,
+    closedSaved: true
+  }
+
+  assert.deepEqual(foldedTabCloseTargets([saved, open, retained]), [open])
+  assert.deepEqual(foldedTabCloseTargets([open, retained, saved]), [open])
 })
 
 test('groupCloseActionLabel: singular labels match single-chip wording', () => {

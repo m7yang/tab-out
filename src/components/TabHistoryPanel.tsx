@@ -14,7 +14,7 @@ import { markClosure } from '../extension/undo.js'
 import { showToast } from '../extension/toast.js'
 import { chipActivationMode, performDashboardItemActivation, shouldSuppressSelectionForGesture } from '../extension/tab-activation.js'
 import { savePageTarget, removeSavedPageTarget } from '../extension/saved-page-actions.js'
-import { historyEntrySaveTarget, historyEntrySaved, isHistoryEntrySaveEligible } from '../extension/history-saved-page.js'
+import { historyEntrySaveTarget, historyEntrySaved, historyEntrySavedPageKey, isHistoryEntrySaveEligible } from '../extension/history-saved-page.js'
 import { PageChipContextMenu } from './PageChipContextMenu'
 import type { PageChipContextMenuTriggerElement } from './PageChipContextMenu'
 import { DefaultFavicon } from './DefaultFavicon'
@@ -28,7 +28,7 @@ import { captureVisibleLineHtml, clampedTitleLineNodes, createExpansionMeasureEl
 import { cn } from '@/lib/utils'
 import type { CSSVariableProperties } from '@/lib/css-properties'
 import type { HoverUrlChangeHandler, HoverUrlSource, SnapshotChangeHandler, TabHistorySnapshot, TabsChangeHandler } from './types'
-import type { TabHistoryEntry, WorkingSetItem, WorkingSetSnapshot } from '../extension/types'
+import type { RetainedPageSurfaceMatch, TabHistoryEntry, WorkingSetItem, WorkingSetSnapshot } from '../extension/types'
 import { useHistoryPanelRows, type HistoryPanelRow } from '../hooks/useHistoryPanelRows.js'
 import { useHistoryScrollbar, type HistoryScrollbar } from '../hooks/useHistoryScrollbar.js'
 import { useDashboardActions, useHoverStateSelector } from './DashboardInteractionContext'
@@ -88,6 +88,7 @@ const historyTitleTruncationCallbacks = new WeakMap<
 >()
 const EMPTY_HIGHLIGHT_TERMS: readonly string[] = []
 const EMPTY_CLOSED_TABS: readonly ClosedTabEntry[] = []
+const EMPTY_RETAINED_PAGE_SURFACE_MATCHES: readonly RetainedPageSurfaceMatch[] = []
 const HISTORY_TITLE_EXPANDED_LAYOUT_CACHE_LIMIT = 240
 const historyTitleExpandedLayoutCache = new Map<string, HistoryTitleExpandedLayoutMetrics>()
 const historyEntryExpansionLane = createTitleExpansionLane()
@@ -155,6 +156,7 @@ interface HistoryEntryProps {
   workingSetItem?: WorkingSetItem | null | undefined
   closedTab?: ClosedTabEntry | null | undefined
   savedKeys?: ReadonlySet<string> | undefined
+  retainedPageSurfaceMatches?: readonly RetainedPageSurfaceMatch[] | undefined
   highlightTerms?: readonly string[] | undefined
   onSnapshotChange?: SnapshotChangeHandler | undefined
   onHistoryLayoutSettled?: (() => void) | undefined
@@ -170,6 +172,7 @@ interface TabHistoryPanelProps {
   dismissedClosedGhosts?: ClosedGhostDismissals | null | undefined
   filter?: string | undefined
   savedKeys?: readonly string[] | undefined
+  retainedPageSurfaceMatches?: readonly RetainedPageSurfaceMatch[] | undefined
   onSnapshotChange?: SnapshotChangeHandler | undefined
   onTabsChange?: TabsChangeHandler | undefined
 }
@@ -1207,6 +1210,7 @@ function HistoryEntryFaviconFrame({ expanded, faviconUrl, faviconDimmed, loading
 type HistoryEntryContextMenuProps = {
   entry: TabHistoryEntry
   savedKeys?: ReadonlySet<string> | undefined
+  retainedPageSurfaceMatches?: readonly RetainedPageSurfaceMatch[] | undefined
   onOpenChange: (open: boolean) => void
   children: PageChipContextMenuTriggerElement
 }
@@ -1216,11 +1220,11 @@ type HistoryEntryContextMenuProps = {
  * context menu (Reload / Duplicate / Copy title / Copy URL / Save page / Suspend) when at least one action
  * applies; otherwise renders the row untouched.
  */
-function HistoryEntryContextMenu({ entry, savedKeys, onOpenChange, children }: HistoryEntryContextMenuProps) {
+function HistoryEntryContextMenu({ entry, savedKeys, retainedPageSurfaceMatches = EMPTY_RETAINED_PAGE_SURFACE_MATCHES, onOpenChange, children }: HistoryEntryContextMenuProps) {
   const copyTitleText = entry.title
   const copyUrlText = entry.url
-  const saveEligible = isHistoryEntrySaveEligible(entry)
-  const saved = historyEntrySaved(entry, savedKeys)
+  const saveEligible = isHistoryEntrySaveEligible(entry, retainedPageSurfaceMatches)
+  const saved = historyEntrySaved(entry, savedKeys, retainedPageSurfaceMatches)
   const savedActionLabel = saved ? 'Remove saved page' : 'Save page'
   const canShowSuspend = entry.exists && Number.isInteger(entry.tabId)
   const suspendEnabled = canShowSuspend && !entry.suspended
@@ -1248,8 +1252,8 @@ function HistoryEntryContextMenu({ entry, savedKeys, onOpenChange, children }: H
   async function onToggleEntrySaved(e: StopPropagationEvent) {
     e.stopPropagation()
     try {
-      if (saved) await removeSavedPageTarget(entry.url)
-      else await savePageTarget(historyEntrySaveTarget(entry))
+      if (saved) await removeSavedPageTarget(historyEntrySavedPageKey(entry, retainedPageSurfaceMatches))
+      else await savePageTarget(historyEntrySaveTarget(entry, retainedPageSurfaceMatches))
     } catch {
       showToast(saved ? "Couldn't remove the saved page" : "Couldn't save the page")
     }
@@ -1292,7 +1296,7 @@ function HistoryEntryContextMenu({ entry, savedKeys, onOpenChange, children }: H
   )
 }
 
-function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetItem = null, closedTab = null, savedKeys, highlightTerms = EMPTY_HIGHLIGHT_TERMS, onSnapshotChange, onHistoryLayoutSettled, onHoverUrlChange, onTabsChange, onForgetClosedGhost }: HistoryEntryProps) {
+function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetItem = null, closedTab = null, savedKeys, retainedPageSurfaceMatches = EMPTY_RETAINED_PAGE_SURFACE_MATCHES, highlightTerms = EMPTY_HIGHLIGHT_TERMS, onSnapshotChange, onHistoryLayoutSettled, onHoverUrlChange, onTabsChange, onForgetClosedGhost }: HistoryEntryProps) {
   const contextMenuOpenRef = useRef(false)
   const titleClampKey = JSON.stringify([entry.title, highlightTerms])
   const {
@@ -1556,7 +1560,7 @@ function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetItem = nul
         style={entrySlotStyle}
         ref={entrySlotRef}
       >
-        <HistoryEntryContextMenu entry={entry} savedKeys={savedKeys} onOpenChange={onHistoryEntryMenuOpenChange}>
+        <HistoryEntryContextMenu entry={entry} savedKeys={savedKeys} retainedPageSurfaceMatches={retainedPageSurfaceMatches} onOpenChange={onHistoryEntryMenuOpenChange}>
           {historyEntrySurface(false)}
         </HistoryEntryContextMenu>
         {expandedEntryElement}
@@ -1609,6 +1613,7 @@ export function TabHistoryPanel({
   dismissedClosedGhosts: admittedClosedGhostDismissals = null,
   filter = '',
   savedKeys,
+  retainedPageSurfaceMatches = EMPTY_RETAINED_PAGE_SURFACE_MATCHES,
   onSnapshotChange,
   onTabsChange
 }: TabHistoryPanelProps) {
@@ -1737,6 +1742,7 @@ export function TabHistoryPanel({
                 layoutKey={layoutKey}
                 snapshot={snapshot}
                 savedKeys={savedKeySet}
+                retainedPageSurfaceMatches={retainedPageSurfaceMatches}
                 highlightTerms={highlightTerms}
                 onSnapshotChange={onSnapshotChange}
                 onHistoryLayoutSettled={settleVisibleHistoryLayout}
@@ -1770,6 +1776,7 @@ function HistoryPanelRow({
   layoutKey,
   snapshot,
   savedKeys,
+  retainedPageSurfaceMatches,
   highlightTerms,
   onSnapshotChange,
   onHistoryLayoutSettled,
@@ -1781,6 +1788,7 @@ function HistoryPanelRow({
   layoutKey: string
   snapshot: TabHistorySnapshot | null
   savedKeys: ReadonlySet<string>
+  retainedPageSurfaceMatches: readonly RetainedPageSurfaceMatch[]
   highlightTerms: readonly string[]
   onSnapshotChange?: SnapshotChangeHandler | undefined
   onHistoryLayoutSettled?: (() => void) | undefined
@@ -1796,6 +1804,7 @@ function HistoryPanelRow({
         indexLabel={historyEntryIndexLabel(row.entry, snapshot, row.entry.index + 1)}
         kind="stack"
         savedKeys={savedKeys}
+        retainedPageSurfaceMatches={retainedPageSurfaceMatches}
         highlightTerms={highlightTerms}
         onSnapshotChange={onSnapshotChange}
         onHistoryLayoutSettled={onHistoryLayoutSettled}
@@ -1813,6 +1822,7 @@ function HistoryPanelRow({
         kind="open-ghost"
         workingSetItem={row.item}
         savedKeys={savedKeys}
+        retainedPageSurfaceMatches={retainedPageSurfaceMatches}
         highlightTerms={highlightTerms}
         onSnapshotChange={onSnapshotChange}
         onHistoryLayoutSettled={onHistoryLayoutSettled}
@@ -1829,6 +1839,7 @@ function HistoryPanelRow({
       kind="closed-ghost"
       closedTab={row.closed}
       savedKeys={savedKeys}
+      retainedPageSurfaceMatches={retainedPageSurfaceMatches}
       highlightTerms={highlightTerms}
       onSnapshotChange={onSnapshotChange}
       onHistoryLayoutSettled={onHistoryLayoutSettled}

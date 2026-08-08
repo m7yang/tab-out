@@ -132,8 +132,13 @@ export type CleanTitleResult = {
   removedSuffix: string
 }
 
+const TITLE_SUFFIX_SEPARATOR_PATTERN = / (?:-|\||—|·|–) /
+
 export function cleanTitleWithRemovedSuffix(title: string, hostname: string, extraSuffixes: string[] = []): CleanTitleResult {
   if (!title || !hostname) return { title: title || '', removedSuffix: '' }
+  if (!TITLE_SUFFIX_SEPARATOR_PATTERN.test(title)) {
+    return { title, removedSuffix: '' }
+  }
 
   const friendly = friendlyDomain(hostname)
   const domain = hostname.replace(/^www\./, '')

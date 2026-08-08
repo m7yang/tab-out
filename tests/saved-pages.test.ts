@@ -47,29 +47,55 @@ test('savedPageKeyForUrl preserves meaningful query and hash in the saved page i
   )
 })
 
-test('isSavedPageEligible excludes browser utility pages and standalone apps', () => {
+test('Saved Page identity distinguishes the same exact URL by surface kind', () => {
+  const url = 'https://example.test/docs?panel=reviews#comment-7'
+
+  assert.notEqual(
+    savedPageKeyForUrl(url, 'normal-tab'),
+    savedPageKeyForUrl(url, 'app')
+  )
+})
+
+test('isSavedPageEligible includes privileged pages and apps but excludes Tab Out itself', () => {
   assert.equal(isSavedPageEligible({ url: 'https://example.test/docs' }), true)
-  assert.equal(isSavedPageEligible({ url: 'chrome://settings/' }), false)
-  assert.equal(isSavedPageEligible({ url: 'chrome-extension://tab-out/index.html' }), false)
+  assert.equal(isSavedPageEligible({ url: 'chrome://settings/' }), true)
+  assert.equal(isSavedPageEligible({ url: 'chrome-extension://other-extension/index.html' }), true)
   assert.equal(isSavedPageEligible({ url: 'chrome-untrusted://new-tab-page/' }), false)
-  assert.equal(isSavedPageEligible({ url: 'https://mail.example.test/', isApp: true }), false)
+  assert.equal(isSavedPageEligible({ url: 'https://mail.example.test/', isApp: true }), true)
+  assert.equal(isSavedPageEligible({ url: 'chrome-extension://tab-out/index.html', isTabOut: true }), false)
+  assert.equal(isSavedPageEligible({ url: 'chrome://newtab/' }), false)
+  assert.equal(isSavedPageEligible({ url: 'about:blank' }), false)
+  assert.equal(isSavedPageEligible({ url: 'data:text/plain,temporary' }), false)
   assert.equal(isSavedPageEligible({ url: 'chrome://newtab/', isTabOut: true }), false)
 })
 
-test('normalizeSavedPagesStore keeps valid records and drops invalid ones', () => {
+test('isSavedPageEligible excludes every page on the current Tab Out extension origin', () => {
+  assert.equal(
+    isSavedPageEligible({ url: 'chrome-extension://tab-out/help.html' }, 'tab-out'),
+    false
+  )
+  assert.equal(
+    isSavedPageEligible({ url: 'chrome-extension://other-extension/help.html' }, 'tab-out'),
+    true
+  )
+})
+
+test('normalizeSavedPagesStore keeps valid v2 records and drops identity mismatches', () => {
   const normalized = normalizeSavedPagesStore({
-    version: 1,
+    version: 2,
     pages: {
       'https://example.test/docs': {
         key: 'https://example.test/docs',
+        surfaceKind: 'normal-tab',
         url: 'https://example.test/docs',
         title: 'Docs',
         favIconUrl: 'https://example.test/favicon.ico',
         savedAt: 10,
         updatedAt: 11
       },
-      'chrome://settings/': {
-        key: 'chrome://settings/',
+      invalid: {
+        key: 'invalid',
+        surfaceKind: 'normal-tab',
         url: 'chrome://settings/',
         title: 'Settings',
         savedAt: 12,
@@ -84,7 +110,7 @@ test('normalizeSavedPagesStore keeps valid records and drops invalid ones', () =
   assert.equal(normalizedPage.url, 'https://example.test/docs')
 })
 
-test('Saved Pages schema accepts a valid envelope while dropping malformed records', () => {
+test('Saved Pages storage migrates v1 URL-only records to v2 normal-tab records', () => {
   const parsed = parseSavedPagesStoreValue({
     version: 1,
     pages: {
@@ -100,7 +126,56 @@ test('Saved Pages schema accepts a valid envelope while dropping malformed recor
   })
 
   assert.equal(parsed.ok, true)
+  assert.equal(parsed.value.version, 2)
   assert.deepEqual(Object.keys(parsed.value.pages), ['https://example.test/docs'])
+  assert.equal(parsed.value.pages['https://example.test/docs']?.surfaceKind, 'normal-tab')
+})
+
+test('saving the same exact URL as a normal tab and app preserves both targets', () => {
+  const url = 'https://app.example.test/inbox'
+  const normalTab = makeTab({ url, title: 'Inbox tab' })
+  const app = makeTab({ url, title: 'Inbox app', isApp: true })
+
+  const store = addSavedPageToStore(
+    addSavedPageToStore(emptySavedPagesStore(), normalTab, 100),
+    app,
+    200
+  )
+
+  assert.deepEqual(Object.keys(store.pages).sort(), [
+    savedPageKeyForUrl(url, 'app'),
+    savedPageKeyForUrl(url, 'normal-tab')
+  ].sort())
+  assert.equal(store.pages[savedPageKeyForUrl(url, 'normal-tab')]?.title, 'Inbox tab')
+  assert.equal(store.pages[savedPageKeyForUrl(url, 'app')]?.title, 'Inbox app')
+
+  const parsed = parseSavedPagesStoreValue(structuredClone(store))
+  assert.equal(parsed.ok, true)
+  assert.equal(parsed.value.pages[savedPageKeyForUrl(url, 'app')]?.surfaceKind, 'app')
+
+  const merged = mergeSavedPagesWithTabs([normalTab], store)
+  const mergedNormalTab = merged.tabs.find((tab) => !tab.isApp)
+  const closedApp = merged.tabs.find((tab) => tab.isApp)
+  assert.equal(mergedNormalTab?.saved, true)
+  assert.equal(mergedNormalTab?.closedSaved, false)
+  assert.equal(closedApp?.sourceType, 'saved-page')
+  assert.equal(closedApp?.closedSaved, true)
+
+  const removedApp = removeSavedPageFromStore(store, savedPageKeyForUrl(url, 'app'))
+  assert.equal(removedApp.removed?.surfaceKind, 'app')
+  assert.ok(removedApp.store.pages[savedPageKeyForUrl(url, 'normal-tab')])
+  assert.equal(removedApp.store.pages[savedPageKeyForUrl(url, 'app')], undefined)
+})
+
+test('an app Saved Page derives fallback copy from its exact URL rather than its qualified key', () => {
+  const url = 'https://app.example.test/inbox'
+  const store = addSavedPageToStore(
+    emptySavedPagesStore(),
+    makeTab({ url, title: '', isApp: true }),
+    100
+  )
+
+  assert.equal(store.pages[savedPageKeyForUrl(url, 'app')]?.title, 'app.example.test/inbox')
 })
 
 test('mergeSavedPagesWithTabs annotates matching open tabs and emits closed saved page items', () => {

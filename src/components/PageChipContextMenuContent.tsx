@@ -10,6 +10,7 @@ export type PageChipContextMenuContentProps = {
   saved?: boolean | undefined
   titleText: string
   onSavedSelect?: ((event: StopPropagationEvent) => void | Promise<void>) | undefined
+  onRemoveFromTabsSelect?: ((event: StopPropagationEvent) => void | Promise<void>) | undefined
   pagePinActionLabel?: string | undefined
   pagePinned?: boolean | undefined
   onPagePinSelect?: ((event: StopPropagationEvent) => void | Promise<void>) | undefined
@@ -27,6 +28,7 @@ export function PageChipContextMenuContent({
   saved,
   titleText,
   onSavedSelect,
+  onRemoveFromTabsSelect,
   pagePinActionLabel,
   pagePinned,
   onPagePinSelect,
@@ -78,6 +80,16 @@ export function PageChipContextMenuContent({
         >
           <SavedPageIcon saved={!!saved} className="size-3.5" />
           <span className="min-w-0 flex-1">{savedActionLabel}</span>
+        </ContextMenuItem>
+      )}
+      {onRemoveFromTabsSelect && (
+        <ContextMenuItem
+          className="page-chip-remove-from-tabs-menu-item"
+          label="Remove from Tabs"
+          onClick={onRemoveFromTabsSelect}
+        >
+          <span className="icon-[lucide--list-x] size-3.5" aria-hidden="true" />
+          <span className="min-w-0 flex-1">Remove from Tabs</span>
         </ContextMenuItem>
       )}
       {onSuspendSelect && (

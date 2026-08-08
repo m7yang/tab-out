@@ -32,7 +32,7 @@ import { Effect, Schema } from 'effect'
 import { getAppRuntime } from './app-runtime.js'
 import { runPromiseExclusiveEffect } from './promise-exclusive-effect.js'
 
-const SUSPEND_TARGET_STORAGE_KEY = 'tabOutSuspendTargetV1'
+export const SUSPEND_TARGET_STORAGE_KEY = 'tabOutSuspendTargetV1'
 const SUSPEND_TARGET_STORAGE_WRITE_LOCK = 'tab-out:suspend-target-write'
 const SUSPENDED_PATH_SUFFIX = '/suspended.html'
 

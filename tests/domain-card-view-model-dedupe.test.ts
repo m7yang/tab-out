@@ -38,6 +38,130 @@ test('different focused comments on the same issue are not treated as duplicates
   assert.equal(jiraChips.length, 2)
 })
 
+test('multiple exact Saved targets sharing one canonical identity remain independently actionable', () => {
+  const longForm =
+    'https://example.atlassian.net/browse/ABC-123?focusedCommentId=100&sourceType=mention'
+  const shortForm =
+    'https://example.atlassian.net/browse/ABC-123?focusedCommentId=100'
+  const group: DomainGroup = {
+    domain: 'example.atlassian.net',
+    tabs: [
+      makeDashboardTab({
+        id: 'saved-long',
+        url: longForm,
+        title: 'Example issue',
+        sourceType: 'saved-page',
+        saved: true,
+        closedSaved: true,
+        savedPageKey: longForm
+      }),
+      makeDashboardTab({
+        id: 'saved-short',
+        url: shortForm,
+        title: 'Example issue',
+        sourceType: 'saved-page',
+        saved: true,
+        closedSaved: true,
+        savedPageKey: shortForm
+      })
+    ]
+  }
+
+  const vm = computeDomainCardViewModel(group)
+  const [chip] = collectDashboardChips(vm)
+  assert.ok(chip)
+  assert.ok(chip.titleVariantChips)
+
+  assert.equal(vm.tabCountLabel, '2 closed')
+  assert.equal(chip.dupeCount, 1)
+  assert.deepEqual(
+    chip.titleVariantChips.map((variant) => ({
+      savedPageKey: variant.savedPageKey,
+      url: variant.tabUrl
+    })).toSorted((left, right) => left.url.localeCompare(right.url)),
+    [
+      { savedPageKey: longForm, url: longForm },
+      { savedPageKey: shortForm, url: shortForm }
+    ].toSorted((left, right) => left.url.localeCompare(right.url))
+  )
+})
+
+test('a closed Saved target does not inherit live state from a canonical-equivalent open tab', () => {
+  const openUrl =
+    'https://example.atlassian.net/browse/ABC-123?focusedCommentId=100&sourceType=mention'
+  const savedUrl =
+    'https://example.atlassian.net/browse/ABC-123?focusedCommentId=100'
+  const group: DomainGroup = {
+    domain: 'example.atlassian.net',
+    tabs: [
+      makeDashboardTab({
+        id: 1,
+        url: openUrl,
+        title: 'Example issue',
+        windowId: 2,
+        active: true,
+        suspended: true,
+        status: 'loading',
+        audible: true
+      }),
+      makeDashboardTab({
+        id: 'saved-exact',
+        url: savedUrl,
+        title: 'Example issue',
+        sourceType: 'saved-page',
+        saved: true,
+        closedSaved: true,
+        savedPageKey: savedUrl
+      })
+    ]
+  }
+
+  const vm = computeDomainCardViewModel(group, { currentWindowId: 1 })
+  const [groupedChip] = collectDashboardChips(vm)
+  const savedVariant = groupedChip?.titleVariantChips?.find(
+    (variant) => variant.savedPageKey === savedUrl
+  )
+  assert.ok(savedVariant)
+
+  assert.equal(vm.tabCountLabel, '1 + 1 closed')
+  assert.equal(savedVariant.dupeCount, 1)
+  assert.equal(savedVariant.suspended, false)
+  assert.equal(savedVariant.loading, false)
+  assert.equal(savedVariant.activeChipFrame, false)
+  assert.equal(savedVariant.activeInOtherWindow, false)
+  assert.equal(savedVariant.audioState, null)
+})
+
+test('a retained row is one unique closed item without a duplicate count', () => {
+  const url = 'https://example.test/article'
+  const group: DomainGroup = {
+    domain: 'example.test',
+    tabs: [
+      makeDashboardTab({
+        id: 'retained-example',
+        url,
+        title: 'Example article',
+        sourceType: 'retained-page',
+        closedSaved: true,
+        retainedPageIdentity: 'identity-example',
+        retainedPageClosureToken: 'lifetime-example'
+      })
+    ]
+  }
+
+  const vm = computeDomainCardViewModel(group)
+  const [chip] = collectDashboardChips(vm)
+  assert.ok(chip)
+
+  assert.equal(vm.tabCountLabel, '1 closed')
+  assert.equal(vm.tabCountTitle, '0 open tabs, 1 closed page')
+  assert.deepEqual(vm.closableDupeUrls, [])
+  assert.equal(vm.closableExtras, 0)
+  assert.equal(chip.sourceType, 'retained-page')
+  assert.equal(chip.dupeCount, 1)
+  assert.equal(chip.titleVariantChips, undefined)
+})
+
 test('GitHub repository root slash variants collapse into one closable duplicate', () => {
   const repository = 'https://github.com/example/repo'
   const group: DomainGroup = {

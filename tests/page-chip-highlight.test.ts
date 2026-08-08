@@ -943,12 +943,13 @@ test('PageChip close animation removes the real row from flow and leaves a trans
   assert.deepEqual(layoutOptions, { animate: true })
 })
 
-test('PageChip skips close removal animation when a saved open chip remains as a closed saved page', () => {
+test('PageChip leaves physical tab closures to refresh into retained resting state without exit motion', () => {
   const pageChipSource = readFileSync(new URL('../src/components/PageChip.tsx', import.meta.url), 'utf8')
 
   assert.match(pageChipSource, /const chipCloseLeavesSavedPage =/)
-  assert.match(pageChipSource, /shouldAnimateRemoval && !chipCloseLeavesSavedPage && chipEl/)
-  assert.match(pageChipSource, /!chipCloseLeavesSavedPage &&\s*chipEl &&\s*titleVariantGroupRemovalConfirmed/)
+  assert.doesNotMatch(pageChipSource, /onAfterClose: \(\{ shouldAnimateRemoval \}\)/)
+  assert.match(pageChipSource, /onAfterClose: \(\) => \{\s*setPreview\(''\)/)
+  assert.match(pageChipSource, /tabEnvs\.length === 0 &&\s*!chipCloseLeavesSavedPage/)
 })
 
 test('PageChip outlines matching live chips when an external row owns the match', () => {
@@ -1092,8 +1093,8 @@ test('PageChip renders same-title URL variants below one visible title', () => {
   assert.match(requiredAt(titleVariantButtonMatch, 1), /hover:bg-\(--chip-target-interaction-bg\)/)
   assert.doesNotMatch(requiredAt(titleVariantButtonMatch, 1), /\bcursor-pointer\b/)
   const pageChipSource = readFileSync(new URL('../src/components/PageChip.tsx', import.meta.url), 'utf8')
-  assert.match(pageChipSource, /function defaultTitleVariantChip\(\) \{[\s\S]*activeChipFrame[\s\S]*!variant\.activeInOtherWindow[\s\S]*activeInOtherWindow[\s\S]*titleVariantChips\[0\]/)
-  assert.match(pageChipSource, /function onVariantGroupChipClick\(e: MouseEvent<HTMLDivElement>\)[\s\S]*?titleVariantEventTargetsExactVariant\(e\.target\)[\s\S]*?activateChipTarget\(e, variant\.tabUrl, variant\.sourceType, variant\)/)
+  assert.match(pageChipSource, /function defaultTitleVariantChip\(\) \{[\s\S]*activeChipFrame[\s\S]*!variant\.activeInOtherWindow[\s\S]*activeInOtherWindow[\s\S]*every\(isClosedSavedDashboardTab\)[\s\S]*sourceType === 'saved-page'[\s\S]*titleVariantChips\[0\]/)
+  assert.match(pageChipSource, /function onVariantGroupChipClick\(e: MouseEvent<HTMLDivElement>\)[\s\S]*?titleVariantEventTargetsExactVariant\(e\.target\)[\s\S]*?activateChipTarget\(e, variant\.tabUrl, variant\.sourceType, variant, e\.currentTarget\)/)
   assert.match(pageChipSource, /function onVariantGroupChipMouseEnter\(e: MouseEvent<HTMLDivElement>\)[\s\S]*?previewDefaultTitleVariantSurface\(e\.target\)[\s\S]*?openChipExpansion\(\)/)
   assert.match(pageChipSource, /function onVariantGroupChipMouseLeave\(e: MouseEvent<HTMLDivElement>\)[\s\S]*?contextMenuOpenRef\.current[\s\S]*?setDefaultVariantSurfaceHover\(false\)[\s\S]*?setPreview\(''\)/)
   assert.match(pageChipSource, /function onTitleVariantMouseLeave\(e: MouseEvent<HTMLElement>\)[\s\S]*?closest\('\.page-chip'\)[\s\S]*?!titleVariantEventTargetsDefaultSurfaceBlocker\(e\.relatedTarget\)[\s\S]*?previewDefaultTitleVariantSurface\(e\.relatedTarget\)/)
@@ -1271,6 +1272,37 @@ test('PageChip highlights the default variant pill via static CSS marker, not Re
   assert.doesNotMatch(requiredAt(otherWindowOnlyPills, 0), /data-tabout-default-variant/)
   assert.match(requiredAt(otherWindowOnlyPills, 1), /data-tabout-default-variant="true"/)
 
+  const savedPriorityHtml = renderWithDomainCardContext(React.createElement(PageChip, {
+    chip: makeVariantGroupChip({
+      closedSaved: true,
+      titleVariantChips: [
+        makeChip({
+          sourceType: 'retained-page',
+          closedSaved: true,
+          tabUrl: 'https://example.com/retained',
+          rawUrl: 'https://example.com/retained',
+          pathSuffix: '…/retained',
+          tooltip: '…/retained',
+          retainedPageIdentity: 'identity-retained',
+          retainedPageClosureToken: 'lifetime-retained'
+        }),
+        makeChip({
+          sourceType: 'saved-page',
+          saved: true,
+          closedSaved: true,
+          tabUrl: 'https://example.com/saved',
+          rawUrl: 'https://example.com/saved',
+          pathSuffix: '…/saved',
+          tooltip: '…/saved',
+          savedPageKey: 'saved-page-key'
+        })
+      ]
+    })
+  }))
+  const savedPriorityPills = titleVariantPillTags(savedPriorityHtml)
+  assert.doesNotMatch(requiredAt(savedPriorityPills, 0), /data-tabout-default-variant/)
+  assert.match(requiredAt(savedPriorityPills, 1), /data-tabout-default-variant="true"/)
+
   const baseCss = readFileSync(new URL('../extension/base.css', import.meta.url), 'utf8')
   // Keyed off the rectangular `.chip-slot` (scoped to a group via its
   // `.chip-title-variant-list`), NOT `.page-chip` — the chip's rounded squircle
@@ -1436,10 +1468,12 @@ test('PageChip routes saved-page mutation actions through Base UI context menus'
   assert.match(contextMenuComponentSource, /<ContextMenuTrigger render=\{trigger\} \/>/)
   assert.match(contextMenuComponentSource, /page-chip-context-menu-open/)
 
-  // The extracted content renders the live-tab, saved, page-pin, suspend, and copy menu items.
+  // The extracted content renders the live-tab, saved, retained, page-pin,
+  // suspend, and copy menu items.
   assert.match(contextMenuContentSource, /className="page-chip-reload-menu-item"/)
   assert.match(contextMenuContentSource, /className="page-chip-duplicate-menu-item"/)
   assert.match(contextMenuContentSource, /className="page-chip-save-menu-item"/)
+  assert.match(contextMenuContentSource, /className="page-chip-remove-from-tabs-menu-item"/)
   assert.match(contextMenuContentSource, /className="page-chip-pin-menu-item"/)
   assert.match(contextMenuContentSource, /className="page-chip-pin-menu-item"[\s\S]*className="page-chip-save-menu-item"/)
   assert.match(contextMenuContentSource, /className="page-chip-copy-title-menu-item"/)
@@ -1453,7 +1487,9 @@ test('PageChip routes saved-page mutation actions through Base UI context menus'
   assert.match(contextMenuContentSource, /<svg className="icon-\[ooui--copy-ltr\] size-3\.5" aria-hidden="true" \/>/)
   assert.match(contextMenuContentSource, /Copy page title text/)
   assert.match(contextMenuContentSource, /Copy URL/)
+  assert.match(contextMenuContentSource, /Remove from Tabs/)
   assert.match(contextMenuContentSource, /onClick=\{onSavedSelect\}/)
+  assert.match(contextMenuContentSource, /onClick=\{onRemoveFromTabsSelect\}/)
   assert.match(contextMenuContentSource, /onClick=\{onPagePinSelect\}/)
   assert.match(contextMenuContentSource, /onClick=\{onCopyTitle\}/)
   assert.match(contextMenuContentSource, /onClick=\{onCopyUrl\}/)
@@ -1479,6 +1515,9 @@ test('PageChip routes saved-page mutation actions through Base UI context menus'
   assert.match(pageChipSource, /pageChipTargetActionPolicy\(chip, \{ interactive: parentInteractive \}\)/)
   assert.match(pageChipSource, /pageChipTargetActionPolicy\(env\)/)
   assert.match(pageChipSource, /pageChipTargetActionPolicy\(variant\)/)
+  assert.match(pageChipSource, /import \{ activateRetainedPageTarget, removeRetainedPageTarget \} from '\.\.\/extension\/retained-page-actions\.js'/)
+  assert.match(pageChipSource, /if \(sourceType === 'retained-page'\) \{[\s\S]*await activateRetainedPageTarget\(target \|\| \{\}, mode\)[\s\S]*return[\s\S]*\}[\s\S]*performDashboardItemActivation/)
+  assert.match(pageChipSource, /async function onRemoveRetainedPage\([\s\S]*await removeRetainedPageTarget\(target\)/)
   assert.match(pageChipSource, /const canUseCopyContextMenu = parentInteractive && \(\!!chipTitleText \|\| \!!chipUrlText\)/)
   assert.match(pageChipSource, /async function onTogglePagePin\(e: StopPropagationEvent\)/)
   assert.match(pageChipSource, /await onTogglePinnedPageChip\?\.\(chip\.pagePinId\)/)
@@ -1490,8 +1529,10 @@ test('PageChip routes saved-page mutation actions through Base UI context menus'
 
   // PageChip wires the mutation handlers into the menus at each call site
   assert.match(pageChipSource, /envCanUseContextMenu \? \([\s\S]*<PageChipContextMenu[\s\S]*savedActionLabel=\{canToggleSavedEnv \? envSavedActionLabel : undefined\}[\s\S]*onSavedSelect=\{canToggleSavedEnv \? \(e\) => onToggleSavedEnv\(e, env\) : undefined\}[\s\S]*onReloadSelect=\{envCanUseChromeTabActions \? \(e\) => onReloadPageTarget\(e, env\) : undefined\}[\s\S]*onDuplicateSelect=\{envCanUseChromeTabActions \? \(e\) => onDuplicatePageTarget\(e, env\) : undefined\}[\s\S]*titleText=\{envTitleText\}[\s\S]*urlText=\{env\.tabUrl\}/)
+  assert.match(pageChipSource, /onRemoveFromTabsSelect=\{canRemoveRetainedEnv \? \(e\) => onRemoveRetainedPage\(e, env\) : undefined\}/)
   assert.match(pageChipSource, /variantCanUseContextMenu \? \([\s\S]*<PageChipContextMenu[\s\S]*savedActionLabel=\{variantCanToggleSaved \? variantSavedActionLabel : undefined\}[\s\S]*onSavedSelect=\{variantCanToggleSaved \? \(e\) => onToggleSavedTitleVariant\(e, variant\) : undefined\}[\s\S]*onReloadSelect=\{variantCanUseChromeTabActions \? \(e\) => onReloadPageTarget\(e, variant\) : undefined\}[\s\S]*onDuplicateSelect=\{variantCanUseChromeTabActions \? \(e\) => onDuplicatePageTarget\(e, variant\) : undefined\}[\s\S]*pagePinActionLabel=\{variantCanTogglePagePin \? variantPagePinActionLabel : undefined\}[\s\S]*onPagePinSelect=\{variantCanTogglePagePin \? \(e\) => onTogglePinnedTitleVariant\(e, variant\) : undefined\}[\s\S]*titleText=\{variantTitleText\}[\s\S]*urlText=\{variant\.tabUrl\}/)
-  assert.match(pageChipSource, /canToggleSavedPage \|\| canTogglePagePin \|\| canUseChromeTabActions \|\| canShowSuspend \|\| canUseCopyContextMenu[\s\S]*<PageChipContextMenu[\s\S]*savedActionLabel=\{canToggleSavedPage \? savedActionLabel : undefined\}[\s\S]*onSavedSelect=\{canToggleSavedPage \? onToggleSavedPage : undefined\}[\s\S]*pagePinActionLabel=\{canTogglePagePin \? pagePinActionLabel : undefined\}[\s\S]*onPagePinSelect=\{canTogglePagePin \? onTogglePagePin : undefined\}[\s\S]*onReloadSelect=\{canUseChromeTabActions \? \(e\) => onReloadPageTarget\(e, chip\) : undefined\}[\s\S]*onDuplicateSelect=\{canUseChromeTabActions \? \(e\) => onDuplicatePageTarget\(e, chip\) : undefined\}[\s\S]*titleText=\{chipTitleText\}[\s\S]*urlText=\{chipUrlText\}[\s\S]*onOpenChange=\{onChipContextMenuOpenChange\}/)
+  assert.match(pageChipSource, /onRemoveFromTabsSelect=\{variantCanRemoveRetained \? \(e\) => onRemoveRetainedPage\(e, variant\) : undefined\}/)
+  assert.match(pageChipSource, /canToggleSavedPage \|\| canRemoveRetained \|\| canTogglePagePin \|\| canUseChromeTabActions \|\| canShowSuspend \|\| canUseCopyContextMenu[\s\S]*<PageChipContextMenu[\s\S]*savedActionLabel=\{canToggleSavedPage \? savedActionLabel : undefined\}[\s\S]*onSavedSelect=\{canToggleSavedPage \? onToggleSavedPage : undefined\}[\s\S]*onRemoveFromTabsSelect=\{canRemoveRetained \? \(e\) => onRemoveRetainedPage\(e, chip\) : undefined\}[\s\S]*pagePinActionLabel=\{canTogglePagePin \? pagePinActionLabel : undefined\}[\s\S]*onPagePinSelect=\{canTogglePagePin \? onTogglePagePin : undefined\}[\s\S]*onReloadSelect=\{canUseChromeTabActions \? \(e\) => onReloadPageTarget\(e, chip\) : undefined\}[\s\S]*onDuplicateSelect=\{canUseChromeTabActions \? \(e\) => onDuplicatePageTarget\(e, chip\) : undefined\}[\s\S]*titleText=\{chipTitleText\}[\s\S]*urlText=\{chipUrlText\}[\s\S]*onOpenChange=\{onChipContextMenuOpenChange\}/)
   assert.match(tabHistoryPanelSource, /onReloadSelect=\{canShowSuspend \? onReloadEntry : undefined\}/)
   assert.match(tabHistoryPanelSource, /onDuplicateSelect=\{canShowSuspend \? onDuplicateEntry : undefined\}/)
 })
@@ -1648,6 +1689,39 @@ test('PageChip keeps folded env saved-page actions in the context menu', () => {
   assert.doesNotMatch(html, /aria-label="Remove saved page"/)
   assert.doesNotMatch(html, /aria-label="Save page"/)
   assert.doesNotMatch(html, /\bchip-save\b/)
+})
+
+test('PageChip progressively mounts oversized folded env groups in 24-target chunks', () => {
+  const envs = Array.from({ length: 100 }, (_, index) => {
+    const label = String(index + 1).padStart(3, '0')
+    const url = `https://env-${label}.example.test/docs`
+    return {
+      prefix: `env-${label}`,
+      tabUrl: url,
+      rawUrl: url,
+      sourceType: 'retained-page' as const,
+      title: 'Example Docs',
+      faviconUrl: '',
+      retainedPageIdentity: `identity-${label}`,
+      retainedPageClosureToken: `lifetime-${label}`
+    }
+  })
+  const chip = makeChip({
+    sourceType: 'retained-page',
+    tabUrl: envs[0]?.tabUrl || '',
+    rawUrl: envs[0]?.rawUrl || '',
+    displaySegments: ['Example Docs'],
+    tooltip: '100 environments · Example Docs',
+    envs
+  })
+
+  const html = renderWithDomainCardContext(React.createElement(PageChip, { chip }))
+
+  assert.equal((html.match(/\bchip-env-shell\b/g) || []).length, 24)
+  assert.match(html, />env-024</)
+  assert.doesNotMatch(html, />env-025</)
+  assert.match(html, /data-tabout-part="progressive-env-sentinel"/)
+  assert.match(html, /data-tabout-progressive-remaining="76"/)
 })
 
 test('PageChip renders saved bookmark folded env pills as read-only hints', () => {

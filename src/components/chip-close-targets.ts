@@ -10,7 +10,13 @@
 import type { DashboardChipData, DashboardChipEnv } from '../extension/types'
 import { isReadOnlyDashboardSourceType } from '../extension/dashboard-source.js'
 
-export type CloseTargetVariant = Pick<DashboardChipData, 'sourceType' | 'saved' | 'closedSaved' | 'tabUrl' | 'rawUrl'>
+export type CloseTargetVariant = {
+  sourceType?: DashboardChipData['sourceType']
+  saved?: boolean
+  closedSaved?: boolean
+  tabUrl: string
+  rawUrl: string
+}
 export type CloseTargetSavedState = Pick<DashboardChipData | DashboardChipEnv, 'sourceType' | 'saved' | 'closedSaved'>
 
 export interface VariantCloseTargets {
@@ -57,6 +63,12 @@ export function partitionVariantCloseTargets(variants: readonly CloseTargetVaria
     .filter((v) => v.sourceType !== 'history')
     .map((v) => ({ prefix: '', tabUrl: v.tabUrl, rawUrl: v.rawUrl }))
   return { historyUrls, tabEnvs }
+}
+
+export function foldedTabCloseTargets(
+  envs: readonly DashboardChipEnv[]
+): DashboardChipEnv[] {
+  return envs.filter((env) => variantClosable(env))
 }
 
 export function historyDeleteFullyRemoved(

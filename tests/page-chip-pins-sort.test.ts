@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { computeDomainCardViewModel } from '../src/extension/domain-card-view-model.js'
+import { computeDomainCardViewModel, dashboardChipOrderKeyForChip } from '../src/extension/domain-card-view-model.js'
 import { buildDomainGroups } from '../src/extension/render.js'
 import {
   createPinnedPageChipIndex,
   pageChipPinId,
+  pageChipPinKeyForFoldUrls,
   pageChipPinKeyForUrl,
   pageChipPinScopeId
 } from '../src/extension/page-chip-pins.js'
@@ -98,8 +99,18 @@ test('computeDomainCardViewModel sorts pinned folded chips as aggregate rows', (
   ]
   const group = groupFor('example.com', tabs)
   const sharedScope = pageChipPinScopeId('example.com', '__shared__', '', '')
+  const legacyBravoPinId = pageChipPinId(
+    'tabs',
+    sharedScope,
+    `fold:${['https://dev.example.com/bravo', 'https://qa.example.com/bravo'].sort().join('\u0000')}`
+  )
+  const compactBravoPinId = pageChipPinId(
+    'tabs',
+    sharedScope,
+    pageChipPinKeyForFoldUrls(['https://dev.example.com/bravo', 'https://qa.example.com/bravo'])
+  )
   const pinnedPageChips = createPinnedPageChipIndex([
-    pageChipPinId('tabs', sharedScope, `fold:${['https://dev.example.com/bravo', 'https://qa.example.com/bravo'].sort().join('\u0000')}`)
+    legacyBravoPinId
   ])
 
   const vm = computeDomainCardViewModel(group, { source: 'tabs', pinnedPageChips })
@@ -113,6 +124,30 @@ test('computeDomainCardViewModel sorts pinned folded chips as aggregate rows', (
     sharedSection.flatVisibleChips.map((chip) => chip.pagePinned),
     [true, false]
   )
+  assert.equal(sharedSection.flatVisibleChips[0]?.pagePinId, compactBravoPinId)
+})
+
+test('folded chip remembered-order keys stay bounded to one representative URL', () => {
+  const alpha = 'https://env-alpha.example.test/docs'
+  const bravo = 'https://env-bravo.example.test/docs'
+  const charlie = 'https://env-charlie.example.test/docs'
+
+  function orderKey(urls: readonly string[]) {
+    const first = urls[0] || ''
+    return dashboardChipOrderKeyForChip({
+      sourceType: 'retained-page',
+      tabUrl: first,
+      envs: urls.map((url) => ({ prefix: 'env', tabUrl: url, rawUrl: url }))
+    })
+  }
+
+  const key = orderKey([bravo, alpha])
+
+  assert.equal(key, `tab:fold:${alpha}`)
+  assert.equal(key.includes(bravo), false)
+  assert.equal(orderKey([alpha, charlie]), key)
+  assert.equal(orderKey([charlie, bravo]), `tab:fold:${bravo}`)
+  assert.equal(orderKey([alpha, bravo]), orderKey([bravo, alpha]))
 })
 
 test('computeDomainCardViewModel keeps pinned same-title URL variants inside one promoted group', () => {
@@ -204,5 +239,55 @@ test('computeDomainCardViewModel orders a unified same-title group by its earlie
   assert.deepEqual(
     variantGroup.titleVariantChips?.map((variant) => variant.pagePinned),
     [true, true, false]
+  )
+})
+
+test('a pinned retained variant does not replace the live same-title group representative', () => {
+  const tabs = [
+    makeTab({ id: 1, title: 'Example content item', url: 'https://example.com/alpha' }),
+    makeTab({
+      id: 2,
+      title: 'Example content item',
+      url: 'https://example.com/bravo',
+      sourceType: 'retained-page',
+      closedSaved: true,
+      retainedPageIdentity: 'identity-bravo',
+      retainedPageClosureToken: 'lifetime-bravo'
+    })
+  ]
+  const group = groupFor('example.com', tabs)
+  const rootScope = pageChipPinScopeId('example.com', '', '', '')
+  const retainedPinId = pageChipPinId(
+    'tabs',
+    rootScope,
+    pageChipPinKeyForUrl('https://example.com/bravo')
+  )
+  const pinnedPageChips = createPinnedPageChipIndex([retainedPinId])
+
+  const vm = computeDomainCardViewModel(group, { source: 'tabs', pinnedPageChips })
+  const section = vm.sections?.find((candidate) => candidate.key === '')
+  const variantGroup = section?.flatVisibleChips[0]
+  assert.ok(variantGroup)
+
+  assert.equal(variantGroup.tabUrl, 'https://example.com/alpha')
+  assert.equal(variantGroup.sourceType, 'tab')
+  assert.deepEqual(
+    variantGroup.titleVariantChips?.map((variant) => ({
+      pagePinned: variant.pagePinned,
+      sourceType: variant.sourceType,
+      tabUrl: variant.tabUrl
+    })),
+    [
+      {
+        pagePinned: true,
+        sourceType: 'retained-page',
+        tabUrl: 'https://example.com/bravo'
+      },
+      {
+        pagePinned: false,
+        sourceType: 'tab',
+        tabUrl: 'https://example.com/alpha'
+      }
+    ]
   )
 })

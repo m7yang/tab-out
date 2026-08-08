@@ -17,12 +17,32 @@
 import { Effect, Exit } from 'effect'
 
 import { refreshBadge as refreshBadgeEffect } from './background/badge.js'
+import { createAdjacentCloseBatcher } from './background/adjacent-close-batcher.js'
+import { createAdjacentOpenSurfaceBatcher } from './background/adjacent-open-surface-batcher.js'
 import { OPEN_FILTER_TAB_COMMAND, openFilterTabEffect } from './background/filter-command.js'
+import {
+  createInitialOpenSurfaceReconciliationCoordinator,
+  initialOpenSurfaceReconciliationEffect
+} from './background/initial-open-surface-reconciliation.js'
 import { OPEN_NEW_TAB_COMMAND, openNewTabEffect } from './background/new-tab-command.js'
 import { buildOpenTabDedupePlan } from './open-tab-dedupe-plan.js'
 import { closeDuplicateTabsEffect } from './tabs.js'
 import { groupColorChanged } from './groups.js'
 import { BrowserTabs } from './browser-tabs-service.js'
+import {
+  captureCurrentOpenSurfaceObservations,
+  captureOpenSurfaceCheckpoint,
+  captureOpenSurfaceObservation
+} from './background/open-surface-capture.js'
+import { recoverRetainedPageSnapshot } from './background/retained-page-recovery.js'
+import {
+  RetainedPages,
+  type CaptureClosedSurfacesResult
+} from './background/retained-pages-service.js'
+import {
+  RETAINED_PAGES_EXPIRY_ALARM,
+  scheduleRetainedPagesExpiryAlarm
+} from './background/retained-pages-expiry-alarm.js'
 import * as TabHistory from './background/tab-history-service.js'
 import * as WorkingSet from './background/working-set-service.js'
 import {
@@ -39,6 +59,10 @@ import {
   isDashboardServiceStateGetMessage,
   isTabHistoryGetMessage,
   parseClosedTabRestoreStateMessage,
+  parseClosedTabRetentionSettleMessage,
+  parseRetainedPageActivateMessage,
+  parseRetainedPageRemoveMessage,
+  parseSavedPageActivateMessage,
   parseTabHistorySwitchDirection
 } from './runtime-messages.js'
 
@@ -47,6 +71,7 @@ const backgroundRuntime = createBackgroundRuntime(chromeApi)
 const workingSetService = backgroundRuntime.runSync(WorkingSet.WorkingSet)
 const tabHistoryService = backgroundRuntime.runSync(TabHistory.TabHistory)
 const startupSnapshotService = backgroundRuntime.runSync(StartupSnapshot)
+const retainedPagesService = backgroundRuntime.runSync(RetainedPages)
 
 function settleBackgroundEffect<Success, Failure, Requirements>(
   effect: Effect.Effect<Success, Failure, Requirements>
@@ -56,6 +81,77 @@ function settleBackgroundEffect<Success, Failure, Requirements>(
     Effect.catchCause(() => Effect.void)
   )
 }
+
+function synchronizeRetainedPagesExpiryAlarm(): Effect.Effect<void, never> {
+  return retainedPagesService.getLedger().pipe(
+    Effect.flatMap((ledger) => scheduleRetainedPagesExpiryAlarm(chromeApi.alarms, ledger)),
+    Effect.catchCause(() => Effect.void)
+  )
+}
+
+function settleRetainedCloseBatchEffect<Failure, Requirements>(
+  effect: Effect.Effect<CaptureClosedSurfacesResult, Failure, Requirements>
+): Effect.Effect<void, never, Requirements> {
+  return Effect.exit(effect).pipe(
+    Effect.flatMap((exit) => {
+      if (Exit.isSuccess(exit)) {
+        const committed = exit.value.ledger
+        if (committed) {
+          return scheduleRetainedPagesExpiryAlarm(
+            chromeApi.alarms,
+            committed
+          ).pipe(Effect.catchCause(() => Effect.void))
+        }
+      }
+      // A failed commit or all-missing batch has no authoritative new ledger;
+      // retry alarm transport from the currently persisted owner state.
+      return synchronizeRetainedPagesExpiryAlarm()
+    }),
+    Effect.catchCause(() => Effect.void)
+  )
+}
+
+const initialOpenSurfaceReconciliation =
+  createInitialOpenSurfaceReconciliationCoordinator({
+    reconcile: (mode) => backgroundRuntime.runPromise(
+      retainedPagesService.reconcileOpenSurfaces(
+        mode,
+        captureCurrentOpenSurfaceObservations(chromeApi)
+      ).pipe(
+        Effect.asVoid,
+        Effect.ensuring(synchronizeRetainedPagesExpiryAlarm())
+      )
+    )
+  })
+
+function afterInitialOpenSurfaceReconciliation<Success, Failure, Requirements>(
+  effect: Effect.Effect<Success, Failure, Requirements>
+): Effect.Effect<Success, Failure, Requirements> {
+  return initialOpenSurfaceReconciliationEffect(initialOpenSurfaceReconciliation).pipe(
+    Effect.andThen(effect)
+  )
+}
+
+const openSurfaceCheckpointBatcher = createAdjacentOpenSurfaceBatcher((captures) =>
+  backgroundRuntime.runPromise(settleBackgroundEffect(
+    afterInitialOpenSurfaceReconciliation(
+      retainedPagesService.checkpointOpenSurfaces(captures)
+    )
+  )))
+
+const retainedCloseBatcher = createAdjacentCloseBatcher((tabIds) =>
+  backgroundRuntime.runPromise(settleRetainedCloseBatchEffect(
+    Effect.all(
+      tabIds.map((tabId) => Effect.tryPromise({
+        try: () => openSurfaceCheckpointBatcher.whenSettled(tabId),
+        catch: (cause) => cause
+      })),
+      { concurrency: 'unbounded', discard: true }
+    ).pipe(Effect.andThen(afterInitialOpenSurfaceReconciliation(
+      retainedPagesService.captureClosedSurfaces(tabIds)
+    )))
+  ))
+)
 
 function sendEffectResponse<Value, Failure, Requirements>(
   effect: Effect.Effect<Value, Failure, Requirements>,
@@ -92,6 +188,18 @@ async function captureActiveTab(windowId: number): Promise<chrome.tabs.Tab | nul
   }
 }
 
+async function captureOpenSurfaceByTabId(tabId: number) {
+  const tab = await captureTab(tabId)
+  return tab ? captureOpenSurfaceObservation(chromeApi, tab) : null
+}
+
+async function captureOpenSurfaceCheckpointByTabId(tabId: number) {
+  const tab = await captureTab(tabId)
+  return tab
+    ? captureOpenSurfaceCheckpoint(chromeApi, tab)
+    : { status: 'unavailable' as const }
+}
+
 const handleActionClick = Effect.fn('Background.handleActionClick')(function*(
   tab: chrome.tabs.Tab
 ) {
@@ -115,17 +223,33 @@ const handleActionClick = Effect.fn('Background.handleActionClick')(function*(
 // ─── Event listeners ──────────────────────────────────────────────────────────
 
 // Update badge when the extension is first installed
-chromeApi.runtime.onInstalled.addListener(() => {
+chromeApi.runtime.onInstalled.addListener((details) => {
   refreshBadge()
+  const reconciliationMode = details.reason === 'install'
+    ? 'first-install'
+    : details.reason === 'chrome_update'
+      ? 'browser-startup'
+      : 'extension-reload'
+  const reconciliation = initialOpenSurfaceReconciliationEffect(
+    initialOpenSurfaceReconciliation,
+    reconciliationMode
+  )
   void backgroundRuntime.runPromise(
-    settleBackgroundEffect(startupSnapshotService.refreshNow())
+    settleBackgroundEffect(
+      reconciliation.pipe(Effect.andThen(startupSnapshotService.refreshNow()))
+    )
   )
 })
 
 // Update badge when Chrome starts up
 chromeApi.runtime.onStartup.addListener(() => {
   refreshBadge()
+  const reconciliation = initialOpenSurfaceReconciliationEffect(
+    initialOpenSurfaceReconciliation,
+    'browser-startup'
+  )
   return backgroundRuntime.runPromise(settleBackgroundEffect(Effect.gen(function*() {
+    yield* reconciliation
     yield* tabHistoryService.resetForBrowserStartup()
     yield* startupSnapshotService.refreshNow()
   })))
@@ -135,6 +259,12 @@ chromeApi.runtime.onStartup.addListener(() => {
 // the dashboard whenever any tab is opened.
 chromeApi.tabs.onCreated.addListener((tab) => {
   refreshBadge()
+  if (typeof tab.id === 'number') {
+    openSurfaceCheckpointBatcher.enqueue(
+      tab.id,
+      captureOpenSurfaceCheckpoint(chromeApi, tab)
+    )
+  }
   void backgroundRuntime.runPromise(
     settleBackgroundEffect(Effect.all([
       tabHistoryService.recordTabCreation(tab),
@@ -169,11 +299,23 @@ chromeApi.windows.onFocusChanged.addListener((windowId) => {
 })
 
 chromeApi.tabs.onMoved.addListener(scheduleStartupSnapshotRefresh)
-chromeApi.tabs.onAttached.addListener(scheduleStartupSnapshotRefresh)
+chromeApi.tabs.onAttached.addListener((tabId) => {
+  openSurfaceCheckpointBatcher.enqueue(tabId, captureOpenSurfaceCheckpointByTabId(tabId))
+  scheduleStartupSnapshotRefresh()
+})
 chromeApi.tabs.onDetached.addListener(scheduleStartupSnapshotRefresh)
 
 chromeApi.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
   refreshBadge()
+  openSurfaceCheckpointBatcher.invalidate(removedTabId)
+  void backgroundRuntime.runPromise(settleBackgroundEffect(
+    afterInitialOpenSurfaceReconciliation(
+      retainedPagesService.replaceOpenSurface(
+        removedTabId,
+        captureOpenSurfaceByTabId(addedTabId)
+      )
+    )
+  ))
   return backgroundRuntime.runPromise(settleBackgroundEffect(
     Effect.all([
       tabHistoryService.replaceTabId(addedTabId, removedTabId),
@@ -189,6 +331,7 @@ chromeApi.tabs.onReplaced.addListener((addedTabId, removedTabId) => {
 // Update badge whenever a tab is closed
 chromeApi.tabs.onRemoved.addListener((tabId, removeInfo) => {
   refreshBadge()
+  retainedCloseBatcher.enqueue(tabId)
   void backgroundRuntime.runPromise(settleBackgroundEffect(
     Effect.all([
       tabHistoryService.restorePreviousTabAfterClose(tabId, removeInfo),
@@ -205,6 +348,10 @@ chromeApi.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     changeInfo.groupId !== undefined ||
     changeInfo.pinned !== undefined
   ) refreshBadge()
+  openSurfaceCheckpointBatcher.enqueue(
+    tabId,
+    captureOpenSurfaceCheckpoint(chromeApi, tab)
+  )
   void backgroundRuntime.runPromise(settleBackgroundEffect(Effect.all([
     tabHistoryService.recordTabNavigation(tabId, changeInfo, tab),
     workingSetService.recordTabNavigation(tabId, changeInfo, tab)
@@ -235,16 +382,31 @@ chromeApi.sessions.onChanged.addListener(() => {
 })
 
 chromeApi.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name !== STARTUP_SNAPSHOT_DURABLE_CHECKPOINT_ALARM) return
-  void backgroundRuntime.runPromise(
-    settleBackgroundEffect(startupSnapshotService.promoteDurableCheckpoint())
-  )
+  if (alarm.name === RETAINED_PAGES_EXPIRY_ALARM) {
+    void backgroundRuntime.runPromise(settleBackgroundEffect(
+      afterInitialOpenSurfaceReconciliation(Effect.gen(function*() {
+        const ledger = yield* retainedPagesService.getLedger()
+        yield* scheduleRetainedPagesExpiryAlarm(chromeApi.alarms, ledger).pipe(
+          Effect.catchCause(() => Effect.void)
+        )
+        yield* startupSnapshotService.refreshNow()
+      }))
+    ))
+    return
+  }
+  if (alarm.name === STARTUP_SNAPSHOT_DURABLE_CHECKPOINT_ALARM) {
+    void backgroundRuntime.runPromise(
+      settleBackgroundEffect(startupSnapshotService.promoteDurableCheckpoint())
+    )
+  }
 })
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (startupSnapshotStorageChangesRequireRefresh(changes, areaName)) {
     void backgroundRuntime.runPromise(
-      settleBackgroundEffect(startupSnapshotService.refreshNow())
+      settleBackgroundEffect(afterInitialOpenSurfaceReconciliation(
+        startupSnapshotService.refreshNow()
+      ))
     )
   }
 })
@@ -276,7 +438,7 @@ chromeApi.action.onClicked.addListener((tab) => {
   )
 })
 
-chromeApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chromeApi.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (isClosedTabRestoreMessage(message)) {
     const restoreState = parseClosedTabRestoreStateMessage(message)
     if (!restoreState) {
@@ -293,6 +455,76 @@ chromeApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       )
     }
     sendResponse({ ok: true })
+    return true
+  }
+
+  const closedTabRetentionSettlement = parseClosedTabRetentionSettleMessage(message)
+  if (closedTabRetentionSettlement) {
+    void retainedCloseBatcher.whenSettled(closedTabRetentionSettlement.tabId).then(
+      () => sendResponse({ ok: true }),
+      () => sendResponse({ ok: false })
+    )
+    return true
+  }
+
+  const retainedPageActivation = parseRetainedPageActivateMessage(message)
+  if (retainedPageActivation) {
+    void backgroundRuntime.runPromise(settleBackgroundEffect(sendEffectResponse(
+      afterInitialOpenSurfaceReconciliation(
+        retainedPagesService.activateSnapshot(
+          retainedPageActivation.identityDigest,
+          retainedPageActivation.closureToken,
+          retainedPageActivation.disposition,
+          typeof sender.tab?.windowId === 'number'
+            ? sender.tab.windowId
+            : undefined
+        ).pipe(Effect.ensuring(synchronizeRetainedPagesExpiryAlarm()))
+      ),
+      sendResponse,
+      ({ outcome }) => ({ ok: true, outcome }),
+      () => ({ ok: false })
+    )))
+    return true
+  }
+
+  const retainedPageRemoval = parseRetainedPageRemoveMessage(message)
+  if (retainedPageRemoval) {
+    void backgroundRuntime.runPromise(settleBackgroundEffect(sendEffectResponse(
+      afterInitialOpenSurfaceReconciliation(
+        retainedPagesService.removeSnapshot(
+          retainedPageRemoval.identityDigest,
+          retainedPageRemoval.closureToken
+        ).pipe(Effect.ensuring(synchronizeRetainedPagesExpiryAlarm()))
+      ),
+      sendResponse,
+      ({ outcome }) => ({ ok: true, outcome }),
+      () => ({ ok: false })
+    )))
+    return true
+  }
+
+  const savedPageActivation = parseSavedPageActivateMessage(message)
+  if (savedPageActivation) {
+    const recovery = Effect.tryPromise({
+      try: () => recoverRetainedPageSnapshot(
+        chromeApi,
+        savedPageActivation,
+        savedPageActivation.disposition,
+        typeof sender.tab?.windowId === 'number'
+          ? { currentWindowId: sender.tab.windowId }
+          : {}
+      ),
+      catch: (cause) => cause
+    })
+    void backgroundRuntime.runPromise(settleBackgroundEffect(sendEffectResponse(
+      recovery,
+      sendResponse,
+      (activated) => ({
+        ok: true,
+        outcome: activated ? 'activated' : 'failed'
+      }),
+      () => ({ ok: false })
+    )))
     return true
   }
 
@@ -323,19 +555,29 @@ chromeApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (isDashboardServiceStateGetMessage(message)) {
     void backgroundRuntime.runPromise(settleBackgroundEffect(sendEffectResponse(
-      captureDashboardServiceStateEffect,
+      afterInitialOpenSurfaceReconciliation(captureDashboardServiceStateEffect),
       sendResponse,
-      ({ tabHistory, workingSetActivity, openTabsSnapshot }) => ({
+      ({
+        tabHistory,
+        workingSetActivity,
+        openTabsSnapshot,
+        retainedPagesWire,
+        retentionHealth
+      }) => ({
         ok: true,
         tabHistory,
         workingSetActivity,
-        openTabsSnapshot
+        openTabsSnapshot,
+        retainedPages: retainedPagesWire,
+        retentionHealth
       }),
       () => ({
         ok: false,
         tabHistory: null,
         workingSetActivity: null,
-        openTabsSnapshot: null
+        openTabsSnapshot: null,
+        retainedPages: null,
+        retentionHealth: null
       })
     )))
     return true
@@ -346,5 +588,6 @@ chromeApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 // ─── Initial run ─────────────────────────────────────────────────────────────
 
-// Run once immediately when the service worker first loads
+// Badge setup is eager. Open-surface reconciliation is deferred by one event
+// turn so onStartup/onInstalled can claim the worker's real lifecycle mode.
 refreshBadge()

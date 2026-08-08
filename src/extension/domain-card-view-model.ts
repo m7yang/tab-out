@@ -14,7 +14,7 @@ import { countClosableDuplicateExtras } from './tab-dedupe-policy.js'
 import { canonicalDedupeKey } from './url-canonical.js'
 import { allOpenTargetsSuspended, dashboardItemNameForTabs, isClosedSavedDashboardTab } from './dashboard-source.js'
 import { pathgroupPinId, subdomainPinId, websitePathPinId } from './section-pins.js'
-import { pageChipPinId, pageChipPinKeyForFoldUrls, pageChipPinKeyForUrl, pageChipPinScopeId, pinnedPageChipOrder } from './page-chip-pins.js'
+import { pageChipFoldRepresentativeUrl, pageChipPinId, pageChipPinKeyForFoldUrls, pageChipPinKeyForUrl, pageChipPinScopeId, pinnedPageChipOrder } from './page-chip-pins.js'
 import type { PinnedPageChipIndex } from './page-chip-pins.js'
 import type { CompiledFilterQuery } from './filter-query.js'
 import type { DashboardCardVM, DashboardChipData, DashboardChipPriorityMap, DashboardClusterVM, DashboardSectionVM, DashboardSegment, DashboardSource, DashboardTab, DashboardTitleSuppression, DashboardWebsitePathSectionVM, DomainGroup, PathGroupResult, WebsitePathSectionResult } from './types'
@@ -101,12 +101,14 @@ const TITLE_BOUNDARY_SEPARATOR_RE = /^[-\u2013\u2014\u00b7|:]/
 const TITLE_BOUNDARY_TRAILING_SEPARATOR_RE = /[-\u2013\u2014\u00b7|:]$/
 
 function dashboardChipOrderKey(sourceType: DashboardTab['sourceType'] | undefined, kind: 'url' | 'fold', value: string): string {
-  const orderSource = sourceType === 'saved-page' ? 'tab' : sourceType || 'tab'
+  const orderSource = sourceType === 'saved-page' || sourceType === 'retained-page'
+    ? 'tab'
+    : sourceType || 'tab'
   return `${orderSource}:${kind}:${value}`
 }
 
 function dashboardFoldChipOrderKey(sourceType: DashboardTab['sourceType'] | undefined, urls: readonly string[]): string {
-  return dashboardChipOrderKey(sourceType, 'fold', urls.toSorted().join('\u0000'))
+  return dashboardChipOrderKey(sourceType, 'fold', pageChipFoldRepresentativeUrl(urls))
 }
 
 export function dashboardChipOrderKeyForTab(tab: Pick<DashboardTab, 'sourceType' | 'url'>): string {
@@ -627,9 +629,35 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   const displayMode = mode === 'unmatched' ? 'unmatched' : 'normal'
   const stableId = domainGroupCardId(group)
   const isAppsGroup = group.domain === '__standalone-apps__'
+  const parsedUrlByValue = new Map<string, URL | null>()
+  const canonicalKeyByValue = new Map<string, string>()
+  const pathGroupByValue = new Map<string, PathGroupResult | null>()
+  const strippedTitleByValue = new Map<string, string>()
+  const subdomainPrefixByValue = new Map<string, string>()
 
-  if (filtering && isAppsGroup) {
-    return { stableId, isHidden: true, displayMode, filtering }
+  function parseUrl(url: string): URL | null {
+    if (parsedUrlByValue.has(url)) return parsedUrlByValue.get(url) ?? null
+    const parsed = URL.parse(url)
+    parsedUrlByValue.set(url, parsed)
+    return parsed
+  }
+
+  function strippedTitle(title: string): string {
+    return strippedTitleByValue.getOrInsertComputed(title, stripTitleNoise)
+  }
+
+  function canonicalKey(url: string): string {
+    return canonicalKeyByValue.getOrInsertComputed(
+      url,
+      () => canonicalDedupeKey(url)
+    )
+  }
+
+  function subdomainForUrl(url: string): string {
+    return subdomainPrefixByValue.getOrInsertComputed(url, () => {
+      const parsed = parseUrl(url)
+      return parsed ? subdomainPrefix(parsed.hostname, group.domain) : ''
+    })
   }
 
   // First thing: narrow the tab set to what this grid should show.
@@ -637,9 +665,16 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   // empty filter keeps nothing (secondary grid is hidden upstream in
   // that case anyway, but bail early so we don't produce a ghost
   // VM full of chips).
+  const filterCandidates = mode === 'unmatched'
+    ? isAppsGroup
+      ? []
+      : allTabs.filter((tab) => !isClosedSavedDashboardTab(tab))
+    : filtering && isAppsGroup
+      ? allTabs.filter(isClosedSavedDashboardTab)
+      : allTabs
   const tabs =
     filtering
-      ? allTabs.filter((t) => {
+      ? filterCandidates.filter((t) => {
           const m = tabMatchesCompiledFilter(t, compiledFilter)
           return mode === 'unmatched' ? !m : m
         })
@@ -664,27 +699,29 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   const savedCountText = filtering && closedSavedCount !== totalClosedSavedCount
     ? `${closedSavedCount}/${totalClosedSavedCount}`
     : `${closedSavedCount}`
-  const savedOnlyCountLabel =
-    filtering && tabCount === 0 && closedSavedCount > 0 && closedSavedCount !== totalClosedSavedCount
-      ? `${savedCountText} saved`
-      : ''
-  const savedCountLabel = closedSavedCount > 0 ? ` +${savedCountText} saved` : ''
-  const tabCountLabel = savedOnlyCountLabel || `${openCountLabel}${savedCountLabel}`
+  const closedOnlyCountLabel = tabCount === 0 && closedSavedCount > 0
+    ? `${savedCountText} closed`
+    : ''
+  const savedCountLabel = closedSavedCount > 0 ? ` + ${savedCountText} closed` : ''
+  const tabCountLabel = closedOnlyCountLabel || `${openCountLabel}${savedCountLabel}`
   const tabCountTitleParts = [
     filtering
       ? `${tabCount} of ${totalTabCount} ${itemLabel}${totalTabCount !== 1 ? 's' : ''} shown while filtering`
       : `${tabCount} ${itemLabel}${tabCount !== 1 ? 's' : ''}`,
     closedSavedCount > 0
       ? filtering
-        ? `${closedSavedCount} of ${totalClosedSavedCount} saved page${totalClosedSavedCount !== 1 ? 's' : ''} shown while filtering`
-        : `${closedSavedCount} saved page${closedSavedCount !== 1 ? 's' : ''}`
+        ? `${closedSavedCount} of ${totalClosedSavedCount} closed page${totalClosedSavedCount !== 1 ? 's' : ''} shown while filtering`
+        : `${closedSavedCount} closed page${closedSavedCount !== 1 ? 's' : ''}`
       : ''
   ].filter(Boolean)
   const tabCountTitle = tabCountTitleParts.join(', ')
   const isTabOutGroup = group.domain === '__tab-out__'
 
   // Tabs in a Chrome group are preserved by bulk close / dedup actions.
-  const isBulkClosableTab = (tab: DashboardTab) => !isGroupedTab(tab) && !(isTabOutGroup && tab.pinned)
+  const isBulkClosableTab = (tab: DashboardTab) =>
+    !isClosedSavedDashboardTab(tab) &&
+    !isGroupedTab(tab) &&
+    !(isTabOutGroup && tab.pinned)
   const closableTabs = openTabs.filter(isBulkClosableTab)
   const closableCount = closableTabs.length
   const suspendableTabs = closableTabs.filter((t) => !t.suspended)
@@ -693,7 +730,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
 
   // Count duplicates per URL and delegate the closeability rules to the
   // shared dedupe policy so dashboard counts mirror tab mutation behavior.
-  const keyOf = (t: DashboardTab) => canonicalDedupeKey(t.url)
+  const keyOf = (t: DashboardTab) => canonicalKey(t.url)
   const tabsByUrl = Map.groupBy(openTabs, keyOf)
 
   function closableForUrl(u: string): number {
@@ -703,7 +740,6 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   const closableExtras = closableDupeUrls.reduce((s, u) => s + closableForUrl(u), 0)
 
   const tabOutDisplayMeta = new WeakMap<DashboardTab, TabOutDisplayMeta>()
-  const displayTabsByUrl = Map.groupBy(tabs, keyOf)
 
   function tabOutBucketForTab(tab: DashboardTab): { key: string; kind: TabOutDisplayBucketKind; rank: number; groupId: number } {
     if (isCurrentTabOutPage(tab, currentWindowId)) return { key: 'current', kind: 'current', rank: 0, groupId: -1 }
@@ -759,13 +795,18 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   // New tabs utility card keeps state-preserved physical Tab Out buckets visible.
   const uniqueTabs: DashboardTab[] = []
   if (isTabOutGroup) {
+    const displayTabsByUrl = Map.groupBy(tabs, keyOf)
     for (const urlTabs of displayTabsByUrl.values()) {
       uniqueTabs.push(...tabOutDisplayTabsForUrl(urlTabs))
     }
   } else {
     const seen = new Set<string>()
     for (const tab of tabs) {
-      const key = keyOf(tab)
+      const key = tab.sourceType === 'saved-page'
+        ? `saved:${tab.savedPageKey || `${tab.isApp ? 'app' : 'normal-tab'}:${tab.url}`}`
+        : tab.sourceType === 'retained-page'
+          ? `retained:${tab.retainedPageIdentity || keyOf(tab)}`
+          : `open:${keyOf(tab)}`
       if (!seen.has(key)) {
         seen.add(key)
         uniqueTabs.push(tab)
@@ -774,8 +815,8 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   }
 
   function baseTitlePresentation(tab: DashboardTab): BaseTitlePresentation {
-    const hostname = URL.parse(tab.url)?.hostname ?? group.domain
-    const cleaned = cleanTitleWithRemovedSuffix(stripTitleNoise(tab.title || ''), hostname, titleNoiseSuffixesForUrl(tab.url))
+    const hostname = parseUrl(tab.url)?.hostname ?? group.domain
+    const cleaned = cleanTitleWithRemovedSuffix(strippedTitle(tab.title || ''), hostname, titleNoiseSuffixesForUrl(tab.url))
     return {
       displayTitle: cleaned.title,
       removedDomainTitleSuffix: cleaned.removedSuffix
@@ -783,22 +824,26 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   }
 
   function titleNoiseSuffixesForUrl(url: string): string[] {
-    const parsed = URL.parse(url)
+    const parsed = parseUrl(url)
     if (parsed?.hostname.endsWith('.atlassian.net') && parsed.pathname.startsWith('/wiki/')) return ['Confluence']
     return []
   }
 
   function structuralPathGroup(tab: DashboardTab): PathGroupResult | null {
-    try {
-      return resolvePathGroup(tab.url)
-    } catch {
-      return null
-    }
+    return pathGroupByValue.getOrInsertComputed(tab.url, () => {
+      const parsed = parseUrl(tab.url)
+      if (!parsed) return null
+      try {
+        return resolvePathGroup(parsed)
+      } catch {
+        return null
+      }
+    })
   }
 
   function buildTitlePresentations(): Map<string, TitlePresentation> {
     const rows: TitlePresentationRow[] = uniqueTabs.map((tab) => {
-      const rawTitle = stripTitleNoise(tab.title || '')
+      const rawTitle = strippedTitle(tab.title || '')
       const baseTitle = baseTitlePresentation(tab)
       const pathGroup = structuralPathGroup(tab)
       return {
@@ -853,15 +898,46 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
     }
 
     const minCount = rows.length <= 3 ? 2 : 3
+    const cardCandidatesByTitle = new Map<
+      string,
+      Map<string, TitleSuppressionCandidate[]>
+    >()
+    const pathGroupCandidatesByTitle = new Map<
+      string,
+      Map<string, TitleSuppressionCandidate[]>
+    >()
+    function cachedTitleSuppressionCandidates(
+      row: TitlePresentationRow,
+      pathGroup: boolean
+    ): TitleSuppressionCandidate[] {
+      const cache = pathGroup
+        ? pathGroupCandidatesByTitle
+        : cardCandidatesByTitle
+      const byStructuralTail = cache.getOrInsertComputed(
+        row.displayTitle,
+        () => new Map()
+      )
+      const structuralTailKey = row.structuralTails.map((tail) =>
+        `${tail.label}\u0000${tail.includeSeparatorInSuppression ? '1' : '0'}`
+      ).join('\u0001')
+      return byStructuralTail.getOrInsertComputed(structuralTailKey, () =>
+        titleSuppressionCandidates(
+          row.displayTitle,
+          row.structuralTails,
+          pathGroup ? isSuppressiblePathGroupTrailingTitleSegment : undefined
+        ).filter((candidate) =>
+          row.displayTitle.slice(0, candidate.index).trim().length >= 3
+        )
+      )
+    }
     for (let pass = 0; pass < 3; pass += 1) {
       const counts = new Map<string, number>()
       const pathGroupCounts = new Map<string, Map<string, number>>()
       const candidatesByUrl = new Map<string, TitleSuppressionCandidate[]>()
       for (const row of rows) {
-        const cardCandidates = titleSuppressionCandidates(row.displayTitle, row.structuralTails).filter((candidate) => row.displayTitle.slice(0, candidate.index).trim().length >= 3)
+        const cardCandidates = cachedTitleSuppressionCandidates(row, false)
         const pathGroupCandidates = row.pathGroupKey
-          ? titleSuppressionCandidates(row.displayTitle, row.structuralTails, isSuppressiblePathGroupTrailingTitleSegment)
-            .filter((candidate) => row.displayTitle.slice(0, candidate.index).trim().length >= 3)
+          ? cachedTitleSuppressionCandidates(row, true)
           : []
         const candidates = uniqueTitleSuppressionCandidates([...cardCandidates, ...pathGroupCandidates])
         candidatesByUrl.set(row.url, candidates)
@@ -932,7 +1008,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
 
   function titlePresentation(tab: DashboardTab): TitlePresentation {
     return titlePresentationByUrl.get(tab.url) || {
-      displayTitle: stripTitleNoise(tab.title || ''),
+      displayTitle: strippedTitle(tab.title || ''),
       suppressedTitleParts: [],
       suppressedTitlePartPositions: [],
       suppressedTitlePartsBeforeStructuralTail: []
@@ -944,6 +1020,17 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   // detection so both reason over the same visible label.
   function displayTitle(tab: DashboardTab): string {
     return titlePresentation(tab).displayTitle
+  }
+
+  const lowerDisplayTitleByValue = new Map<string, string>()
+  const trimmedLowerDisplayTitleByValue = new Map<string, string>()
+  function lowerDisplayTitle(tab: DashboardTab, trim = false): string {
+    const cache = trim
+      ? trimmedLowerDisplayTitleByValue
+      : lowerDisplayTitleByValue
+    const title = displayTitle(tab)
+    const value = trim ? title.trim() : title
+    return cache.getOrInsertComputed(value, () => value.toLowerCase())
   }
 
   function titleSuppressionSummary() {
@@ -1035,7 +1122,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   // natural number ordering (Dashboard 2 before Dashboard 11, PR #4488
   // before PR #4706).
   function sortLabel(tab: DashboardTab): string {
-    return displayTitle(tab).toLowerCase()
+    return lowerDisplayTitle(tab)
   }
   function chipPriorityScore(tab: DashboardTab): number {
     const score = chipPriority?.get(tab.url || '') ?? chipPriority?.get(tab.rawUrl || '')
@@ -1112,15 +1199,36 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   function tabOpenStateRank(tab: DashboardTab): number {
     return isClosedSavedDashboardTab(tab) ? 1 : 0
   }
-  uniqueTabs.sort((a, b) => compareWithPriorityThenRememberedChipOrder(
-    dashboardChipOrderKeyForTab(a),
-    dashboardChipOrderKeyForTab(b),
-    chipPriorityScore(a),
-    chipPriorityScore(b),
-    () => tabOpenStateRank(a) - tabOpenStateRank(b) || compareNumericText(sortLabel(a), sortLabel(b)),
-    dashboardChipOrderAltKeyForTab(a),
-    dashboardChipOrderAltKeyForTab(b)
-  ))
+  const hasRememberedChipOrder = !!chipOrder && chipOrder.size > 0
+  const uniqueTabSortMeta = new Map(uniqueTabs.map((tab) => [tab, {
+    priority: chipPriorityScore(tab),
+    openStateRank: tabOpenStateRank(tab),
+    sortLabel: sortLabel(tab),
+    ...(hasRememberedChipOrder
+      ? {
+          orderKey: dashboardChipOrderKeyForTab(tab),
+          orderAltKey: dashboardChipOrderAltKeyForTab(tab)
+        }
+      : {})
+  }]))
+  uniqueTabs.sort((a, b) => {
+    const aMeta = uniqueTabSortMeta.get(a)!
+    const bMeta = uniqueTabSortMeta.get(b)!
+    const fallback = () => aMeta.openStateRank - bMeta.openStateRank ||
+      compareNumericText(aMeta.sortLabel, bMeta.sortLabel)
+    if (!hasRememberedChipOrder) {
+      return compareWithPriority(aMeta.priority, bMeta.priority, fallback)
+    }
+    return compareWithPriorityThenRememberedChipOrder(
+      aMeta.orderKey!,
+      bMeta.orderKey!,
+      aMeta.priority,
+      bMeta.priority,
+      fallback,
+      aMeta.orderAltKey,
+      bMeta.orderAltKey
+    )
+  })
 
   // Detect cross-subdomain shared pages — the "same page in dev2us +
   // dev11us + qaus" pattern that floods multi-env cards with near-
@@ -1133,20 +1241,19 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   {
     const pageMap = new Map<string, DashboardTab[]>()
     for (const tab of uniqueTabs) {
-      const parsed = URL.parse(tab.url)
+      const parsed = parseUrl(tab.url)
       if (!parsed) continue
-      const sub = subdomainPrefix(parsed.hostname, group.domain)
+      const sub = subdomainForUrl(tab.url)
       if (!sub) continue // root-level tabs have no env to compare
       const pathKey = parsed.pathname + parsed.search + parsed.hash
-      const titleKey = displayTitle(tab).trim().toLowerCase()
+      const titleKey = lowerDisplayTitle(tab, true)
       const pageKey = `${pathKey}\u0000${titleKey}`
       pageMap.getOrInsertComputed(pageKey, () => []).push(tab)
     }
     for (const tabs of pageMap.values()) {
       const subs = new Set<string>()
       for (const t of tabs) {
-        const parsed = URL.parse(t.url)
-        if (parsed) subs.add(subdomainPrefix(parsed.hostname, group.domain))
+        subs.add(subdomainForUrl(t.url))
       }
       if (subs.size < 2) continue
       foldGroups.push(tabs)
@@ -1161,12 +1268,12 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   for (const tab of uniqueTabs) {
     if (foldedTabUrls.has(tab.url)) continue
     let key = ''
-    const parsed = URL.parse(tab.url)
+    const parsed = parseUrl(tab.url)
     if (parsed) {
       if (parsed.hostname === 'localhost' && parsed.port) {
         key = parsed.port
       } else {
-        key = subdomainPrefix(parsed.hostname, group.domain)
+        key = subdomainForUrl(tab.url)
       }
     }
     bySubdomain.getOrInsertComputed(key, () => []).push(tab)
@@ -1215,7 +1322,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
     stripLabel = '',
     { iconOnly = false, rawTitle = false }: { iconOnly?: boolean; rawTitle?: boolean } = {}
   ): DashboardChipData {
-    const parsed = URL.parse(tab.url)
+    const parsed = parseUrl(tab.url)
     // rawTitle: bypass the presentation pipeline entirely (no noise strip,
     // no suppression pills) — app chips mirror the history list, which
     // shows titles exactly as Chrome reports them.
@@ -1232,7 +1339,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
     let portPrefix = ''
     if (parsed && showPrefix) {
       if (parsed.hostname === 'localhost' && parsed.port) portPrefix = parsed.port
-      else subPrefix = subdomainPrefix(parsed.hostname, group.domain)
+      else subPrefix = subdomainForUrl(tab.url)
     }
     const leadPrefix = subPrefix || portPrefix
     const pgLabel = pathGroupLabel || ''
@@ -1256,7 +1363,13 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
     const tooltip = [leadPrefix, label, pathSuffix].filter(Boolean).join(' · ')
     const grouped = isGroupedTab(tab)
     const tabOutMeta = tabOutDisplayMeta.get(tab)
-    const duplicateTabs = tabOutMeta?.tabs || tabsByUrl.get(keyOf(tab)) || [tab]
+    // Closed Saved and retained targets are exact, independent snapshots. A
+    // canonical-equivalent live tab may share their presentation group, but it
+    // must not lend them live-only state such as loading, suspension, audio, or
+    // an active frame.
+    const duplicateTabs = isClosedSavedDashboardTab(tab)
+      ? [tab]
+      : tabOutMeta?.tabs || tabsByUrl.get(keyOf(tab)) || [tab]
     const { activeInOtherWindow, activeChipFrame } = activeFrameStateForDuplicateSet(duplicateTabs, currentWindowId)
     return {
       ...(tab.id === undefined ? {} : { tabId: tab.id }),
@@ -1268,6 +1381,12 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
       suspended: allOpenTargetsSuspended(duplicateTabs),
       loading: duplicateTabs.some(isOpenTabLoading),
       ...(tab.savedPageKey === undefined ? {} : { savedPageKey: tab.savedPageKey }),
+      ...(tab.retainedPageIdentity === undefined
+        ? {}
+        : { retainedPageIdentity: tab.retainedPageIdentity }),
+      ...(tab.retainedPageClosureToken === undefined
+        ? {}
+        : { retainedPageClosureToken: tab.retainedPageClosureToken }),
       pagePinDisabled: !!tabOutMeta?.pagePinDisabled,
       leadPrefix,
       pathGroupLabel: pgLabel,
@@ -1276,8 +1395,12 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
       suppressedTitleParts: presentation.suppressedTitleParts,
       pathSuffix: pathSuffix || '',
       tooltip,
-      dupeCount: tabOutMeta?.tabs.length || tabsByUrl.get(keyOf(tab))?.length || 1,
+      dupeCount: isClosedSavedDashboardTab(tab)
+        ? 1
+        : tabOutMeta?.tabs.length || tabsByUrl.get(keyOf(tab))?.length || 1,
       faviconUrl: pickDashboardChipFavicon(tab),
+      actionTitle: tab.title,
+      ...(tab.favIconUrl ? { actionFaviconUrl: tab.favIconUrl } : {}),
       isGrouped: grouped,
       groupDotColor: grouped ? groupDotColor(tab.groupId) : null,
       isApp: !!tab.isApp,
@@ -1323,7 +1446,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
 
   function titleCollisionPathByUrl(groupTabs: DashboardTab[]): Map<string, string> {
     const pathByUrl = new Map<string, string>()
-    const sameTitle = Map.groupBy(groupTabs, (tab) => displayTitle(tab).toLowerCase())
+    const sameTitle = Map.groupBy(groupTabs, (tab) => lowerDisplayTitle(tab))
     for (const collided of sameTitle.values()) {
       if (collided.length < 2) continue
       const collidedUrls = collided.map((t) => t.url)
@@ -1341,12 +1464,12 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   }
 
   function titleVariantLabelForUrl(url: string): string {
-    const parsed = URL.parse(url)
+    const parsed = parseUrl(url)
     return parsed ? `${parsed.pathname || '/'}${parsed.search}${parsed.hash}` || '/' : url || '/'
   }
 
   function titleVariantHostLabelForUrl(url: string): string {
-    const parsed = URL.parse(url)
+    const parsed = parseUrl(url)
     return parsed ? `${parsed.host}${parsed.pathname || '/'}${parsed.search}${parsed.hash}` || url || '/' : url || '/'
   }
 
@@ -1378,8 +1501,11 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
     const activeInOtherWindow = !activeInCurrentWindow && variants.some((variant) => !!variant.activeInOtherWindow)
     const allVariantsSaved = variants.length > 0 && variants.every((variant) => !!variant.saved)
     const allVariantsClosedSaved = variants.length > 0 && variants.every((variant) => isClosedSavedDashboardTab(variant))
+    const stateRepresentative = !isClosedSavedDashboardTab(representative)
+      ? representative
+      : variants.find((variant) => !isClosedSavedDashboardTab(variant)) || representative
     const groupedChip: DashboardChipData = {
-      ...representative,
+      ...stateRepresentative,
       saved: allVariantsSaved,
       closedSaved: allVariantsClosedSaved,
       suspended: allOpenTargetsSuspended(variants),
@@ -1393,6 +1519,8 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
       titleVariantChips: variants
     }
     delete groupedChip.savedPageKey
+    delete groupedChip.retainedPageIdentity
+    delete groupedChip.retainedPageClosureToken
     delete groupedChip.pagePinId
     delete groupedChip.pagePinned
     return groupedChip
@@ -1404,7 +1532,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
       return {
         tab,
         chip: buildChipData(tab, showChipPrefix, pathSuffix, pathGroupLabel, stripLabel),
-        titleKey: displayTitle(tab).trim().toLowerCase()
+        titleKey: lowerDisplayTitle(tab, true)
       }
     })
     const entriesByTitle = Map.groupBy(entries, (entry) => entry.titleKey)
@@ -1455,7 +1583,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
     const pgByUrl = new Map<string, PathGroupResult>()
     const pgKeyCount = new Map<string, number>()
     for (const t of contentTabs) {
-      const pg = resolvePathGroup(t.url)
+      const pg = structuralPathGroup(t)
       if (!pg) continue
       pgByUrl.set(t.url, pg)
       pgKeyCount.set(pg.key, (pgKeyCount.get(pg.key) || 0) + 1)
@@ -1554,6 +1682,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
     // were open. PageChip still branches on iconOnly for callers that want
     // the compact form. Titles stay RAW (rawTitle) to match history rows.
     const appChips = uniqueTabs.map((tab) => buildChipData(tab, false, '', '', '', { rawTitle: true }))
+    const { vis: visibleAppChips, hid: hiddenAppChips } = splitForOverflow(appChips)
     const vmClosableCount = displayMode === 'unmatched' || !allowMutations ? 0 : closableCount
     const vmClosableExtras = displayMode === 'unmatched' || !allowMutations ? 0 : closableExtras
     const vmClosableDupeUrls = displayMode === 'unmatched' || !allowMutations ? [] : closableDupeUrls
@@ -1579,15 +1708,15 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
       sections: [
         {
           key: '__apps__',
-          sectionCount: tabCount,
+          sectionCount: tabs.length,
           sectionClosableUrls: displayMode === 'unmatched' || !allowMutations ? [] : closableTabs.map((tab) => tab.url),
           showHeader: false,
           isShared: false,
           isPort: false,
           hasFlat: true,
-          flatVisibleChips: appChips,
-          flatHiddenChips: [],
-          flatHiddenCount: 0,
+          flatVisibleChips: visibleAppChips,
+          flatHiddenChips: hiddenAppChips,
+          flatHiddenCount: hiddenAppChips.length,
           suppressedTitleParts: [],
           clusters: [],
           websitePathSections: [],
@@ -1605,6 +1734,8 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   function buildFoldedChipData(tabs: DashboardTab[]): DashboardChipData {
     const primary = tabs[0]
     if (!primary) throw new Error('Folded chip requires at least one tab')
+    const liveTabs = tabs.filter((tab) => !isClosedSavedDashboardTab(tab))
+    const stateRepresentative = liveTabs[0] || primary
     const presentation = titlePresentation(primary)
     const label = presentation.displayTitle
     const rawSegments = stripPgLabel(label, '')
@@ -1616,8 +1747,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
     // page identity and subdomain prefix every time.
     const envs = tabs
       .map((t) => {
-        const parsed = URL.parse(t.url)
-        const sub = parsed ? subdomainPrefix(parsed.hostname, group.domain) : ''
+        const sub = subdomainForUrl(t.url)
         return {
           ...(t.id === undefined ? {} : { tabId: t.id }),
           prefix: sub || '?',
@@ -1627,8 +1757,16 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
           saved: !!t.saved,
           closedSaved: isClosedSavedDashboardTab(t),
           ...(t.savedPageKey === undefined ? {} : { savedPageKey: t.savedPageKey }),
+          ...(t.retainedPageIdentity === undefined
+            ? {}
+            : { retainedPageIdentity: t.retainedPageIdentity }),
+          ...(t.retainedPageClosureToken === undefined
+            ? {}
+            : { retainedPageClosureToken: t.retainedPageClosureToken }),
           title: displayTitle(t),
           faviconUrl: pickDashboardChipFavicon(t),
+          actionTitle: t.title,
+          ...(t.favIconUrl ? { actionFaviconUrl: t.favIconUrl } : {}),
           isApp: !!t.isApp,
           activeInOtherWindow: isActiveInOtherWindow(t, currentWindowId)
         }
@@ -1636,9 +1774,10 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
       .sort((a, b) => compareNumericText(a.prefix, b.prefix))
     const tooltip = [envs.map((e) => e.prefix).join(' · '), label].filter(Boolean).join(' · ')
     return {
-      tabUrl: primary.url,
-      rawUrl: primary.rawUrl || primary.url,
-      sourceType: primary.sourceType || 'tab',
+      tabUrl: stateRepresentative.url,
+      rawUrl: stateRepresentative.rawUrl || stateRepresentative.url,
+      sourceType: stateRepresentative.sourceType || 'tab',
+      closedSaved: liveTabs.length === 0,
       suspended: allOpenTargetsSuspended(tabs),
       loading: tabs.some(isOpenTabLoading),
       leadPrefix: '',
@@ -1648,7 +1787,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
       pathSuffix: '',
       tooltip,
       dupeCount: 1,
-      faviconUrl: pickDashboardChipFavicon(primary),
+      faviconUrl: pickDashboardChipFavicon(stateRepresentative),
       isGrouped: false,
       groupDotColor: null,
       // Folded chip reads as "app" only when every env tab behind it
@@ -1687,7 +1826,9 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
       pageChipPinKeyForFoldUrls(tabs.map((tab) => tab.url))
     )))
     const { vis, hid } = splitForOverflow(foldedChipData)
-    const sharedClosableUrls = allowMutations ? sortedFolds.flatMap((tabs) => tabs.filter((t) => !isGroupedTab(t)).map((t) => t.url)) : []
+    const sharedClosableUrls = allowMutations
+      ? sortedFolds.flatMap((tabs) => tabs.filter(isBulkClosableTab).map((t) => t.url))
+      : []
     const totalFoldedTabs = sortedFolds.reduce((sum, tabs) => sum + tabs.length, 0)
     sharedSectionData = {
       key: '__shared__',
@@ -1969,7 +2110,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
     const targetsByKey = new Map<string, Array<{ tabId: number; tabUrl: string }>>()
     for (const tab of tabs) {
       if (typeof tab.id !== 'number') continue
-      const actualTitle = stripTitleNoise(tab.title || '')
+      const actualTitle = strippedTitle(tab.title || '')
       for (const part of titlePresentation(tab).suppressedTitleParts) {
         // Display presentations are URL-deduplicated, but destructive actions
         // operate on physical tabs. Same-URL duplicates can carry different

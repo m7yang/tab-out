@@ -8,6 +8,7 @@ import {
   emptySavedPagesStore,
   mergeSavedPagesWithTabs,
   removeSavedPageFromStore,
+  savedPageKeyForUrl,
   type SavedPageCandidate,
   type SavedPagesStore
 } from '../src/extension/saved-pages.js'
@@ -226,6 +227,41 @@ test('the Saved Pages Effect API composes the complete mutation transaction', as
   })))
 
   assert.equal(stored.pages[url]?.title, 'Article')
+})
+
+test('a mutation writes v1 records as v2 normal-tab records without losing an app target', async () => {
+  const url = 'https://app.example.test/inbox'
+  const legacyStore: unknown = {
+    version: 1,
+    pages: {
+      [url]: {
+        key: url,
+        url,
+        title: 'Inbox tab',
+        savedAt: 100,
+        updatedAt: 100
+      }
+    }
+  }
+  let written: SavedPagesStore | undefined
+  const mutations = createSavedPagesMutationStore({
+    read: async () => structuredClone(legacyStore),
+    write: async (nextStore) => {
+      written = structuredClone(nextStore)
+    }
+  })
+
+  await mutations.mutate((store) => ({
+    store: addSavedPageToStore(store, {
+      ...savedPage(url, 'Inbox app'),
+      isApp: true
+    }, 200),
+    value: undefined
+  }))
+
+  assert.equal(written?.version, 2)
+  assert.equal(written?.pages[savedPageKeyForUrl(url, 'normal-tab')]?.surfaceKind, 'normal-tab')
+  assert.equal(written?.pages[savedPageKeyForUrl(url, 'app')]?.surfaceKind, 'app')
 })
 
 test('persistMetadataUpdates with an unchanged merged store performs no reads or writes', async () => {

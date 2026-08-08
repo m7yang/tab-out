@@ -13,3 +13,10 @@ export async function writeChromeStorageValue(
 ): Promise<void> {
   await storage.set({ [key]: value })
 }
+
+export async function removeChromeStorageValue(
+  storage: chrome.storage.StorageArea,
+  key: string
+): Promise<void> {
+  await storage.remove(key)
+}

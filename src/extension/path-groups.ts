@@ -152,9 +152,9 @@ const BUILT_IN_PATH_GROUPERS: PathGroupRule[] = [
   // keyword affordance instead of rendering a chip-pathgroup.
 ]
 
-export function resolvePathGroup(url: string): PathGroupResult | null {
+export function resolvePathGroup(url: string | URL): PathGroupResult | null {
   if (!url) return null
-  const parsed = URL.parse(url)
+  const parsed = typeof url === 'string' ? URL.parse(url) : url
   if (!parsed) return null
 
   for (const rule of BUILT_IN_PATH_GROUPERS) {

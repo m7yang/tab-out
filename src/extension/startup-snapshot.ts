@@ -24,6 +24,7 @@ import type {
   WorkingSetSnapshot
 } from './types'
 import type { SavedPageMetadataUpdates, SavedPagesStore } from './saved-pages.js'
+import type { RetainedPageRecord } from './retained-pages-ledger.js'
 
 export type { DashboardStartupTitleRetention }
 
@@ -599,10 +600,13 @@ export function promoteDashboardStartupSeed(now = Date.now()): Promise<boolean> 
 
 export type TabsStartupSnapshotInputs = {
   dashboardTabs: DashboardTab[]
+  /** Full live inventory used only to suppress hidden retained matches. */
+  retainedLiveTabs?: readonly DashboardTab[]
   currentWindowId: number | null
   tabHistory: TabHistorySnapshot
   workingSetActivity: WorkingSetActivityStore
   savedPagesStore: SavedPagesStore
+  retainedPages?: readonly RetainedPageRecord[]
   closedTabs: readonly ClosedTabEntry[]
   pinnedDomains: string[]
   tabPreviousOrder?: Map<string, number>
@@ -642,7 +646,9 @@ export const buildTabsDashboardStartupSnapshotEffect = Effect.fn(
       historySearchStatus: inputs.filterSearch?.historySearchStatus ?? 'idle',
       bookmarkTabs: inputs.filterSearch?.bookmarkTabs ?? [],
       historyTabs: inputs.filterSearch?.historyTabs ?? [],
-      savedPagesStore: inputs.savedPagesStore
+      savedPagesStore: inputs.savedPagesStore,
+      retainedPages: inputs.retainedPages ?? [],
+      retainedLiveTabs: inputs.retainedLiveTabs ?? inputs.dashboardTabs
     }
   )
   return yield* Effect.try({

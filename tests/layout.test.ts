@@ -326,6 +326,7 @@ test('service worker maintains the startup snapshot on browser startup and tab e
   const backgroundSource = readFileSync(new URL('../src/extension/background.ts', import.meta.url), 'utf8')
   const serviceSource = readFileSync(new URL('../src/extension/background/startup-snapshot-service.ts', import.meta.url), 'utf8')
   const appEntrySource = readFileSync(new URL('../src/app.tsx', import.meta.url), 'utf8')
+  const pageRefreshSource = readFileSync(new URL('../src/extension/dashboard-page-refresh.ts', import.meta.url), 'utf8')
 
   assert.match(backgroundSource, /const startupSnapshotService = backgroundRuntime\.runSync\(StartupSnapshot\)/)
   assert.match(backgroundSource, /onStartup\.addListener/)
@@ -345,7 +346,9 @@ test('service worker maintains the startup snapshot on browser startup and tab e
   assert.match(serviceSource, /invalidateTitleRetention/)
   assert.doesNotMatch(serviceSource, /buildTabsDashboardStartupSnapshotEffect|saveCachedDashboardStartupSnapshotEffect/)
   assert.match(appEntrySource, /captureAppStartupFrameEffect\(\)/)
-  assert.match(appEntrySource, /changeInfo\.status !== undefined/)
+  assert.match(appEntrySource, /dashboardTabUpdateRefreshOptions\(changeInfo, tab\)/)
+  assert.match(pageRefreshSource, /'status'/)
+  assert.match(pageRefreshSource, /changeInfo\[key\] !== undefined/)
 })
 
 test('recently closed rows and dismissals stay behind startup readiness', () => {

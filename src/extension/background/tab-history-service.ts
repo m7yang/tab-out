@@ -42,7 +42,8 @@ import type { TabHistorySnapshot, WorkingSetActivityStore } from '../types'
 
 export { TAB_HISTORY_GET_MESSAGE, TAB_HISTORY_SWITCH_MESSAGE } from '../runtime-messages.js'
 
-const TAB_HISTORY_KEY = 'globalTabHistory'
+export const TAB_HISTORY_STORAGE_KEY = 'globalTabHistory'
+const TAB_HISTORY_KEY = TAB_HISTORY_STORAGE_KEY
 const TAB_HISTORY_STORAGE_VERSION = 2
 
 type StoredGlobalTabHistoryV2 = GlobalTabHistory & {

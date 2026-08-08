@@ -1,41 +1,50 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { setTimeout as delay } from 'node:timers/promises'
 
 import { setAppStartupFilterIntent } from '../src/app-startup.js'
 import { getAppRuntime } from '../src/extension/app-runtime.js'
 import { CLOSED_GHOST_DISMISSAL_STORAGE_KEY } from '../src/extension/closed-ghost-dismissals.js'
 import { appDashboardStore } from '../src/extension/dashboard-intake.js'
+import { encodeDashboardRetainedPagesWire } from '../src/extension/dashboard-retained-pages-wire.js'
 import { captureAppStartupFrameEffect } from '../src/extension/startup-frame.js'
 
 function installChrome(options: {
   failDismissalRead?: boolean
   bookmarks?: chrome.bookmarks.BookmarkTreeNode[]
+  localReadBarrier?: Promise<void>
+  onServiceStateRequest?: () => void
 } = {}) {
   let historySearchCount = 0
   ;(globalThis as any).chrome = {
     runtime: {
       id: 'tab-out',
       getURL: (path: string) => `chrome-extension://tab-out${path}`,
-      sendMessage: async () => ({
-        ok: true,
-        openTabsSnapshot: {
-          tabs: [],
-          windows: [{ id: 1, focused: true, type: 'normal' }]
-        },
-        tabHistory: {
-          stackSize: 0,
-          maxSize: 48,
-          cursorIndex: -1,
-          currentIndex: -1,
-          previousIndex: -1,
-          nextIndex: -1,
-          activeTabId: null,
-          activeWindowId: null,
-          activeWasInserted: false,
-          entries: []
-        },
-        workingSetActivity: { version: 1, records: {} }
-      })
+      sendMessage: async () => {
+        options.onServiceStateRequest?.()
+        return {
+          ok: true,
+          openTabsSnapshot: {
+            tabs: [],
+            windows: [{ id: 1, focused: true, type: 'normal' }]
+          },
+          tabHistory: {
+            stackSize: 0,
+            maxSize: 48,
+            cursorIndex: -1,
+            currentIndex: -1,
+            previousIndex: -1,
+            nextIndex: -1,
+            activeTabId: null,
+            activeWindowId: null,
+            activeWasInserted: false,
+            entries: []
+          },
+          workingSetActivity: { version: 1, records: {} },
+          retainedPages: await encodeDashboardRetainedPagesWire([]),
+          retentionHealth: null
+        }
+      }
     },
     tabs: { query: async () => [] },
     windows: {
@@ -55,6 +64,7 @@ function installChrome(options: {
       session: { get: async () => ({}) },
       local: {
         get: async (keys: unknown) => {
+          await options.localReadBarrier
           if (options.failDismissalRead && keys === CLOSED_GHOST_DISMISSAL_STORAGE_KEY) {
             throw new Error('Dismissals unavailable')
           }
@@ -93,6 +103,27 @@ test('startup frame rejects an unknown semantic authority instead of admitting e
     (error: any) => error?._tag === 'StartupFrameAuthorityError' &&
       error.authority === 'closed-row dismissals'
   )
+})
+
+test('startup frame begins its service-state request while local authorities are loading', async () => {
+  const localReads = Promise.withResolvers<void>()
+  const serviceRequest = Promise.withResolvers<void>()
+  installChrome({
+    localReadBarrier: localReads.promise,
+    onServiceStateRequest: () => serviceRequest.resolve()
+  })
+  appDashboardStore.selectStartupSource('tabs')
+  setAppStartupFilterIntent('')
+
+  const frame = getAppRuntime().runPromise(captureAppStartupFrameEffect())
+  const requestStartedBeforeRelease = await Promise.race([
+    serviceRequest.promise.then(() => true),
+    delay(50, false)
+  ])
+  localReads.resolve()
+  await frame
+
+  assert.equal(requestStartedBeforeRelease, true)
 })
 
 test('Bookmarks startup follows the latest source without requiring hidden Tabs companions', async () => {
