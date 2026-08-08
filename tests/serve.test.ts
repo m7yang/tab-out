@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { once } from 'node:events'
 import { createServer, type Server } from 'node:http'
 import test from 'node:test'
 
@@ -16,35 +17,8 @@ function serverPort(server: Server): number {
 }
 
 function listenOnAvailablePort(server: Server): Promise<void> {
-  return new Promise((resolve, reject) => {
-    function cleanup(): void {
-      server.removeListener('error', onError)
-      server.removeListener('listening', onListening)
-    }
-
-    function onError(error: Error): void {
-      cleanup()
-      reject(error)
-    }
-
-    function onListening(): void {
-      cleanup()
-      resolve()
-    }
-
-    server.once('error', onError)
-    server.once('listening', onListening)
-    server.listen(0, '127.0.0.1')
-  })
-}
-
-function closeServer(server: Server): Promise<void> {
-  return new Promise((resolve, reject) => {
-    server.close((error) => {
-      if (error) reject(error)
-      else resolve()
-    })
-  })
+  server.listen(0, '127.0.0.1')
+  return once(server, 'listening').then(() => undefined)
 }
 
 test('debug server serves the dashboard fixture and closes with its scope', async () => {
@@ -80,20 +54,16 @@ test('debug server serves the dashboard fixture and closes with its scope', asyn
 })
 
 test('debug server reports a typed port-binding failure', async () => {
-  const blockingServer = createServer()
+  await using blockingServer = createServer()
   await listenOnAvailablePort(blockingServer)
   const port = serverPort(blockingServer)
 
-  try {
-    const result = await Effect.runPromise(Effect.result(runDashboardDebugServer({
-      port,
-      awaitShutdown: Effect.never
-    })))
-    assert.equal(Result.isFailure(result), true)
-    if (Result.isSuccess(result)) throw new Error('occupied port unexpectedly started a second server')
-    assert.ok(result.failure instanceof DebugServerError)
-    assert.equal(result.failure.port, port)
-  } finally {
-    await closeServer(blockingServer)
-  }
+  const result = await Effect.runPromise(Effect.result(runDashboardDebugServer({
+    port,
+    awaitShutdown: Effect.never
+  })))
+  assert.equal(Result.isFailure(result), true)
+  if (Result.isSuccess(result)) throw new Error('occupied port unexpectedly started a second server')
+  assert.ok(result.failure instanceof DebugServerError)
+  assert.equal(result.failure.port, port)
 })

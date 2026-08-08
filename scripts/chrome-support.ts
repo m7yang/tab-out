@@ -296,10 +296,6 @@ function provideChromeSupportNodeServices<A, E>(effect: Effect.Effect<A, E, File
   )
 }
 
-export function chromeSupportMain(argv = process.argv.slice(2)): Promise<number> {
-  return Effect.runPromise(provideChromeSupportNodeServices(chromeSupportProgram(argv)))
-}
-
 if (import.meta.main) {
   provideChromeSupportNodeServices(chromeSupportProgram(process.argv.slice(2))).pipe(
     Effect.tap((exitCode) => Effect.sync(() => {

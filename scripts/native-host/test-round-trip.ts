@@ -1,3 +1,4 @@
+import { once } from 'node:events'
 import { createServer, type Server } from 'node:net'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
@@ -265,40 +266,29 @@ const runClient = Effect.fn('nativeHostTest.runClient')(function*(
   return { stdout, stderr, exitCode }
 })
 
-function closeServer(server: Server): Effect.Effect<void, NativeHostTestError> {
-  return Effect.callback<void, NativeHostTestError>((resume) => {
-    if (!server.listening) {
-      resume(Effect.void)
-      return
-    }
-
-    server.close((cause) => resume(cause
-      ? Effect.fail(nativeHostTestError('close replacement socket server', cause))
-      : Effect.void
-    ))
-  })
+function disposeServer(server: Server): Effect.Effect<void> {
+  if (!server.listening) return Effect.void
+  return Effect.tryPromise({
+    try: () => server[Symbol.asyncDispose](),
+    catch: (cause) => nativeHostTestError('close replacement socket server', cause)
+  }).pipe(Effect.orDie)
 }
 
 function listenOnUnixSocket(socketPath: string) {
-  return Effect.acquireRelease(
-    Effect.callback<Server, NativeHostTestError>((resume) => {
-      const server = createServer()
-      const onError = (cause: Error) => {
-        resume(Effect.fail(nativeHostTestError('start replacement socket server', cause)))
-      }
-      server.once('error', onError)
-      server.listen(socketPath, () => {
-        server.off('error', onError)
-        resume(Effect.succeed(server))
-      })
-
-      return Effect.sync(() => {
-        server.off('error', onError)
-        if (server.listening) server.close()
-      })
-    }),
-    (server) => closeServer(server).pipe(Effect.orDie)
-  )
+  return Effect.gen(function*() {
+    const server = yield* Effect.acquireRelease(
+      Effect.sync(() => createServer()),
+      disposeServer
+    )
+    yield* Effect.tryPromise({
+      try: (signal) => {
+        server.listen(socketPath)
+        return once(server, 'listening', { signal })
+      },
+      catch: (cause) => nativeHostTestError('start replacement socket server', cause)
+    })
+    return server
+  })
 }
 
 const testRoundTrip = Effect.fn('nativeHostTest.roundTrip')(function*(hostPath: string) {

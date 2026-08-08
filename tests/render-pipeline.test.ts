@@ -23,7 +23,6 @@ import { parseFilterQuery } from '../src/extension/filter-query.js'
 import { fetchDashboardData } from '../src/extension/dashboard-data-fetch.js'
 import { buildDashboardDataFromTabs, buildDashboardViewModel, buildDomainGroups, computeDomainCardViewModel, dashboardChipOrderKeyForTab, tabMatchesFilter } from '../src/extension/render.js'
 import { addSavedPageToStore, emptySavedPagesStore, SAVED_PAGES_STORAGE_KEY } from '../src/extension/saved-pages.js'
-import { installWebLocksStub } from './helpers/web-locks.js'
 import { useDashboardViewModels } from '../src/hooks/useDashboardViewModels.js'
 import { retainHistorySearchResultsOnError } from '../src/extension/dashboard-intake.js'
 import { historySearchStatusCopy } from '../src/components/history-search-status-copy.js'
@@ -3302,7 +3301,6 @@ test('manifest keeps only the permissions used by the extension', () => {
 
 function installSavedPagesStorageProbe(initialStore: unknown) {
   const previousChrome = (globalThis as { chrome?: unknown }).chrome
-  const restoreLocks = installWebLocksStub()
   const state = { reads: 0, writes: 0, stored: initialStore }
   ;(globalThis as any).chrome = {
     ...(previousChrome as object),
@@ -3325,7 +3323,6 @@ function installSavedPagesStorageProbe(initialStore: unknown) {
     state,
     restore: () => {
       ;(globalThis as { chrome?: unknown }).chrome = previousChrome
-      restoreLocks()
     }
   }
 }

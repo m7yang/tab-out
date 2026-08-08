@@ -6,8 +6,7 @@ import tseslint from 'typescript-eslint'
 const sharedGlobals = {
   ...globals.browser,
   ...globals.node,
-  chrome: 'readonly',
-  copy: 'readonly'
+  chrome: 'readonly'
 }
 
 const reactHooksRules = {

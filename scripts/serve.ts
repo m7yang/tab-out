@@ -148,27 +148,11 @@ export function runDashboardDebugServer(
   )
 }
 
-const awaitProcessShutdown = Effect.callback<void>((resume) => {
-  function cleanup(): void {
-    process.removeListener('SIGINT', shutdown)
-    process.removeListener('SIGTERM', shutdown)
-  }
-
-  function shutdown(): void {
-    cleanup()
-    resume(Effect.void)
-  }
-
-  process.once('SIGINT', shutdown)
-  process.once('SIGTERM', shutdown)
-  return Effect.sync(cleanup)
-})
-
-function debugServerProgram(awaitShutdown: Effect.Effect<void>): Effect.Effect<number> {
+function debugServerProgram(): Effect.Effect<number> {
   const port = Number(process.env.PORT) || DEFAULT_PORT
   return runDashboardDebugServer({
     port,
-    awaitShutdown,
+    awaitShutdown: Effect.never,
     onListening: (boundServerPort) => {
       process.stdout.write(`Tab Out debug server  http://${HOST}:${boundServerPort}\n`)
       process.stdout.write(
@@ -184,12 +168,8 @@ function debugServerProgram(awaitShutdown: Effect.Effect<void>): Effect.Effect<n
   )
 }
 
-export function debugServerMain(): Promise<number> {
-  return Effect.runPromise(debugServerProgram(awaitProcessShutdown))
-}
-
 if (import.meta.main) {
-  debugServerProgram(Effect.never).pipe(
+  debugServerProgram().pipe(
     Effect.tap((exitCode) => Effect.sync(() => {
       process.exitCode = exitCode
     })),

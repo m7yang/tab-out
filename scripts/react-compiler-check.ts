@@ -11,7 +11,7 @@
    ================================================================ */
 
 import { createRequire } from 'node:module'
-import { readdirSync, readFileSync } from 'node:fs'
+import { globSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import process from 'node:process'
 
@@ -45,19 +45,15 @@ const BASELINE: ReadonlyMap<string, number> = new Map([
 
 const repoRequire = createRequire(join(REPO, 'package.json'))
 const compiler: unknown = repoRequire('babel-plugin-react-compiler')
-let babel: BabelRuntime
-try {
-  babel = repoRequire('@babel/core') as BabelRuntime
-} catch {
-  babel = createRequire(repoRequire.resolve('@rolldown/plugin-babel'))('@babel/core') as BabelRuntime
-}
+const babel = createRequire(repoRequire.resolve('@rolldown/plugin-babel'))('@babel/core') as BabelRuntime
 
 function sourceFiles(): string[] {
-  return readdirSync(join(REPO, 'src'), { recursive: true, withFileTypes: true })
-    .filter((entry) => (
-      entry.isFile() && /\.(tsx|ts)$/.test(entry.name) && !entry.name.endsWith('.d.ts')
-    ))
-    .map((entry) => join(entry.parentPath, entry.name))
+  const sourceRoot = join(REPO, 'src')
+  return globSync('**/*.{ts,tsx}', {
+    cwd: sourceRoot,
+    exclude: ['**/*.d.ts']
+  })
+    .map((file) => join(sourceRoot, file))
     .sort()
 }
 

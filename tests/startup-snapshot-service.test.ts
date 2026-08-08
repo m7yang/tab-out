@@ -31,7 +31,6 @@ import {
 import { parseDashboardStartupSeedBoundary } from '../src/extension/startup-snapshot-schema.js'
 import type { WorkingSetActivityStore } from '../src/extension/types'
 import { makeChromeTab } from './helpers/chrome-tab.js'
-import { installWebLocksStub } from './helpers/web-locks.js'
 
 const emptyTabHistory = {
   stackSize: 0,
@@ -173,8 +172,6 @@ test('seed refreshes only for local sources that can change compact ordering', (
 })
 
 test('worker writes compact Warm and Durable seeds while preserving pinned and saved-only card order', async (t) => {
-  const restoreLocks = installWebLocksStub()
-  t.after(restoreLocks)
   const savedUrl = 'https://saved.example/report'
   const savedPages = addSavedPageToStore(emptySavedPagesStore(), {
     url: savedUrl,
@@ -217,8 +214,6 @@ test('worker writes compact Warm and Durable seeds while preserving pinned and s
 test('service schedules one non-sliding Durable promotion and promotes the newest Warm seed', async (t) => {
   const clock = FakeTimers.install({ now: 100, toFake: ['Date'] })
   t.after(() => clock.uninstall())
-  const restoreLocks = installWebLocksStub()
-  t.after(restoreLocks)
   const storage = installWorkerChrome(t)
   let tabs = [makeChromeTab(1, 'https://first.example/docs', 'First')]
   let stateReads = 0
@@ -263,8 +258,6 @@ test('service schedules one non-sliding Durable promotion and promotes the newes
 test('a transient cache read failure retries once before performing browser work', async (t) => {
   const clock = FakeTimers.install({ toFake: ['setTimeout', 'clearTimeout'] })
   t.after(() => clock.uninstall())
-  const restoreLocks = installWebLocksStub()
-  t.after(restoreLocks)
   let sessionReads = 0
   let stateReads = 0
   const storage = installWorkerChrome(t, {
@@ -293,8 +286,6 @@ test('a transient cache read failure retries once before performing browser work
 })
 
 test('unknown pin input preserves the prior Warm seed', async (t) => {
-  const restoreLocks = installWebLocksStub()
-  t.after(restoreLocks)
   const prior = {
     schemaVersion: 2,
     savedAt: 10,
@@ -323,8 +314,6 @@ test('unknown pin input preserves the prior Warm seed', async (t) => {
 })
 
 test('session changes no longer rebuild a seed that does not contain recently closed rows', async (t) => {
-  const restoreLocks = installWebLocksStub()
-  t.after(restoreLocks)
   installWorkerChrome(t)
   let stateReads = 0
   const service = createStartupSnapshotService(t, {
@@ -343,8 +332,6 @@ test('session changes no longer rebuild a seed that does not contain recently cl
 test('seed scheduling uses a sliding quiet window with a fixed maximum wait', async (t) => {
   const clock = FakeTimers.install({ toFake: ['setTimeout', 'clearTimeout'] })
   t.after(() => clock.uninstall())
-  const restoreLocks = installWebLocksStub()
-  t.after(restoreLocks)
   installWorkerChrome(t)
   let stateReads = 0
   const service = createStartupSnapshotService(t, {
@@ -368,8 +355,6 @@ test('seed scheduling uses a sliding quiet window with a fixed maximum wait', as
 test('a refresh requested during an active seed flight runs once as a trailing refresh', async (t) => {
   const clock = FakeTimers.install({ toFake: ['setTimeout', 'clearTimeout'] })
   t.after(() => clock.uninstall())
-  const restoreLocks = installWebLocksStub()
-  t.after(restoreLocks)
   installWorkerChrome(t)
   const firstRead = Promise.withResolvers<void>()
   const releaseFirstRead = Promise.withResolvers<void>()
@@ -397,8 +382,6 @@ test('a refresh requested during an active seed flight runs once as a trailing r
 })
 
 test('a completed seed-flight failure does not block a later refresh', async (t) => {
-  const restoreLocks = installWebLocksStub()
-  t.after(restoreLocks)
   const storage = installWorkerChrome(t)
   let stateReads = 0
   const service = createStartupSnapshotService(t, {

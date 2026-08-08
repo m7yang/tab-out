@@ -1,6 +1,6 @@
-import { cp, mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { cp, glob, mkdir, mkdtempDisposable, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { extname, join, relative } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
@@ -25,12 +25,6 @@ interface RuntimeErrorObservation {
   readonly url: string
 }
 
-interface IsolatedExtensionFiles {
-  readonly artifactDirectory: string
-  readonly profileDirectory: string
-  readonly temporaryDirectory: string
-}
-
 export interface InstalledExtension {
   readonly artifactDirectory: string
   readonly context: BrowserContext
@@ -43,62 +37,19 @@ export interface InstalledExtension {
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url))
 const builtExtensionDirectory = join(repositoryRoot, 'extension')
 
-async function listFiles(directory: string): Promise<readonly string[]> {
-  const entries = await readdir(directory, { withFileTypes: true })
-  const files: string[] = []
-
-  for (const entry of entries) {
-    const path = join(directory, entry.name)
-    if (entry.isDirectory()) {
-      files.push(...await listFiles(path))
-      continue
-    }
-    if (entry.isFile()) files.push(path)
-  }
-
-  return files
-}
-
 async function findInstrumentationMarker(
   artifactDirectory: string
 ): Promise<readonly string[]> {
-  const bundleDirectory = join(artifactDirectory, 'dist')
-  const bundleFiles = (await listFiles(bundleDirectory))
-    .filter((path) => extname(path) === '.js')
   const matches: string[] = []
 
-  for (const bundleFile of bundleFiles) {
-    const content = await readFile(bundleFile, 'utf8')
+  for await (const bundleFile of glob('dist/**/*.js', { cwd: artifactDirectory })) {
+    const content = await readFile(join(artifactDirectory, bundleFile), 'utf8')
     if (content.includes(RETENTION_TEST_INSTRUMENTATION_MARKER)) {
-      matches.push(relative(artifactDirectory, bundleFile))
+      matches.push(bundleFile)
     }
   }
 
   return matches.sort()
-}
-
-async function createIsolatedExtensionFiles(): Promise<IsolatedExtensionFiles> {
-  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'tab-out-extension-smoke-'))
-  const artifactDirectory = join(temporaryDirectory, 'extension')
-  const profileDirectory = join(temporaryDirectory, 'profile')
-
-  try {
-    await cp(builtExtensionDirectory, artifactDirectory, {
-      errorOnExist: true,
-      force: false,
-      recursive: true
-    })
-    await mkdir(profileDirectory)
-  } catch (error) {
-    await rm(temporaryDirectory, { force: true, recursive: true })
-    throw error
-  }
-
-  return {
-    artifactDirectory,
-    profileDirectory,
-    temporaryDirectory
-  }
 }
 
 function isTabOutServiceWorker(worker: Worker): boolean {
@@ -176,18 +127,26 @@ type InstalledExtensionWorkerFixtures = {
 
 export const test = base.extend<object, InstalledExtensionWorkerFixtures>({
   installedExtension: [async ({}, use) => {
-    const isolatedFiles = await createIsolatedExtensionFiles()
-    const markerMatches = await findInstrumentationMarker(
-      isolatedFiles.artifactDirectory
+    await using temporaryDirectory = await mkdtempDisposable(
+      join(tmpdir(), 'tab-out-extension-smoke-')
     )
+    const artifactDirectory = join(temporaryDirectory.path, 'extension')
+    const profileDirectory = join(temporaryDirectory.path, 'profile')
+    await cp(builtExtensionDirectory, artifactDirectory, {
+      errorOnExist: true,
+      force: false,
+      recursive: true
+    })
+    await mkdir(profileDirectory)
+    const markerMatches = await findInstrumentationMarker(artifactDirectory)
     const errors = new RuntimeErrorCollector()
     let context: BrowserContext | undefined
 
     try {
-      context = await chromium.launchPersistentContext(isolatedFiles.profileDirectory, {
+      context = await chromium.launchPersistentContext(profileDirectory, {
         args: [
-          `--disable-extensions-except=${isolatedFiles.artifactDirectory}`,
-          `--load-extension=${isolatedFiles.artifactDirectory}`
+          `--disable-extensions-except=${artifactDirectory}`,
+          `--load-extension=${artifactDirectory}`
         ],
         channel: 'chromium',
         headless: true
@@ -202,7 +161,7 @@ export const test = base.extend<object, InstalledExtensionWorkerFixtures>({
       const extensionId = new URL(serviceWorker.url()).hostname
 
       await use({
-        artifactDirectory: isolatedFiles.artifactDirectory,
+        artifactDirectory,
         context,
         extensionId,
         markerMatches,
@@ -214,10 +173,9 @@ export const test = base.extend<object, InstalledExtensionWorkerFixtures>({
         try {
           await context.close()
         } catch {
-          // Preserve the test result while still removing the disposable profile below.
+          // Preserve the test result; the disposable directory still removes the profile.
         }
       }
-      await rm(isolatedFiles.temporaryDirectory, { force: true, recursive: true })
     }
 
     const observedErrors = errors.snapshot()

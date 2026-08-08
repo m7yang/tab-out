@@ -42,13 +42,11 @@ export default defineConfig({
     target: CHROME_BUILD_TARGET,
     outDir: 'extension/dist',
     emptyOutDir: buildEntry !== 'background',
-    sourcemap: false,
     modulePreload: false,
     rolldownOptions: {
       input: buildInputs,
       output: {
         entryFileNames: '[name].js',
-        chunkFileNames: 'assets/[name]-[hash].js',
         ...(buildEntry === 'background' ? { codeSplitting: false } : {}),
         assetFileNames: 'assets/[name][extname]'
       }

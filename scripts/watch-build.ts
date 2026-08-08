@@ -1,4 +1,4 @@
-import { watch, type FSWatcher } from 'node:fs'
+import { watch } from 'node:fs'
 
 import * as NodeRuntime from '@effect/platform-node/NodeRuntime'
 import * as NodeServices from '@effect/platform-node/NodeServices'
@@ -22,11 +22,6 @@ const WATCH_TARGETS: WatchTarget[] = [
 ]
 const DEBOUNCE_MS = 120
 
-type BuildProcessResult = {
-  readonly code: number | null
-  readonly signal: NodeJS.Signals | null
-}
-
 class WatchRegistrationError extends Schema.TaggedErrorClass<WatchRegistrationError>()(
   'WatchRegistrationError',
   {
@@ -39,14 +34,6 @@ class BuildProcessError extends Schema.TaggedErrorClass<BuildProcessError>()(
   'BuildProcessError',
   { cause: Schema.Defect() }
 ) {}
-
-function closeWatcher(watcher: FSWatcher): Effect.Effect<void> {
-  return Effect.sync(() => {
-    try {
-      watcher.close()
-    } catch {}
-  })
-}
 
 const subscribeToChanges = Effect.fn('watchBuild.subscribe')(function*(
   onChange: (reason: string) => void
@@ -62,37 +49,17 @@ const subscribeToChanges = Effect.fn('watchBuild.subscribe')(function*(
         }),
         catch: (cause) => WatchRegistrationError.make({ path, cause })
       }),
-      closeWatcher
+      (watcher) => Effect.sync(() => watcher.close())
     ),
     { discard: true }
   )
-})
-
-const awaitProcessShutdown = Effect.callback<void>((resume) => {
-  function cleanup(): void {
-    process.removeListener('SIGINT', shutdown)
-    process.removeListener('SIGTERM', shutdown)
-  }
-
-  function shutdown(): void {
-    cleanup()
-    resume(Effect.void)
-  }
-
-  process.once('SIGINT', shutdown)
-  process.once('SIGTERM', shutdown)
-  return Effect.sync(cleanup)
 })
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-export function watchBuildMain(): Promise<number> {
-  return Effect.runPromise(watchBuildProgram(awaitProcessShutdown))
-}
-
-function watchBuildProgram(awaitShutdown: Effect.Effect<void>): Effect.Effect<number> {
+function watchBuildProgram(): Effect.Effect<number> {
   return Effect.gen(function*() {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const runBuildProcess = Effect.fn('watchBuild.runBuildProcess')(function*() {
@@ -107,23 +74,22 @@ function watchBuildProgram(awaitShutdown: Effect.Effect<void>): Effect.Effect<nu
       const code = yield* handle.exitCode.pipe(
         Effect.mapError((cause) => BuildProcessError.make({ cause }))
       )
-      return { code, signal: null } satisfies BuildProcessResult
+      return code
     })
 
     return yield* runWatchBuildWorkflow({
       debounce: Effect.sleep(DEBOUNCE_MS),
       subscribe: subscribeToChanges,
       runBuild: () => Effect.scoped(runBuildProcess()),
-      awaitShutdown,
+      awaitShutdown: Effect.never,
       onReady: () => {
         console.log(`[watch] watching ${WATCH_TARGETS.map(({ path }) => path).join(', ')}`)
       },
       onBuildStart: (reason) => {
         console.log(`\n[watch] build started (${reason})`)
       },
-      onBuildSuccess: ({ code, signal }) => {
-        if (signal) console.log(`[watch] build stopped by ${signal}`)
-        else if (code === 0) console.log('[watch] build completed')
+      onBuildSuccess: (code) => {
+        if (code === 0) console.log('[watch] build completed')
         else console.log(`[watch] build failed with exit code ${code}`)
       },
       onBuildFailure: (error) => {
@@ -141,7 +107,7 @@ function watchBuildProgram(awaitShutdown: Effect.Effect<void>): Effect.Effect<nu
 }
 
 if (import.meta.main) {
-  watchBuildProgram(Effect.never).pipe(
+  watchBuildProgram().pipe(
     Effect.tap((exitCode) => Effect.sync(() => {
       process.exitCode = exitCode
     })),

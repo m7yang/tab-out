@@ -1,25 +1,19 @@
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
-import { extname, join, relative } from 'node:path'
+import { globSync, readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url))
 const sourceRoot = join(repositoryRoot, 'src')
-const TYPESCRIPT_EXTENSIONS = new Set(['.ts', '.tsx'])
-
-function productionTypeScriptFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true })
-    .flatMap((entry) => {
-      const path = join(directory, entry.name)
-      if (entry.isDirectory()) return productionTypeScriptFiles(path)
-      return entry.isFile() && TYPESCRIPT_EXTENSIONS.has(extname(entry.name)) ? [path] : []
-    })
+function productionTypeScriptFiles(): string[] {
+  return globSync('**/*.{ts,tsx}', { cwd: sourceRoot })
+    .map((file) => join(sourceRoot, file))
     .sort()
 }
 
 test('production Effects cross the runtime boundary only through the shared app and worker runtimes', () => {
-  const sources = productionTypeScriptFiles(sourceRoot).map((path) => ({
+  const sources = productionTypeScriptFiles().map((path) => ({
     path,
     relativePath: relative(repositoryRoot, path),
     source: readFileSync(path, 'utf8')

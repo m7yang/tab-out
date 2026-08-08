@@ -17,7 +17,6 @@ import {
 } from '../src/extension/startup-snapshot.js'
 import { parseDashboardStartupSeedBoundary } from '../src/extension/startup-snapshot-schema.js'
 import type { WorkingSetSnapshot } from '../src/extension/types'
-import { installWebLocksStub } from './helpers/web-locks.js'
 import { makeCachedSuspendedTab } from './helpers/suspended-tab.js'
 
 type StoredValues = Record<string, unknown>
@@ -174,7 +173,6 @@ test('v2 seed decoding filters duplicate and noncanonical continuity keys', () =
 })
 
 test('legacy render caches are derived read-only into compact continuity seeds', async (t) => {
-  const restoreLocks = installWebLocksStub()
   const sessionValues = {
     [LEGACY_DASHBOARD_STARTUP_SNAPSHOT_CACHE_KEY]: legacySeed(200)
   }
@@ -184,7 +182,6 @@ test('legacy render caches are derived read-only into compact continuity seeds',
   const storage = installStorage(sessionValues, localValues)
   t.after(() => {
     storage.restore()
-    restoreLocks()
   })
 
   const loaded = await loadDashboardStartupSeed(300)
@@ -201,7 +198,6 @@ test('legacy render caches are derived read-only into compact continuity seeds',
 })
 
 test('a successful v2 save migrates each area only after its compact write', async (t) => {
-  const restoreLocks = installWebLocksStub()
   const sessionValues: StoredValues = {
     [LEGACY_DASHBOARD_STARTUP_SNAPSHOT_CACHE_KEY]: legacySeed(100)
   }
@@ -211,7 +207,6 @@ test('a successful v2 save migrates each area only after its compact write', asy
   const storage = installStorage(sessionValues, localValues)
   t.after(() => {
     storage.restore()
-    restoreLocks()
   })
 
   await saveDashboardStartupSeed({
@@ -243,7 +238,6 @@ test('a successful v2 save migrates each area only after its compact write', asy
 })
 
 test('a newer legacy generation replaces an older v2 seed before legacy cleanup', async (t) => {
-  const restoreLocks = installWebLocksStub()
   const sessionValues: StoredValues = {
     [DASHBOARD_STARTUP_SEED_CACHE_KEY]: seed(50),
     [LEGACY_DASHBOARD_STARTUP_SNAPSHOT_CACHE_KEY]: legacySeed(100)
@@ -255,7 +249,6 @@ test('a newer legacy generation replaces an older v2 seed before legacy cleanup'
   const storage = installStorage(sessionValues, localValues)
   t.after(() => {
     storage.restore()
-    restoreLocks()
   })
 
   await saveDashboardStartupSeed({
@@ -275,7 +268,6 @@ test('a newer legacy generation replaces an older v2 seed before legacy cleanup'
 })
 
 test('failed durable replacement leaves its legacy checkpoint recoverable', async (t) => {
-  const restoreLocks = installWebLocksStub()
   const sessionValues: StoredValues = {}
   const localValues: StoredValues = {
     [LEGACY_DASHBOARD_STARTUP_SNAPSHOT_CACHE_KEY]: legacySeed(100)
@@ -285,7 +277,6 @@ test('failed durable replacement leaves its legacy checkpoint recoverable', asyn
   })
   t.after(() => {
     storage.restore()
-    restoreLocks()
   })
 
   await saveDashboardStartupSeed({
@@ -302,7 +293,6 @@ test('failed durable replacement leaves its legacy checkpoint recoverable', asyn
 })
 
 test('seed loading selects the newest generation and uses Warm only for equal-generation title data', async (t) => {
-  const restoreLocks = installWebLocksStub()
   const sessionValues: StoredValues = {
     [DASHBOARD_STARTUP_SEED_CACHE_KEY]: seed(200, {
       titleRetention: [{
@@ -319,7 +309,6 @@ test('seed loading selects the newest generation and uses Warm only for equal-ge
   const storage = installStorage(sessionValues, localValues)
   t.after(() => {
     storage.restore()
-    restoreLocks()
   })
 
   assert.equal((await loadDashboardStartupSeed(250))?.titleRetention?.[0]?.title, 'Warm title')
@@ -333,7 +322,6 @@ test('seed loading selects the newest generation and uses Warm only for equal-ge
 })
 
 test('seed loading rejects an expired Durable checkpoint', async (t) => {
-  const restoreLocks = installWebLocksStub()
   const sessionValues: StoredValues = {}
   const localValues: StoredValues = {
     [DASHBOARD_STARTUP_SEED_CACHE_KEY]: seed(100)
@@ -341,7 +329,6 @@ test('seed loading rejects an expired Durable checkpoint', async (t) => {
   const storage = installStorage(sessionValues, localValues)
   t.after(() => {
     storage.restore()
-    restoreLocks()
   })
 
   assert.equal(
@@ -405,7 +392,6 @@ test('ordering helpers install card order and intersect frozen priority with liv
 })
 
 test('a title-only Warm update neither changes Durable nor arms promotion', async (t) => {
-  const restoreLocks = installWebLocksStub()
   const originalWarm = seed(100, {
     titleRetention: [{
       tabId: 7,
@@ -421,7 +407,6 @@ test('a title-only Warm update neither changes Durable nor arms promotion', asyn
   let scheduled = 0
   t.after(() => {
     storage.restore()
-    restoreLocks()
   })
 
   const titleTab = makeCachedSuspendedTab('https://example.test/docs')
@@ -445,7 +430,6 @@ test('a title-only Warm update neither changes Durable nor arms promotion', asyn
 })
 
 test('title invalidation advances the generation so an older capture cannot restore it', async (t) => {
-  const restoreLocks = installWebLocksStub()
   const sessionValues: StoredValues = {
     [DASHBOARD_STARTUP_SEED_CACHE_KEY]: seed(100, {
       titleRetention: [{
@@ -462,7 +446,6 @@ test('title invalidation advances the generation so an older capture cannot rest
   const storage = installStorage(sessionValues, localValues)
   t.after(() => {
     storage.restore()
-    restoreLocks()
   })
 
   assert.equal(await invalidateDashboardStartupTitleRetention(7, 200), true)
@@ -483,7 +466,6 @@ test('title invalidation advances the generation so an older capture cannot rest
 })
 
 test('durable promotion retries once and strips session-only title retention', async (t) => {
-  const restoreLocks = installWebLocksStub()
   const sessionValues: StoredValues = {
     [DASHBOARD_STARTUP_SEED_CACHE_KEY]: seed(200, {
       titleRetention: [{
@@ -506,7 +488,6 @@ test('durable promotion retries once and strips session-only title retention', a
   })
   t.after(() => {
     storage.restore()
-    restoreLocks()
   })
 
   assert.equal(await promoteDashboardStartupSeed(300), true)
@@ -520,7 +501,6 @@ test('durable promotion retries once and strips session-only title retention', a
 })
 
 test('a later material refresh can re-arm promotion after both durable write attempts fail', async (t) => {
-  const restoreLocks = installWebLocksStub()
   const sessionValues: StoredValues = {
     [DASHBOARD_STARTUP_SEED_CACHE_KEY]: seed(200, {
       cardOrder: ['domain-newer.test']
@@ -538,7 +518,6 @@ test('a later material refresh can re-arm promotion after both durable write att
   let scheduledAt: number | null = null
   t.after(() => {
     storage.restore()
-    restoreLocks()
   })
 
   assert.equal(await promoteDashboardStartupSeed(300), false)

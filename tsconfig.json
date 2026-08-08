@@ -8,17 +8,13 @@
     "resolveJsonModule": true,
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "jsx": "react-jsx",
-    "allowJs": false,
     "strict": true,
-    "noImplicitAny": true,
     "noImplicitReturns": true,
-    "strictNullChecks": true,
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "allowUnreachableCode": false,
-    "forceConsistentCasingInFileNames": true,
     "noImplicitOverride": true,
     "erasableSyntaxOnly": true,
     "isolatedModules": true,
@@ -27,7 +23,6 @@
     "noEmit": true,
     "skipLibCheck": true,
     "types": ["chrome", "node", "react", "react-dom"],
-    "maxNodeModuleJsDepth": 0,
     "paths": {
       "@/*": ["./src/*"]
     }

@@ -221,15 +221,8 @@ function handleServerRequest(
   switch (message.method) {
     case 'workspace/workspaceFolders':
       return respond(input, messageId, [{ uri: workspaceUri, name: path.basename(workspaceRoot) }])
-    case 'client/registerCapability':
-    case 'client/unregisterCapability':
-    case 'window/workDoneProgress/create':
-      return respond(input, messageId, null)
     case 'workspace/applyEdit':
       return respond(input, messageId, { applied: false })
-    case 'window/showMessageRequest':
-    case '@/tailwindCSS/getDocumentSymbols':
-      return respond(input, messageId, null)
     default:
       return respond(input, messageId, null)
   }
