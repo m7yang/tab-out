@@ -62,7 +62,6 @@ export type StartupAdmissionController<Value, Error> = {
   read(): StartupAdmissionState<Value, Error>
   subscribe(listener: () => void): () => void
   start(): void
-  retry(): void
   visibilityReturned(): void
   materialChanged(delayMs?: number): void
   dispose(): void
@@ -290,9 +289,6 @@ export function createStartupAdmissionController<Value, Error>(
     },
     start() {
       if (state.phase === 'shell') startAttempt()
-    },
-    retry() {
-      if (state.phase === 'failed') startAttempt()
     },
     visibilityReturned() {
       if (state.phase === 'shell' || state.phase === 'failed') {

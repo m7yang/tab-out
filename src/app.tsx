@@ -4,7 +4,6 @@ import './styles/app.css'
 import { attachApp } from './components/App'
 import {
   applyAppStartup,
-  publishAppStartupFailure,
   resetAppStartupShell,
   setAppStartupFilterIntent,
   setAppStartupMaterialChangeHandler,
@@ -179,30 +178,24 @@ const stopClosedGhostDismissalSync = subscribeClosedGhostDismissals((dismissals)
 })
 startupAdmissionController.subscribe(() => {
   const state = startupAdmissionController.read()
-  if (state.phase === 'capturing') {
+  if (state.phase !== 'ready') {
     resetAppStartupShell()
     return
   }
-  if (state.phase === 'failed') {
-    publishAppStartupFailure(() => startupAdmissionController.retry())
-    return
-  }
-  if (state.phase === 'ready') {
-    // Install steady-state session updates in the same task that admits the
-    // frame. Pre-ready events invalidate capture; no independently fetched
-    // closed-tab result can overtake the admitted generation.
-    stopClosedTabUpdates ??= appDashboardStore.startClosedTabUpdates()
-    recordStartupTiming(STARTUP_ORDER_DEBUG_CAPTURE, 'startup-frame-ready', {
-      detail: {
-        closedTabs: state.value.snapshot.closedTabs.length,
-        domainGroups: state.value.snapshot.dashboard.domainGroups.length,
-        realTabs: state.value.snapshot.dashboard.realTabs.length,
-        source: state.value.source,
-        workingSet: state.value.snapshot.workingSet.items.length
-      }
-    })
-    applyAppStartup(state.value)
-  }
+  // Install steady-state session updates in the same task that admits the
+  // frame. Pre-ready events invalidate capture; no independently fetched
+  // closed-tab result can overtake the admitted generation.
+  stopClosedTabUpdates ??= appDashboardStore.startClosedTabUpdates()
+  recordStartupTiming(STARTUP_ORDER_DEBUG_CAPTURE, 'startup-frame-ready', {
+    detail: {
+      closedTabs: state.value.snapshot.closedTabs.length,
+      domainGroups: state.value.snapshot.dashboard.domainGroups.length,
+      realTabs: state.value.snapshot.dashboard.realTabs.length,
+      source: state.value.source,
+      workingSet: state.value.snapshot.workingSet.items.length
+    }
+  })
+  applyAppStartup(state.value)
 })
 recordStartupTiming(STARTUP_ORDER_DEBUG_CAPTURE, 'initialize-start')
 startupAdmissionController.start()

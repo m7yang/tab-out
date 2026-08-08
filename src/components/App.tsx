@@ -283,7 +283,6 @@ type DashboardShellProps = {
   source: DashboardSource
   sourceSelection: DashboardSource
   stats: DashboardStats
-  startupState: AppStartupState | null
   tabHistory: TabHistorySnapshot | null
   urlPreviewStore: UrlPreviewStore
   workingSet: WorkingSetSnapshot | null
@@ -313,7 +312,6 @@ function DashboardShell({
   source,
   sourceSelection,
   stats,
-  startupState,
   tabHistory,
   urlPreviewStore,
   workingSet
@@ -394,26 +392,6 @@ function DashboardShell({
                 : 'ml-[calc(0px-var(--dashboard-card-shadow-bleed))] pl-(--dashboard-card-shadow-bleed)'
             )}
           >
-            <div
-              data-tabout="dashboard-startup-status"
-              className="pointer-events-none absolute inset-x-0 top-1.5 z-10 flex h-8 items-center justify-center text-xs text-muted-foreground"
-              role={startupState?.phase === 'failed' ? 'alert' : 'status'}
-              aria-live="polite"
-            >
-              {startupState?.phase === 'failed' && (
-                <span className="pointer-events-auto inline-flex items-center gap-2">
-                  <span>Couldn’t load dashboard</span>
-                  <button
-                    type="button"
-                    data-tabout-part="retry-button"
-                    className="rounded-md px-2 py-1 text-foreground hover:bg-muted [corner-shape:squircle]"
-                    onClick={startupState.retry}
-                  >
-                    Retry
-                  </button>
-                </span>
-              )}
-            </div>
             <DashboardMissionsList
               filter={filter}
               historyRangeAction={showHistoryRange ? (
@@ -820,7 +798,6 @@ export function App() {
           source={source}
           sourceSelection={sourceSelection}
           stats={stats}
-          startupState={startupState}
           tabHistory={dynamicContentVisible ? tabHistory : null}
           urlPreviewStore={urlPreviewStore}
           workingSet={historyPanelWorkingSet}

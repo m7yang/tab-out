@@ -26,11 +26,10 @@ visible Dashboard state by itself. The generated shell remains interactive
 until the live Startup Frame is ready. Normal refreshes and source switching
 remain owned by the existing Dashboard Intake seam.
 
-The shell stays visually quiet throughout capture: it shows no loading label,
-spinner, or skeleton. Failure uses a reserved status slot for `Couldn’t load
-dashboard` and Retry without a layout shift. Filter and source controls remain
-interactive, and their latest intent participates in the page-local attempt
-revision.
+The shell stays visually quiet throughout capture and after an unsuccessful
+attempt: it shows no loading label, spinner, skeleton, startup failure copy, or
+Retry control. Filter and source controls remain interactive, and their latest
+intent participates in the page-local attempt revision.
 
 A generation succeeds only when every semantic authority represented in the
 frame is known: open tabs and windows, Activation History, Working Set, Saved
@@ -56,17 +55,18 @@ Render-ready view models, full Dashboard and history payloads, recently closed
 rows, dismissals, display preferences, the current-page overlay, and background
 work used only to keep those cached surfaces coherent are removed.
 
-If a live Startup Frame cannot be built, the shell reports a compact retryable
-failure instead of presenting an empty Dashboard or stale cache. A live attempt
+If a live Startup Frame cannot be built, the shell stays visually quiet instead
+of presenting an empty Dashboard or stale cache. A live attempt
 subscribes to material browser, storage, service, and page-input changes before
 capture, and only an unchanged page-local attempt revision may commit. A change
 coalesces a new capture within the original five-second deadline; the deadline
 does not reset. An error or deadline invalidates the attempt and releases
-Dashboard Intake, so late results cannot commit. Explicit Retry, returning the
-page to visible, or a material input change can start a fresh generation after
-failure through one coalesced flight; there is no timer-driven retry loop. This
-supersedes ADR 0005 where that decision permits either a Warm Snapshot or
-Durable Checkpoint to supply visible content before live state arrives.
+Dashboard Intake, so late results cannot commit. Returning the page to visible
+or a material input change can start a fresh generation after failure through
+one coalesced flight. There is no explicit Retry action or timer-driven retry
+loop. This supersedes ADR 0005 where that decision permits either a Warm
+Snapshot or Durable Checkpoint to supply visible content before live state
+arrives.
 
 ## Consequences
 
@@ -75,5 +75,6 @@ still paints and becomes interactive immediately. Warm and Durable state can
 preserve useful ordering without a Dirty Fence, two-slot commit, per-input
 revision vector, or current-page delta journal. Startup admission becomes one
 focused module rather than a redesign of normal Dashboard Intake. The quiet
-shell avoids replacing stale-content flicker with loading-indicator flicker,
-while the reserved failure state keeps an unsuccessful capture legible.
+shell avoids replacing stale-content flicker with transient startup status UI;
+an unsuccessful capture intentionally remains an interactive shell until a
+material change, visibility return, or page refresh starts another attempt.

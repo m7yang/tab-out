@@ -235,7 +235,7 @@ test('a delayed material change from failure also coalesces before the fresh cap
   })
 })
 
-test('capture failure stays failed until an explicit fresh-attempt trigger', () => {
+test('capture failure stays failed until visibility or material state changes', () => {
   const time = createTestTime()
   const harness = createCaptureHarness<string, string>()
   const controller = createStartupAdmissionController({
@@ -256,7 +256,7 @@ test('capture failure stays failed until an explicit fresh-attempt trigger', () 
   assert.equal(harness.captures.length, 1)
   assert.equal(time.pendingTimerCount(), 0)
 
-  controller.retry()
+  controller.materialChanged()
   assert.deepEqual(harness.captures[1]?.request, {
     attempt: 2,
     generation: 0,
@@ -341,7 +341,6 @@ test('dispose is idempotent and rejects every later completion', () => {
 
   harness.captures[0]?.settle({ ok: true, value: 'late frame' })
   time.advanceBy(10_000)
-  controller.retry()
   controller.materialChanged()
   controller.visibilityReturned()
 

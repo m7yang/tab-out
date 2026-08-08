@@ -12,9 +12,7 @@ export type AppStartupFrame = {
   source: DashboardSource
 }
 
-export type AppStartupState =
-  | { phase: 'failed'; retry: () => void }
-  | ({ phase: 'ready' } & AppStartupFrame)
+export type AppStartupState = { phase: 'ready' } & AppStartupFrame
 
 let currentStartupState: AppStartupState | null = null
 const startupListeners = new Set<() => void>()
@@ -45,10 +43,6 @@ export function updateAppStartupClosedGhostDismissals(
     closedGhostDismissals: dismissals
   })
   return true
-}
-
-export function publishAppStartupFailure(retry: () => void): void {
-  publishAppStartup({ phase: 'failed', retry })
 }
 
 export function resetAppStartupShell(): void {

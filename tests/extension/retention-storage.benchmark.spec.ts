@@ -1097,7 +1097,6 @@ async function measureStartupFrame(
   ) {
     throw new Error('Startup Frame diagnostic did not observe its request and publication')
   }
-  await expect(page.getByText('Couldn’t load dashboard')).toHaveCount(0)
   return {
     preHeaderServiceStateRequestCount: diagnostic.preHeaderRequestCount,
     serviceStateRequestMs: diagnostic.latestPreHeaderRequest.durationMs,

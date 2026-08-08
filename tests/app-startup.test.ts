@@ -3,7 +3,6 @@ import test from 'node:test'
 
 import {
   applyAppStartup,
-  publishAppStartupFailure,
   readAppStartup,
   readBuildTimeAppStartup,
   resetAppStartupShell,
@@ -51,20 +50,6 @@ test('app startup publishes one ready frame and applies it to Dashboard Intake',
   assert.equal(readBuildTimeAppStartup(), null)
   assert.equal(appDashboardStore.read().historyRange, 'off')
   assert.equal(appDashboardStore.read().startupStateApplied, true)
-})
-
-test('failure never applies partial state to Dashboard Intake', () => {
-  resetAppStartupShell()
-  let retries = 0
-
-  publishAppStartupFailure(() => { retries += 1 })
-  const failed = readAppStartup()
-  assert.equal(failed?.phase, 'failed')
-  if (failed?.phase === 'failed') failed.retry()
-  assert.equal(retries, 1)
-
-  resetAppStartupShell()
-  assert.equal(readAppStartup(), null)
 })
 
 test('post-admission dismissal events update the ready frame without partial startup intake', () => {
