@@ -20,18 +20,50 @@ const SCRIPT_FILE = fileURLToPath(
   new URL('../scripts/check-commit-references.ts', import.meta.url)
 )
 const TSX_BIN = fileURLToPath(new URL('../node_modules/.bin/tsx', import.meta.url))
+const GIT_LOCAL_ENVIRONMENT_VARIABLES = execFileSync(
+  'git',
+  ['rev-parse', '--local-env-vars'],
+  { encoding: 'utf8' }
+).trim().split(/\r?\n/u).filter(Boolean)
+
+function independentGitEnvironment(
+  source: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
+  const environment = { ...source }
+  for (const name of GIT_LOCAL_ENVIRONMENT_VARIABLES) delete environment[name]
+  return environment
+}
 
 function git(cwd: string, ...args: string[]): string {
-  return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    env: independentGitEnvironment()
+  }).trim()
 }
 
 function runPrePush(cwd: string, input: string) {
   return spawnSync(TSX_BIN, [SCRIPT_FILE, '--pre-push', 'origin'], {
     cwd,
     input,
-    encoding: 'utf8'
+    encoding: 'utf8',
+    env: independentGitEnvironment()
   })
 }
+
+test('temporary repositories discard inherited hook repository pointers', () => {
+  const environment = independentGitEnvironment({
+    GIT_DIR: '/example/.git',
+    GIT_INDEX_FILE: '/example/.git/index',
+    GIT_WORK_TREE: '/example',
+    PATH: '/example/bin'
+  })
+
+  assert.equal(environment.GIT_DIR, undefined)
+  assert.equal(environment.GIT_INDEX_FILE, undefined)
+  assert.equal(environment.GIT_WORK_TREE, undefined)
+  assert.equal(environment.PATH, '/example/bin')
+})
 
 test('finds built-in issue, pull-request, URL, and mention syntax', () => {
   const message = [

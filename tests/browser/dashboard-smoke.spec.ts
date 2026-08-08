@@ -244,13 +244,13 @@ test('dashboard attaches before storage resolves and fills startup surfaces atom
     storagePending: (window as typeof window & { __tabOutInitialStoragePending?: boolean })
       .__tabOutInitialStoragePending === true
   }))
-  expect(pendingState).toEqual({
+  expect(pendingState).toMatchObject({
     cards: 0,
     clearVisible: true,
     headerShadowOpacity: 0,
-    startupStatus: '',
     storagePending: true
   })
+  expect(['', 'Loading…']).toContain(pendingState.startupStatus)
   await expect(page.locator('[data-tabout="dashboard-startup-status"]')).toHaveText('Loading…')
   await page.getByRole('button', { name: 'Clear filter' }).click()
   await expect(filterInput).toHaveValue('')

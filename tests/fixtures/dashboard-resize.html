@@ -30,6 +30,7 @@
       const historyReorderMotionCase = fixtureParams.has('historyReorderMotion')
       const appLoadingFaviconCase = fixtureParams.has('appLoadingFavicon')
       const unicodeBionicTitleCase = fixtureParams.has('unicodeBionicTitle')
+      const retainedFocusCase = fixtureParams.has('retainedFocus')
       const largeTabsCount = Math.max(0, Number.parseInt(fixtureParams.get('largeTabs') || '0', 10) || 0)
       const createBulkTab = (index) => {
         const domain = `bulk-tab-${String(index + 1).padStart(4, '0')}.test`
@@ -611,11 +612,144 @@
         return { version: 1, records }
       }
 
+      function bytesToBase64(bytes) {
+        const chunks = []
+        const chunkSize = 32_768
+        for (let index = 0; index < bytes.length; index += chunkSize) {
+          chunks.push(String.fromCharCode(...bytes.subarray(index, index + chunkSize)))
+        }
+        return btoa(chunks.join(''))
+      }
+
+      async function retainedPagesWire(pages) {
+        const compressed = new Blob([JSON.stringify(pages)]).stream().pipeThrough(
+          new CompressionStream('gzip')
+        )
+        return {
+          schemaVersion: 1,
+          identityVersion: 1,
+          encoding: 'gzip-base64-json-v1',
+          data: bytesToBase64(new Uint8Array(await new Response(compressed).arrayBuffer()))
+        }
+      }
+
       const slowCloseRefresh = fixtureParams.has('slowCloseRefresh')
       const slowInitialStorage = fixtureParams.has('slowInitialStorage')
       const failFirstStartupStorage = fixtureParams.has('failFirstStartupStorage')
       const stalledCloseRefresh = fixtureParams.has('stalledCloseRefresh')
       const slowStartupRefresh = fixtureParams.has('slowStartupRefresh')
+      const retainedPages = retainedFocusCase
+        ? [
+            {
+              identityDigest: 'retained-focus-alpha',
+              surfaceKind: 'normal-tab',
+              canonicalKey: 'url:https://retained-focus.test/alpha',
+              url: 'https://retained-focus.test/alpha',
+              title: 'Retained Focus Alpha',
+              closedAt: Date.now() - 3_000,
+              closureToken: 'retained-focus-alpha-lifetime'
+            },
+            {
+              identityDigest: 'retained-focus-bravo',
+              surfaceKind: 'normal-tab',
+              canonicalKey: 'url:https://retained-focus.test/bravo',
+              url: 'https://retained-focus.test/bravo',
+              title: 'Retained Focus Bravo',
+              closedAt: Date.now() - 2_000,
+              closureToken: 'retained-focus-bravo-lifetime'
+            },
+            {
+              identityDigest: 'retained-focus-charlie',
+              surfaceKind: 'normal-tab',
+              canonicalKey: 'url:https://retained-focus.test/charlie',
+              url: 'https://retained-focus.test/charlie',
+              title: 'Retained Focus Charlie',
+              closedAt: Date.now() - 1_000,
+              closureToken: 'retained-focus-charlie-lifetime'
+            },
+            {
+              identityDigest: 'retained-focus-only',
+              surfaceKind: 'normal-tab',
+              canonicalKey: 'url:https://retained-focus-only.test/page',
+              url: 'https://retained-focus-only.test/page',
+              title: 'Retained Focus Only',
+              closedAt: Date.now(),
+              closureToken: 'retained-focus-only-lifetime'
+            },
+            ...Array.from({ length: 7 }, (_, index) => ({
+              identityDigest: `retained-focus-overflow-${index + 1}`,
+              surfaceKind: 'normal-tab',
+              canonicalKey: `url:https://retained-focus-overflow.test/page-${index + 1}`,
+              url: `https://retained-focus-overflow.test/page-${index + 1}`,
+              title: `Retained Focus Overflow ${index + 1}`,
+              closedAt: Date.now() - 10_000 - index,
+              closureToken: `retained-focus-overflow-${index + 1}-lifetime`
+            }))
+          ]
+        : []
+      const pendingClosedTabs = new Map()
+      let retainedClosureSequence = 0
+
+      function fixtureRetainedPageUrl(tab) {
+        const rawUrl = tab.pendingUrl || tab.url || ''
+        if (!rawUrl.startsWith('chrome-extension://')) return rawUrl
+
+        const parsed = URL.parse(rawUrl)
+        if (!parsed || !parsed.pathname.endsWith('/suspended.html')) return rawUrl
+        const fragment = parsed.hash.startsWith('#') ? parsed.hash.slice(1) : ''
+        const markerIndex = fragment.indexOf('&uri=')
+        const encodedUrl = markerIndex >= 0
+          ? fragment.slice(markerIndex + '&uri='.length)
+          : fragment.startsWith('uri=') ? fragment.slice('uri='.length) : ''
+        if (!encodedUrl) return rawUrl
+        try {
+          return decodeURIComponent(encodedUrl) || rawUrl
+        } catch {
+          return rawUrl
+        }
+      }
+
+      function fixtureTabIsRetainable(tab, runtimeId) {
+        const url = fixtureRetainedPageUrl(tab)
+        const parsed = URL.parse(url)
+        if (!parsed) return false
+        if (['blob:', 'data:', 'javascript:'].includes(parsed.protocol)) return false
+        if (parsed.protocol === 'about:' && ['blank', 'srcdoc'].includes(parsed.pathname)) return false
+        if (
+          parsed.protocol === 'chrome:' &&
+          ['newtab', 'new-tab-page'].includes(parsed.hostname)
+        ) return false
+        if (
+          parsed.protocol === 'chrome-search:' &&
+          ['local-ntp', 'new-tab-page'].includes(parsed.hostname)
+        ) return false
+        if (parsed.protocol === 'chrome-untrusted:' && parsed.hostname === 'new-tab-page') return false
+        if (parsed.protocol === 'chrome-extension:' && parsed.hostname === runtimeId) return false
+        return true
+      }
+
+      function captureFixtureRetainedPage(tab, runtimeId) {
+        if (!fixtureTabIsRetainable(tab, runtimeId)) return
+        const url = fixtureRetainedPageUrl(tab)
+        const surfaceKind = windows.find((windowInfo) => windowInfo.id === tab.windowId)?.type === 'app'
+          ? 'app'
+          : 'normal-tab'
+        const identityDigest = JSON.stringify([surfaceKind, url])
+        const record = {
+          identityDigest,
+          surfaceKind,
+          canonicalKey: url,
+          url,
+          title: tab.title || '',
+          closedAt: Date.now(),
+          closureToken: `fixture-closure-${++retainedClosureSequence}`,
+          ...(tab.favIconUrl ? { favIconUrl: tab.favIconUrl } : {})
+        }
+        const existingIndex = retainedPages.findIndex((page) => page.identityDigest === identityDigest)
+        if (existingIndex >= 0) retainedPages.splice(existingIndex, 1, record)
+        else retainedPages.push(record)
+      }
+
       let delayNextDashboardServiceState = false
       let dashboardServiceStateRequestCount = 0
       const chromeApi = createFakeChromeApi({
@@ -639,6 +773,8 @@
               ok: true,
               tabHistory: tabHistorySnapshot,
               workingSetActivity: workingSetActivityFromTabs(),
+              retainedPages: await retainedPagesWire(retainedPages),
+              retentionHealth: null,
               openTabsSnapshot: {
                 tabs: tabs.slice(),
                 windows: windows.slice()
@@ -647,6 +783,33 @@
           }
           if (message?.type === 'tab-out:get-tab-history') {
             return { ok: true, snapshot: tabHistorySnapshot }
+          }
+          if (message?.type === 'tab-out:settle-closed-tab-retention') {
+            const closedTab = pendingClosedTabs.get(message.tabId)
+            if (!closedTab) return { ok: false }
+            pendingClosedTabs.delete(message.tabId)
+            captureFixtureRetainedPage(closedTab, chromeApi.runtime.id)
+            return { ok: true }
+          }
+          if (
+            message?.type === 'tab-out:activate-retained-page' ||
+            message?.type === 'tab-out:remove-retained-page'
+          ) {
+            const retainedPageIndex = retainedPages.findIndex((page) => (
+              page.identityDigest === message.identityDigest &&
+              page.closureToken === message.closureToken
+            ))
+            if (retainedPageIndex < 0) {
+              return {
+                ok: true,
+                outcome: message.type === 'tab-out:activate-retained-page' ? 'stale' : 'already-absent'
+              }
+            }
+            retainedPages.splice(retainedPageIndex, 1)
+            return {
+              ok: true,
+              outcome: message.type === 'tab-out:activate-retained-page' ? 'activated' : 'removed'
+            }
           }
           return { ok: false }
         }
@@ -686,8 +849,20 @@
       }
       const removeTabs = chromeApi.tabs.remove.bind(chromeApi.tabs)
       chromeApi.tabs.remove = async (tabIds) => {
+        const ids = Array.isArray(tabIds) ? tabIds : [tabIds]
+        const closedTabs = ids.flatMap((tabId) => {
+          const tab = tabs.find((candidate) => candidate.id === tabId)
+          return tab ? [tab] : []
+        })
         await removeTabs(tabIds)
         if (slowCloseRefresh || stalledCloseRefresh) delayNextDashboardServiceState = true
+        for (const tab of closedTabs) {
+          pendingClosedTabs.set(tab.id, tab)
+          chromeApi.tabs.onRemoved.dispatch(tab.id, {
+            isWindowClosing: false,
+            windowId: tab.windowId
+          })
+        }
       }
       window.chrome = chromeApi
       // The smoke helpers below poke "something changed" / "tab activated"
@@ -695,6 +870,21 @@
       const listeners = { dispatch: (...args) => window.chrome.tabs.onCreated.dispatch(...args) }
       const tabActivatedListeners = { dispatch: (...args) => window.chrome.tabs.onActivated.dispatch(...args) }
       const originalWindowIds = new Map(tabs.map((tab) => [tab.id, tab.windowId]))
+      if (retainedFocusCase) {
+        let retainedFocusVisibilityState = 'visible'
+        Object.defineProperty(Document.prototype, 'visibilityState', {
+          configurable: true,
+          get: () => retainedFocusVisibilityState
+        })
+        Object.defineProperty(Document.prototype, 'hidden', {
+          configurable: true,
+          get: () => retainedFocusVisibilityState !== 'visible'
+        })
+        window.__tabOutSmokeSetRetainedFocusVisibility = (visibilityState) => {
+          retainedFocusVisibilityState = visibilityState
+          document.dispatchEvent(new Event('visibilitychange'))
+        }
+      }
       if (historyReorderMotionCase) {
         const historyReorderEvents = []
         let historyVisibilityState = 'visible'

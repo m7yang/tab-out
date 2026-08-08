@@ -28,6 +28,8 @@
     "test": "node --experimental-import-text --import tsx --test tests/*.test.ts",
     "test:browser:layout": "playwright test --config tests/playwright.config.ts tests/browser/dashboard-layout.spec.ts",
     "test:browser": "playwright test --config tests/playwright.config.ts tests/browser/dashboard-smoke.spec.ts",
+    "test:extension": "playwright test --config tests/playwright.extension.config.ts",
+    "test:extension:retention-benchmark": "pnpm chrome-support:check && pnpm build && playwright test --config tests/playwright.extension-benchmark.config.ts",
     "verify:bundle": "git diff --exit-code -- extension/dist",
     "verify:compiler": "node scripts/react-compiler-check.ts",
     "lint:tailwind": "node scripts/check-tailwind-diagnostics.ts",

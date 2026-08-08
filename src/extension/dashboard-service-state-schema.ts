@@ -1,5 +1,14 @@
 import { Schema } from 'effect'
 
+import {
+  dashboardRetainedPagesWireSchema,
+  type DashboardRetainedPagesWire
+} from './dashboard-retained-pages-wire.js'
+import {
+  parseRetentionHealthEpisodeValue,
+  retentionHealthEpisodeSchema,
+  type RetentionHealthEpisode
+} from './retention-health.js'
 import type { ChromeOpenTabsSnapshot } from './tabs.js'
 
 const serializedMutedInfoSchema = Schema.Struct({
@@ -110,7 +119,9 @@ const dashboardServiceStateResponseSchema = Schema.Struct({
   openTabsSnapshot: Schema.Struct({
     tabs: Schema.mutable(Schema.Array(serializedChromeTabSchema)),
     windows: Schema.mutable(Schema.Array(serializedChromeWindowSchema))
-  })
+  }),
+  retainedPages: dashboardRetainedPagesWireSchema,
+  retentionHealth: Schema.NullOr(retentionHealthEpisodeSchema)
 })
 
 const isDashboardServiceStateResponse = Schema.is(dashboardServiceStateResponseSchema)
@@ -119,13 +130,21 @@ export type ParsedDashboardServiceStateResponse = {
   tabHistory: unknown
   workingSetActivity: unknown
   openTabsSnapshot: ChromeOpenTabsSnapshot
+  retainedPages: DashboardRetainedPagesWire
+  retentionHealth: RetentionHealthEpisode | null
 }
 
 export function parseDashboardServiceStateResponse(value: unknown): ParsedDashboardServiceStateResponse | null {
   if (!isDashboardServiceStateResponse(value)) return null
+  const retentionHealth = value.retentionHealth === null
+    ? null
+    : parseRetentionHealthEpisodeValue(value.retentionHealth)
+  if (value.retentionHealth !== null && retentionHealth === null) return null
   return {
     tabHistory: value.tabHistory,
     workingSetActivity: value.workingSetActivity,
+    retainedPages: value.retainedPages,
+    retentionHealth,
     openTabsSnapshot: {
       tabs: value.openTabsSnapshot.tabs.map(normalizeSerializedChromeTab),
       windows: value.openTabsSnapshot.windows.map(normalizeSerializedChromeWindow)

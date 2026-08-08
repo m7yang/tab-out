@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
+import { encodeDashboardRetainedPagesWire } from '../src/extension/dashboard-retained-pages-wire.js'
 import { fetchDashboardServiceStateResult } from '../src/extension/dashboard-service-state.js'
 
 test('dashboard service state distinguishes a transport failure from valid empty state', async () => {
@@ -29,7 +30,9 @@ test('dashboard service state treats an explicit successful empty response as kn
           windows: [{ id: 1, focused: true, type: 'normal' }]
         },
         tabHistory: { entries: [], maxSize: 48 },
-        workingSetActivity: { version: 1, records: {} }
+        workingSetActivity: { version: 1, records: {} },
+        retainedPages: await encodeDashboardRetainedPagesWire([]),
+        retentionHealth: null
       })
     }
   } as unknown as typeof globalThis.chrome
@@ -65,7 +68,9 @@ test('dashboard service state rejects otherwise-valid responses without an atomi
           ok: true,
           openTabsSnapshot,
           tabHistory: { entries: [], maxSize: 48 },
-          workingSetActivity: { version: 1, records: {} }
+          workingSetActivity: { version: 1, records: {} },
+          retainedPages: await encodeDashboardRetainedPagesWire([]),
+          retentionHealth: null
         })
       }
     } as unknown as typeof globalThis.chrome
@@ -86,7 +91,9 @@ test('dashboard service state rejects malformed serialized browser rows', async 
           windows: [{ id: 1, focused: true, type: 'normal' }]
         },
         tabHistory: { entries: [] },
-        workingSetActivity: { version: 1, records: {} }
+        workingSetActivity: { version: 1, records: {} },
+        retainedPages: await encodeDashboardRetainedPagesWire([]),
+        retentionHealth: null
       })
     }
   } as unknown as typeof globalThis.chrome
@@ -95,4 +102,57 @@ test('dashboard service state rejects malformed serialized browser rows', async 
 
   assert.equal(result.ok, false)
   assert.equal(result.value.openTabsSnapshot, null)
+})
+
+test('dashboard service state rejects a health record containing page metadata', async () => {
+  globalThis.chrome = {
+    runtime: {
+      sendMessage: async () => ({
+        ok: true,
+        openTabsSnapshot: { tabs: [], windows: [] },
+        tabHistory: { entries: [] },
+        workingSetActivity: { version: 1, records: {} },
+        retainedPages: await encodeDashboardRetainedPagesWire([]),
+        retentionHealth: {
+          failureKind: 'capture',
+          operationKind: 'automatic-capture',
+          retryState: 'exhausted-after-one-retry',
+          startedAt: 100,
+          lastFailedAt: 100,
+          url: 'https://example.test/private'
+        }
+      })
+    }
+  } as unknown as typeof globalThis.chrome
+
+  const result = await fetchDashboardServiceStateResult()
+
+  assert.equal(result.ok, false)
+  assert.equal(result.value.retentionHealth, null)
+})
+
+test('dashboard service state rejects a corrupt retained projection as a whole response', async () => {
+  globalThis.chrome = {
+    runtime: {
+      sendMessage: async () => ({
+        ok: true,
+        openTabsSnapshot: { tabs: [], windows: [] },
+        tabHistory: { entries: [] },
+        workingSetActivity: { version: 1, records: {} },
+        retainedPages: {
+          schemaVersion: 1,
+          identityVersion: 1,
+          encoding: 'gzip-base64-json-v1',
+          data: 'not-base64!'
+        },
+        retentionHealth: null
+      })
+    }
+  } as unknown as typeof globalThis.chrome
+
+  const result = await fetchDashboardServiceStateResult()
+
+  assert.equal(result.ok, false)
+  assert.equal(result.value.openTabsSnapshot, null)
+  assert.deepEqual(result.value.retainedPages, [])
 })

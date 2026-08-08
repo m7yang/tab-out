@@ -16,6 +16,7 @@ import {
 import { BrowserTabs } from '../src/extension/browser-tabs-service.js'
 import type { CapturedDashboardServiceState } from '../src/extension/dashboard-service-messages.js'
 import { DOMAIN_PIN_STORAGE_KEY } from '../src/extension/domain-pins.js'
+import { RETAINED_PAGES_STORAGE_KEY } from '../src/extension/retained-pages-storage.js'
 import { PAGE_CHIP_PIN_STORAGE_KEY } from '../src/extension/page-chip-pins.js'
 import {
   SAVED_PAGES_STORAGE_KEY,
@@ -54,6 +55,8 @@ function dashboardServiceState(
   return {
     tabHistory: emptyTabHistory,
     workingSetActivity,
+    retainedPages: [],
+    retentionHealth: null,
     openTabsSnapshot: {
       tabs,
       windows: [{
@@ -162,6 +165,7 @@ test('seed refreshes only for local sources that can change compact ordering', (
   const change: chrome.storage.StorageChange = { newValue: [] }
 
   assert.equal(startupSnapshotStorageChangesRequireRefresh({ [DOMAIN_PIN_STORAGE_KEY]: change }, 'local'), true)
+  assert.equal(startupSnapshotStorageChangesRequireRefresh({ [RETAINED_PAGES_STORAGE_KEY]: change }, 'local'), true)
   assert.equal(startupSnapshotStorageChangesRequireRefresh({ [SAVED_PAGES_STORAGE_KEY]: change }, 'local'), true)
   assert.equal(startupSnapshotStorageChangesRequireRefresh({ [SECTION_PIN_STORAGE_KEY]: change }, 'local'), false)
   assert.equal(startupSnapshotStorageChangesRequireRefresh({ [PAGE_CHIP_PIN_STORAGE_KEY]: change }, 'local'), false)

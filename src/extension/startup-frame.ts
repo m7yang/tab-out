@@ -6,6 +6,7 @@ import { loadDashboardLocalStateResultEffect } from './dashboard-local-state.js'
 import { loadClosedGhostDismissalsResultEffect } from './closed-ghost-dismissals.js'
 import { isHistoryFilterEnabled } from './history-range.js'
 import { loadHistoryRangePreferenceResultEffect } from './history-range-storage.js'
+import { fetchDashboardServiceStateResultEffect } from './dashboard-service-state.js'
 import {
   dashboardStartupPreviousOrder,
   dashboardStartupTitleHistory,
@@ -31,11 +32,18 @@ function unknownAuthority(authority: string): StartupFrameAuthorityError {
 export const captureAppStartupFrameEffect = Effect.fn(
   'startupFrame.capture'
 )(function*() {
-  const [seed, localStateResult, historyRangeResult, dismissalsResult] = yield* Effect.all([
+  const [
+    seed,
+    localStateResult,
+    historyRangeResult,
+    dismissalsResult,
+    serviceStateResult
+  ] = yield* Effect.all([
     loadDashboardStartupSeedEffect(),
     loadDashboardLocalStateResultEffect(),
     loadHistoryRangePreferenceResultEffect(),
-    loadClosedGhostDismissalsResultEffect()
+    loadClosedGhostDismissalsResultEffect(),
+    fetchDashboardServiceStateResultEffect()
   ] as const, { concurrency: 'unbounded' })
 
   if (!localStateResult.ok) return yield* Effect.fail(unknownAuthority('pins'))
@@ -58,6 +66,7 @@ export const captureAppStartupFrameEffect = Effect.fn(
     historyRange: historyRangeResult.value,
     historyFilterEnabled: isHistoryFilterEnabled(historyRangeResult.value),
     pinnedDomains: [...localStateResult.state.pinnedDomains],
+    prefetchedServiceStateResult: serviceStateResult,
     previousOrder
   }
   const tabsSnapshot = yield* fetchDashboardStartupSnapshotEffect({

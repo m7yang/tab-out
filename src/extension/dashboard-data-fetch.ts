@@ -26,10 +26,21 @@ type FetchDashboardDataOptions = BuildDashboardDataOptions & {
   currentWindowId?: number | null
 }
 
-function dashboardTabsForDataEffect(dashboardTabs?: DashboardTab[]) {
-  if (dashboardTabs) return Effect.succeed(dashboardTabs)
+function dashboardTabsForDataEffect(
+  dashboardTabs?: DashboardTab[],
+  retainedLiveTabs?: readonly DashboardTab[]
+) {
+  if (dashboardTabs) {
+    return Effect.succeed({
+      dashboardTabs,
+      retainedLiveTabs: retainedLiveTabs ?? dashboardTabs
+    })
+  }
   return fetchOpenTabsSnapshotEffect().pipe(
-    Effect.map((result) => getDashboardTabsFromOpenTabs(result.tabs))
+    Effect.map((result) => ({
+      dashboardTabs: getDashboardTabsFromOpenTabs(result.tabs),
+      retainedLiveTabs: result.tabs
+    }))
   )
 }
 
@@ -52,7 +63,9 @@ export const fetchDashboardDataEffect = Effect.fn(
     bookmarkTabs = [],
     historyTabs = [],
     currentWindowId,
-    savedPagesStore
+    savedPagesStore,
+    retainedPages = [],
+    retainedLiveTabs
   }: FetchDashboardDataOptions = {}
 ) {
   if (source === 'bookmarks') {
@@ -62,6 +75,7 @@ export const fetchDashboardDataEffect = Effect.fn(
     return {
       realTabs,
       domainGroups,
+      retainedPageSurfaceMatches: [],
       currentWindowId: null,
       bookmarkTabs: [],
       bookmarkDomainGroups: [],
@@ -77,13 +91,13 @@ export const fetchDashboardDataEffect = Effect.fn(
     }
   }
 
-  const [resolvedDashboardTabs, resolvedCurrentWindowId] = yield* Effect.all([
-    dashboardTabsForDataEffect(dashboardTabs),
+  const [resolvedTabs, resolvedCurrentWindowId] = yield* Effect.all([
+    dashboardTabsForDataEffect(dashboardTabs, retainedLiveTabs),
     currentWindowId === undefined
       ? getCurrentWindowIdResultEffect().pipe(Effect.map((result) => result.value))
       : Effect.succeed(currentWindowId)
   ] as const, { concurrency: 'unbounded' })
-  const { dashboard, savedPageUpdates } = yield* buildDashboardDataFromTabsEffect(resolvedDashboardTabs, resolvedCurrentWindowId, previousOrder, {
+  const { dashboard, savedPageUpdates } = yield* buildDashboardDataFromTabsEffect(resolvedTabs.dashboardTabs, resolvedCurrentWindowId, previousOrder, {
     pinnedDomains,
     bookmarkPreviousOrder,
     historyPreviousOrder,
@@ -94,6 +108,8 @@ export const fetchDashboardDataEffect = Effect.fn(
     historySearchStatus,
     bookmarkTabs,
     historyTabs,
+    retainedPages,
+    retainedLiveTabs: resolvedTabs.retainedLiveTabs,
     ...(savedPagesStore === undefined ? {} : { savedPagesStore })
   })
   // Page fetchers are the only Saved Pages metadata writers; builds stay pure

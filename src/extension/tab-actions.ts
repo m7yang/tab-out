@@ -230,7 +230,6 @@ const finishTabCloseAction = Effect.fn('tabActions.finishClose')(function*({
   if (result.snapshot.length > 0) markClosedTabs(result.snapshot, label)
   else showToast(label)
   yield* runOptionalCallback(onAfterClose ? () => onAfterClose(result) : undefined)
-  refreshDashboardAfterTabAction()
   return result
 })
 
@@ -452,7 +451,6 @@ const runCloseChipTarget = Effect.fn('tabActions.closeChipTarget')(function*({
   }
 
   yield* runOptionalCallback(onAfterClose ? () => onAfterClose(result) : undefined)
-  if (closeResult.removedCount > 0) refreshDashboardAfterTabAction()
 
   return result
 })

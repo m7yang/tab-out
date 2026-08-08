@@ -29,6 +29,7 @@ import { retainHistorySearchResultsOnError } from '../src/extension/dashboard-in
 import { historySearchStatusCopy } from '../src/components/history-search-status-copy.js'
 import { normalizeTabHistorySnapshot } from '../src/extension/tab-history.js'
 import { resolveWebsitePathSection } from '../src/extension/website-path-sections.js'
+import { RETAINED_PAGE_LIFETIME_MS, type RetainedPageRecord } from '../src/extension/retained-pages-ledger.js'
 import type { DashboardCardVM, DashboardChipData, DashboardTab } from '../src/extension/types'
 
 (globalThis as any).chrome = {
@@ -113,6 +114,32 @@ test('computeDomainCardViewModel preserves title suffixes for hostless file URLs
   assert.deepEqual(chip.suppressedTitleParts, [])
 })
 
+test('buildDomainGroups keeps eligible hostless pages visible and places view-source with its target host', () => {
+  const groups = buildDomainGroups([
+    makeTab({
+      id: 'view-source',
+      url: 'view-source:https://example.test/article',
+      title: 'Source of Example article',
+      sourceType: 'retained-page',
+      closedSaved: true
+    }),
+    makeTab({
+      id: 'mailto',
+      url: 'mailto:person@example.test',
+      title: 'Email person',
+      sourceType: 'saved-page',
+      saved: true,
+      closedSaved: true
+    })
+  ])
+
+  assert.deepEqual(groups.map(({ domain, label }) => ({ domain, label })), [
+    { domain: 'example.test', label: undefined },
+    { domain: '__hostless-pages__', label: 'Other pages' }
+  ])
+  assert.equal(groups.flatMap((group) => group.tabs).length, 2)
+})
+
 test('buildDomainGroups orders normal domain cards by tab count', () => {
   const groups = buildDomainGroups([
     makeTab({ url: 'https://github.com/', title: 'GitHub' }),
@@ -128,12 +155,23 @@ test('buildDomainGroups orders normal domain cards by tab count', () => {
 })
 
 test('buildDashboardDataFromTabs builds dashboard data from an injected open-tab snapshot', async () => {
+  const retainedPage: RetainedPageRecord = {
+    identityDigest: 'retained-docs',
+    surfaceKind: 'normal-tab',
+    canonicalKey: 'https://example.com/docs',
+    url: 'https://example.com/docs',
+    title: 'Retained Docs',
+    closedAt: 1,
+    closureToken: 'retained-docs-closure'
+  }
   const { dashboard } = await buildDashboardDataFromTabs(
     [
       makeTab({ url: 'https://example.com/docs', title: 'Docs' }),
       makeTab({ id: 2, url: 'https://example.test/app', title: 'App' })
     ],
-    1
+    1,
+    new Map(),
+    { retainedPages: [retainedPage], now: 1_000 }
   )
 
   assert.deepEqual(dashboard.realTabs.map((tab) => tab.url), ['https://example.com/docs', 'https://example.test/app'])
@@ -141,6 +179,31 @@ test('buildDashboardDataFromTabs builds dashboard data from an injected open-tab
   assert.equal(dashboard.currentWindowId, 1)
   assert.equal(dashboard.bookmarkSearchReady, false)
   assert.equal(dashboard.historySearchQuery, '')
+  assert.deepEqual(dashboard.retainedPageSurfaceMatches, [{
+    canonicalKey: retainedPage.canonicalKey,
+    surfaceKind: retainedPage.surfaceKind
+  }])
+})
+
+test('expired retention cannot infer an app surface for Activation History', async () => {
+  const now = 10_000
+  const expiredAppPage: RetainedPageRecord = {
+    identityDigest: 'retained-expired-app',
+    surfaceKind: 'app',
+    canonicalKey: 'https://example.test/app',
+    url: 'https://example.test/app',
+    title: 'Expired app',
+    closedAt: now - RETAINED_PAGE_LIFETIME_MS,
+    closureToken: 'retained-expired-app-closure'
+  }
+
+  const { dashboard } = await buildDashboardDataFromTabs([], null, new Map(), {
+    retainedPages: [expiredAppPage],
+    now
+  })
+
+  assert.deepEqual(dashboard.realTabs, [])
+  assert.deepEqual(dashboard.retainedPageSurfaceMatches, [])
 })
 
 test('buildDomainGroups puts pinned domain cards above higher-count normal cards', () => {
@@ -261,6 +324,57 @@ test('buildDomainGroups collects standalone app tabs into a dedicated apps card'
   assert.equal(filteredVm.matchedCards.some(({ group }) => group.domain === '__standalone-apps__'), false)
   assert.equal(filteredVm.unmatchedCards.some(({ group }) => group.domain === '__standalone-apps__'), false)
   assert.deepEqual(filteredVm.filteredCloseUrls, [])
+})
+
+test('closed standalone-app pages remain filterable while open apps stay outside filter results', () => {
+  const groups = buildDomainGroups([
+    makeTab({
+      id: 1,
+      url: 'https://mail.example.test/inbox',
+      title: 'Open inbox',
+      isApp: true,
+      windowId: 2
+    }),
+    makeTab({
+      id: 'retained-app',
+      url: 'https://notes.example.test/reference',
+      title: 'Closed reference',
+      isApp: true,
+      sourceType: 'retained-page',
+      closedSaved: true,
+      retainedPageIdentity: 'identity-retained-app',
+      retainedPageClosureToken: 'lifetime-retained-app'
+    })
+  ])
+  const appsGroup = groups.find((group) => group.domain === '__standalone-apps__')
+  assert.ok(appsGroup)
+
+  const matchingClosed = computeDomainCardViewModel(appsGroup, { filter: 'reference' })
+  assert.equal(matchingClosed.isHidden, false)
+  assert.equal(matchingClosed.tabCountLabel, '1 closed')
+  assert.deepEqual(
+    firstSection(matchingClosed).flatVisibleChips.map((chip) => chip.sourceType),
+    ['retained-page']
+  )
+
+  const matchingOpen = computeDomainCardViewModel(appsGroup, { filter: 'inbox' })
+  assert.equal(matchingOpen.isHidden, true)
+})
+
+test('standalone-app cards use ordinary Page Chip overflow presentation', () => {
+  const group = buildDomainGroups(Array.from({ length: 7 }, (_, index) => makeTab({
+    id: index + 1,
+    url: `https://app-${index}.example.test/`,
+    title: `App ${index}`,
+    isApp: true,
+    windowId: index + 2
+  }))).find((candidate) => candidate.domain === '__standalone-apps__')
+  assert.ok(group)
+
+  const vm = computeDomainCardViewModel(group)
+  assert.equal(firstSection(vm).flatVisibleChips.length, 5)
+  assert.equal(firstSection(vm).flatHiddenChips.length, 2)
+  assert.equal(firstSection(vm).flatHiddenCount, 2)
 })
 
 test('buildDomainGroups collects Tab Out pages into a dedicated new tabs card', () => {
@@ -609,6 +723,59 @@ test('computeDomainCardViewModel keeps saved state scoped to same-title URL vari
   assert.equal(chip.savedPageKey, undefined)
   assert.equal(variants.find((variant) => variant.tabUrl.endsWith('search_id=alpha'))?.saved, true)
   assert.equal(variants.find((variant) => variant.tabUrl.endsWith('search_id=bravo'))?.saved, false)
+})
+
+test('same-title groups use a live state representative when remembered order puts a closed page first', () => {
+  const tabs = [
+    makeTab({
+      id: 'saved-first',
+      url: 'https://example.com/reference?kind=saved',
+      title: 'Shared title',
+      sourceType: 'saved-page',
+      saved: true,
+      closedSaved: true
+    }),
+    makeTab({
+      id: 42,
+      url: 'https://example.com/reference?kind=open',
+      title: 'Shared title',
+      sourceType: 'tab',
+      active: true
+    })
+  ]
+  const group = atOrThrow(buildDomainGroups(tabs), 0)
+  const chip = atOrThrow(firstSection(computeDomainCardViewModel(group, {
+    chipOrder: new Map([
+      [dashboardChipOrderKeyForTab(atOrThrow(tabs, 0)), 0],
+      [dashboardChipOrderKeyForTab(atOrThrow(tabs, 1)), 1]
+    ])
+  })).flatVisibleChips, 0)
+
+  assert.equal(chip.sourceType, 'tab')
+  assert.equal(chip.tabId, 42)
+  assert.equal(chip.closedSaved, false)
+  assert.equal(chip.activeChipFrame, true)
+  assert.equal(chip.titleVariantChips?.[0]?.sourceType, 'saved-page')
+})
+
+test('closed-page chips keep raw snapshot metadata separate from display title and favicon transforms', () => {
+  const rawFavicon = 'https://example.com/static/favicon.ico'
+  const tab = makeTab({
+    id: 'retained',
+    url: 'https://example.com/reference',
+    title: 'Example reference - Example Workspace',
+    favIconUrl: rawFavicon,
+    sourceType: 'retained-page',
+    closedSaved: true
+  })
+  const chip = atOrThrow(firstSection(computeDomainCardViewModel({
+    domain: 'example.com',
+    tabs: [tab]
+  })).flatVisibleChips, 0)
+
+  assert.equal(chip.actionTitle, tab.title)
+  assert.equal(chip.actionFaviconUrl, rawFavicon)
+  assert.equal(chip.faviconUrl.includes('/_favicon/'), true)
 })
 
 test('computeDomainCardViewModel inlines title suppression when same-title URL variants are the only occurrence', () => {
@@ -1833,6 +2000,33 @@ test('buildDashboardViewModel keeps remembered order across saved-page and raw-u
   )
 })
 
+test('computeDomainCardViewModel does not inspect an empty remembered chip order', () => {
+  class UnreadableEmptyOrder extends Map<string, number> {
+    override get(_key: string): number | undefined {
+      throw new Error('an empty remembered order must not perform URL-key lookups')
+    }
+  }
+
+  const tabs = [
+    makeTab({ url: 'https://example.test/alpha', title: 'Alpha page' }),
+    makeTab({ id: 2, url: 'https://example.test/bravo', title: 'Bravo page' })
+  ]
+
+  const baseline = computeDomainCardViewModel(
+    { domain: 'example.test', tabs },
+    { source: 'tabs' }
+  )
+  const withEmptyOrder = computeDomainCardViewModel(
+    { domain: 'example.test', tabs },
+    { source: 'tabs', chipOrder: new UnreadableEmptyOrder() }
+  )
+
+  assert.deepEqual(
+    firstSection(withEmptyOrder).flatVisibleChips.map((chip) => chip.tabUrl),
+    firstSection(baseline).flatVisibleChips.map((chip) => chip.tabUrl)
+  )
+})
+
 // useDashboardViewModels memoizes its builds with real hooks now, so it must run
 // inside a React render; a one-shot static render extracts the hook's value.
 function renderHookValue<T>(run: () => T): T {
@@ -2952,8 +3146,12 @@ test('closed saved pages stay searchable without counting as open tabs or close 
   const unfilteredCard = atOrThrow(unfiltered.matchedCards, 0)
   assert.equal(unfiltered.stats.totalTabs, 1)
   assert.equal(unfiltered.stats.visibleTabs, 1)
-  assert.equal(unfilteredCard.vm.tabCountLabel, '1 +1 saved')
+  assert.equal(unfilteredCard.vm.tabCountLabel, '1 + 1 closed')
   assert.equal(unfilteredCard.vm.closableCount, 1)
+  assert.deepEqual(
+    sectionsOf(unfilteredCard.vm).flatMap((section) => section.sectionClosableUrls),
+    ['https://example.test/open']
+  )
   assert.deepEqual(unfiltered.globalDedupeUrls, [])
 
   const filtered = buildDashboardViewModel({
@@ -2965,12 +3163,23 @@ test('closed saved pages stay searchable without counting as open tabs or close 
   const filteredCard = atOrThrow(filtered.matchedCards, 0)
   assert.equal(filtered.stats.visibleTabs, 0)
   assert.equal(filtered.matchedCards.length, 1)
-  assert.equal(filteredCard.vm.tabCountLabel, '0 +1 saved')
+  assert.equal(filteredCard.vm.tabCountLabel, '1 closed')
   assert.deepEqual(filtered.filteredCloseUrls, [])
   assert.equal(atOrThrow(firstSection(filteredCard.vm).flatVisibleChips, 0).sourceType, 'saved-page')
+  const unmatchedCard = atOrThrow(filtered.unmatchedCards, 0)
+  assert.deepEqual(
+    firstSection(unmatchedCard.vm).flatVisibleChips.map((chip) => chip.sourceType),
+    ['tab']
+  )
+  assert.equal(
+    filtered.unmatchedCards.flatMap(({ vm }) => sectionsOf(vm))
+      .flatMap((section) => section.flatVisibleChips)
+      .some((chip) => chip.sourceType === 'saved-page' || chip.sourceType === 'retained-page'),
+    false
+  )
 })
 
-test('filtered saved-only cards show the matched saved-page fraction in their badge', () => {
+test('filtered saved-only cards show the matched closed-page fraction in their badge', () => {
   const groups = buildDomainGroups([
     makeTab({ id: 1, url: 'https://example.test/open', title: 'Open tab' }),
     makeTab({ id: 'saved-1', url: 'https://example.test/saved-1', title: 'Matching reference one', sourceType: 'saved-page', saved: true, closedSaved: true }),
@@ -2989,11 +3198,11 @@ test('filtered saved-only cards show the matched saved-page fraction in their ba
 
   assert.equal(filtered.matchedCards.length, 1)
   const matchedCard = atOrThrow(filtered.matchedCards, 0)
-  assert.equal(matchedCard.vm.tabCountLabel, '2/4 saved')
-  assert.equal(matchedCard.vm.tabCountTitle, '0 of 1 open tab shown while filtering, 2 of 4 saved pages shown while filtering')
+  assert.equal(matchedCard.vm.tabCountLabel, '2/4 closed')
+  assert.equal(matchedCard.vm.tabCountTitle, '0 of 1 open tab shown while filtering, 2 of 4 closed pages shown while filtering')
 })
 
-test('filtered cards show the saved-page fraction alongside their open-tab count', () => {
+test('filtered cards show the closed-page fraction alongside their open-tab count', () => {
   const groups = buildDomainGroups([
     makeTab({ id: 1, url: 'https://example.test/open-match', title: 'Matching open tab' }),
     makeTab({ id: 2, url: 'https://example.test/open-other', title: 'Other open tab' }),
@@ -3013,8 +3222,8 @@ test('filtered cards show the saved-page fraction alongside their open-tab count
 
   assert.equal(filtered.matchedCards.length, 1)
   const matchedCard = atOrThrow(filtered.matchedCards, 0)
-  assert.equal(matchedCard.vm.tabCountLabel, '1/2 +2/4 saved')
-  assert.equal(matchedCard.vm.tabCountTitle, '1 of 2 open tabs shown while filtering, 2 of 4 saved pages shown while filtering')
+  assert.equal(matchedCard.vm.tabCountLabel, '1/2 + 2/4 closed')
+  assert.equal(matchedCard.vm.tabCountTitle, '1 of 2 open tabs shown while filtering, 2 of 4 closed pages shown while filtering')
 })
 
 test('New tabs bulk-close scopes exclude pinned physical copies in card and section counts', () => {

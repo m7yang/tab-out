@@ -42,7 +42,7 @@ import type {
   DashboardStats,
   TabHistorySnapshot
 } from './types'
-import type { HistorySearchSummary, WorkingSetSnapshot } from '../extension/types'
+import type { HistorySearchSummary, RetainedPageSurfaceMatch, WorkingSetSnapshot } from '../extension/types'
 import type { CardPositionMap, MissionContainer } from '../extension/card-move-animation'
 
 type MissionContainerRef = {
@@ -263,6 +263,7 @@ type DashboardShellProps = {
   closedTabs: readonly ClosedTabEntry[]
   dismissedClosedGhosts: ClosedGhostDismissals | null
   savedKeys?: readonly string[] | undefined
+  retainedPageSurfaceMatches?: readonly RetainedPageSurfaceMatch[] | undefined
   filter: string
   filterInput: string
   filterResultCandidates: readonly FilterResultCandidate[]
@@ -292,6 +293,7 @@ function DashboardShell({
   closedTabs,
   dismissedClosedGhosts,
   savedKeys,
+  retainedPageSurfaceMatches,
   filter,
   filterInput,
   filterResultCandidates,
@@ -342,6 +344,7 @@ function DashboardShell({
             workingSet={historyWorkingSet}
             filter={filter}
             savedKeys={savedKeys}
+            retainedPageSurfaceMatches={retainedPageSurfaceMatches}
             onTabsChange={onTabsChange}
           />
         )}
@@ -798,6 +801,7 @@ export function App() {
           closedTabs={dynamicContentVisible ? closedTabs : EMPTY_CLOSED_TABS}
           dismissedClosedGhosts={startupReady ? startupState.closedGhostDismissals : null}
           savedKeys={visibleDashboard?.savedKeys}
+          retainedPageSurfaceMatches={visibleDashboard?.retainedPageSurfaceMatches}
           filter={filter}
           filterInput={filterInput}
           filterResultCandidates={filterResultCandidates}

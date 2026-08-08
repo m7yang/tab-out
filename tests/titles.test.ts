@@ -11,3 +11,13 @@ test('title cleanup handles hostnames that match Object prototype properties', (
     )
   }
 })
+
+test('title cleanup preserves a separator-free title exactly', () => {
+  assert.deepEqual(
+    cleanTitleWithRemovedSuffix('A title without structural separators', 'alpha.example.test'),
+    {
+      title: 'A title without structural separators',
+      removedSuffix: ''
+    }
+  )
+})

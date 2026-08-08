@@ -561,7 +561,7 @@ test('closeChipTarget preserves a confirmed partial close without animating surv
     assert.deepEqual(result.snapshot.map((tab) => tab.url), [closedUrl])
     assert.equal(result.shouldAnimateRemoval, false)
     assert.deepEqual(tabs.map((tab) => tab.id), [1, 2])
-    assert.equal(refreshCount, 1)
+    assert.equal(refreshCount, 0)
   } finally {
     cleanup()
   }
@@ -738,7 +738,7 @@ test('close paths prefer a pending navigation over the stale committed URL', asy
   assert.deepEqual(tabs.map((tab) => tab.id), [1, 2])
 })
 
-test('closeExactTabSection keeps partial Undo and refreshes only for the confirmed removal', async () => {
+test('closeExactTabSection keeps partial Undo and delegates removal refresh to the retention settlement listener', async () => {
   let refreshCount = 0
   const cleanup = replaceDashboardRefreshForTesting(() => {
     refreshCount += 1
@@ -767,7 +767,7 @@ test('closeExactTabSection keeps partial Undo and refreshes only for the confirm
     assert.equal(result.failedCount, 1)
     assert.deepEqual(result.snapshot.map((tab) => tab.url), [closedUrl])
     assert.deepEqual(tabs.map((tab) => tab.id), [1, 2])
-    assert.equal(refreshCount, 1)
+    assert.equal(refreshCount, 0)
 
     await undoLastClose()
 
@@ -816,7 +816,7 @@ test('tab close feedback distinguishes total, partial, and complete writes', () 
   assert.equal(tabCloseProgressLabel(1, 2, 'duplicates'), 'Closed 1 of 2 duplicates')
 })
 
-test('dedupeTabs reports a partial close, keeps Undo, and refreshes confirmed changes', async () => {
+test('dedupeTabs reports a partial close, keeps Undo, and delegates removal refresh to retention settlement', async () => {
   let refreshCount = 0
   const cleanup = replaceDashboardRefreshForTesting(() => {
     refreshCount += 1
@@ -851,7 +851,7 @@ test('dedupeTabs reports a partial close, keeps Undo, and refreshes confirmed ch
     assert.deepEqual(result.snapshot.map((tab) => tab.title), ['Middle'])
     assert.deepEqual(callbackResults, [result])
     assert.deepEqual(tabs.map((tab) => tab.id), [1, 3])
-    assert.equal(refreshCount, 1)
+    assert.equal(refreshCount, 0)
 
     await undoLastClose()
 

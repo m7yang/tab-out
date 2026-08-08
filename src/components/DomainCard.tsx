@@ -85,7 +85,13 @@ function TabBadgeCount({ count }: { count: string }) {
   ) : count
 }
 
-function TabBadge({ label }: { label?: string | number | undefined }) {
+function TabBadge({
+  label,
+  accessibleLabel
+}: {
+  label?: string | number | undefined
+  accessibleLabel?: string | undefined
+}) {
   const labelText = String(label ?? '')
   const savedMatch = labelText.match(/^(.*?) \+(\d+(?:\/\d+)?) saved$/)
   const savedOnlyMatch = labelText.match(/^(\d+(?:\/\d+)?) saved$/)
@@ -98,6 +104,7 @@ function TabBadge({ label }: { label?: string | number | undefined }) {
 
   return (
     <span
+      aria-label={accessibleLabel}
       className={cn(
         'open-tabs-badge tab-count-badge inline-flex h-5.5 box-border items-center rounded-md bg-[rgba(82,82,82,0.08)] px-2 py-0 text-[12px] font-medium tabular-nums text-(--accent-amber) [corner-shape:squircle]',
         isFiltered && 'tab-count-badge-filtered'
@@ -444,7 +451,7 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
                 {vm.singleSubdomainKey}
               </span>
             )}
-            <TabBadge label={vm.tabCountLabel} />
+            <TabBadge label={vm.tabCountLabel} accessibleLabel={vm.tabCountTitle} />
             {closableExtras > 0 && <DedupButton count={closableExtras} closing={dedupeBadgesClosing} onClick={onDedup} />}
           </div>
           {showCardMenu && (

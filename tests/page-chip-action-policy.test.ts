@@ -13,6 +13,7 @@ test('live tab targets expose saved-page, Chrome tab, and close actions', () => 
     }),
     {
       canClose: true,
+      canRemoveRetained: false,
       canToggleSaved: true,
       canUseChromeTabActions: true,
       showSavedHint: false
@@ -30,6 +31,7 @@ test('closed saved-page targets can be removed but cannot use live-tab or close 
     }),
     {
       canClose: false,
+      canRemoveRetained: false,
       canToggleSaved: true,
       canUseChromeTabActions: false,
       showSavedHint: false
@@ -47,6 +49,7 @@ test('read-only saved targets show the saved hint without mutation actions', () 
     }),
     {
       canClose: false,
+      canRemoveRetained: false,
       canToggleSaved: false,
       canUseChromeTabActions: false,
       showSavedHint: true
@@ -64,6 +67,7 @@ test('history targets expose delete through the shared close capability', () => 
     }),
     {
       canClose: true,
+      canRemoveRetained: false,
       canToggleSaved: false,
       canUseChromeTabActions: false,
       showSavedHint: false
@@ -84,7 +88,26 @@ test('non-interactive aggregate targets suppress target-level actions', () => {
     ),
     {
       canClose: false,
+      canRemoveRetained: false,
       canToggleSaved: false,
+      canUseChromeTabActions: false,
+      showSavedHint: false
+    }
+  )
+})
+
+test('retained app targets can be saved or removed from Tabs without live-tab actions', () => {
+  assert.deepEqual(
+    pageChipTargetActionPolicy({
+      sourceType: 'retained-page',
+      saved: false,
+      closedSaved: true,
+      isApp: true
+    }),
+    {
+      canClose: false,
+      canRemoveRetained: true,
+      canToggleSaved: true,
       canUseChromeTabActions: false,
       showSavedHint: false
     }

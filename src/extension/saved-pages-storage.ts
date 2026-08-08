@@ -7,16 +7,22 @@ import {
   SAVED_PAGES_STORAGE_KEY,
   savedPageKeyForUrl,
   type SavedPageRecord,
+  type SavedPageSurfaceKind,
   type SavedPagesStore,
   type SavedPagesStoreLoadResult
 } from './saved-pages.js'
 
-const savedPagesStoreEnvelopeSchema = Schema.Struct({
+const savedPagesStoreEnvelopeV1Schema = Schema.Struct({
   version: Schema.Literals([1]),
   pages: Schema.Record(Schema.String, Schema.Unknown)
 })
 
-const savedPageRecordCandidateSchema = Schema.Struct({
+const savedPagesStoreEnvelopeV2Schema = Schema.Struct({
+  version: Schema.Literals([2]),
+  pages: Schema.Record(Schema.String, Schema.Unknown)
+})
+
+const savedPageRecordV1CandidateSchema = Schema.Struct({
   key: Schema.String,
   url: Schema.optionalKey(Schema.String),
   title: Schema.optionalKey(Schema.Unknown),
@@ -26,10 +32,24 @@ const savedPageRecordCandidateSchema = Schema.Struct({
   lastSeenOpenAt: Schema.optionalKey(Schema.Unknown)
 })
 
-type SavedPagesStoreEnvelope = typeof savedPagesStoreEnvelopeSchema.Type
+const savedPageRecordV2CandidateSchema = Schema.Struct({
+  key: Schema.String,
+  surfaceKind: Schema.Literals(['normal-tab', 'app']),
+  url: Schema.String,
+  title: Schema.optionalKey(Schema.Unknown),
+  favIconUrl: Schema.optionalKey(Schema.Unknown),
+  savedAt: Schema.optionalKey(Schema.Unknown),
+  updatedAt: Schema.optionalKey(Schema.Unknown),
+  lastSeenOpenAt: Schema.optionalKey(Schema.Unknown)
+})
 
-const isSavedPagesStoreEnvelope = Schema.is(savedPagesStoreEnvelopeSchema)
-const isSavedPageRecordCandidate = Schema.is(savedPageRecordCandidateSchema)
+type SavedPagesStoreEnvelopeV1 = typeof savedPagesStoreEnvelopeV1Schema.Type
+type SavedPagesStoreEnvelopeV2 = typeof savedPagesStoreEnvelopeV2Schema.Type
+
+const isSavedPagesStoreEnvelopeV1 = Schema.is(savedPagesStoreEnvelopeV1Schema)
+const isSavedPagesStoreEnvelopeV2 = Schema.is(savedPagesStoreEnvelopeV2Schema)
+const isSavedPageRecordV1Candidate = Schema.is(savedPageRecordV1CandidateSchema)
+const isSavedPageRecordV2Candidate = Schema.is(savedPageRecordV2CandidateSchema)
 
 class SavedPagesStoreReadError extends Schema.TaggedErrorClass<SavedPagesStoreReadError>()(
   'SavedPagesStoreReadError',
@@ -40,35 +60,68 @@ function finiteNumberOr(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
-function normalizeSavedPagesStoreEnvelope(store: SavedPagesStoreEnvelope): SavedPagesStore {
+type SavedPageRecordFields = {
+  readonly key: string
+  readonly url?: string
+  readonly title?: unknown
+  readonly favIconUrl?: unknown
+  readonly savedAt?: unknown
+  readonly updatedAt?: unknown
+  readonly lastSeenOpenAt?: unknown
+}
+
+function normalizeSavedPageRecord(
+  record: SavedPageRecordFields,
+  surfaceKind: SavedPageSurfaceKind
+): SavedPageRecord | null {
+  const recordUrl = record.url || ''
+  const key = savedPageKeyForUrl(recordUrl || record.key, surfaceKind)
+  if (!key || key !== record.key) return null
+  const savedAt = finiteNumberOr(record.savedAt, 0)
+  const updatedAt = finiteNumberOr(record.updatedAt, savedAt)
+  return {
+    key,
+    surfaceKind,
+    url: recordUrl || (surfaceKind === 'normal-tab' ? key : ''),
+    title: String(record.title || ''),
+    ...(record.favIconUrl ? { favIconUrl: String(record.favIconUrl) } : {}),
+    savedAt,
+    updatedAt,
+    ...(typeof record.lastSeenOpenAt === 'number' && Number.isFinite(record.lastSeenOpenAt)
+      ? { lastSeenOpenAt: record.lastSeenOpenAt }
+      : {})
+  }
+}
+
+function normalizeSavedPagesStoreEnvelopeV1(store: SavedPagesStoreEnvelopeV1): SavedPagesStore {
   const pages: Record<string, SavedPageRecord> = {}
   for (const record of Object.values(store.pages)) {
-    if (!isSavedPageRecordCandidate(record)) continue
-    const recordUrl = record.url || ''
-    const key = savedPageKeyForUrl(recordUrl || record.key)
-    if (!key || key !== record.key) continue
-    const savedAt = finiteNumberOr(record.savedAt, 0)
-    const updatedAt = finiteNumberOr(record.updatedAt, savedAt)
-    pages[key] = {
-      key,
-      url: recordUrl || key,
-      title: String(record.title || ''),
-      ...(record.favIconUrl ? { favIconUrl: String(record.favIconUrl) } : {}),
-      savedAt,
-      updatedAt,
-      ...(typeof record.lastSeenOpenAt === 'number' && Number.isFinite(record.lastSeenOpenAt)
-        ? { lastSeenOpenAt: record.lastSeenOpenAt }
-        : {})
-    }
+    if (!isSavedPageRecordV1Candidate(record)) continue
+    const normalized = normalizeSavedPageRecord(record, 'normal-tab')
+    if (normalized) pages[normalized.key] = normalized
   }
-  return { version: 1, pages }
+  return { version: 2, pages }
+}
+
+function normalizeSavedPagesStoreEnvelopeV2(store: SavedPagesStoreEnvelopeV2): SavedPagesStore {
+  const pages: Record<string, SavedPageRecord> = {}
+  for (const record of Object.values(store.pages)) {
+    if (!isSavedPageRecordV2Candidate(record)) continue
+    const normalized = normalizeSavedPageRecord(record, record.surfaceKind)
+    if (normalized) pages[normalized.key] = normalized
+  }
+  return { version: 2, pages }
 }
 
 export function parseSavedPagesStoreValue(stored: unknown): SavedPagesStoreLoadResult {
   if (stored === undefined) return { ok: true, value: emptySavedPagesStore() }
-  return isSavedPagesStoreEnvelope(stored)
-    ? { ok: true, value: normalizeSavedPagesStoreEnvelope(stored) }
-    : { ok: false, value: emptySavedPagesStore() }
+  if (isSavedPagesStoreEnvelopeV2(stored)) {
+    return { ok: true, value: normalizeSavedPagesStoreEnvelopeV2(stored) }
+  }
+  if (isSavedPagesStoreEnvelopeV1(stored)) {
+    return { ok: true, value: normalizeSavedPagesStoreEnvelopeV1(stored) }
+  }
+  return { ok: false, value: emptySavedPagesStore() }
 }
 
 function savedPagesStorageArea(): chrome.storage.StorageArea {

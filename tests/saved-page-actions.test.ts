@@ -30,6 +30,10 @@ async function invokeToastAction(action: ToastAction | null | undefined): Promis
   await action.onClick()
 }
 
+function savedRecord(store: SavedPagesStore, key: string) {
+  return store.pages[key]
+}
+
 function actionHarness(initialStore = emptySavedPagesStore()) {
   let store = initialStore
   let mutateCalls = 0
@@ -97,6 +101,23 @@ test('savePageTarget reports when persistence succeeds but refresh fails', async
     title: "Page saved, but couldn't refresh the dashboard",
     action: null
   }])
+})
+
+test('Saved Page actions preserve an app target through remove and Undo', async () => {
+  const appTarget = { ...target, isApp: true }
+  const appKey = savedPageKeyForUrl(appTarget.url, 'app')
+  const harness = actionHarness()
+
+  await harness.actions.savePageTarget(appTarget)
+  assert.equal(harness.store.pages[appKey]?.surfaceKind, 'app')
+  assert.equal(harness.store.pages[savedPageKeyForUrl(appTarget.url, 'normal-tab')], undefined)
+
+  await harness.actions.removeSavedPageTarget(appKey)
+  assert.equal(harness.store.pages[appKey], undefined)
+  assert.equal(harness.notices.at(-1)?.action?.label, 'Undo')
+
+  await invokeToastAction(harness.notices.at(-1)?.action)
+  assert.equal(savedRecord(harness.store, appKey)?.surfaceKind, 'app')
 })
 
 test('removeSavedPageTarget handles a storage rejection with user feedback', async () => {

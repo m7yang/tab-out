@@ -18,7 +18,7 @@ import { getAppRuntime } from './app-runtime.js'
 import type { BrowserReadResult } from './browser-tabs-gateway.js'
 import { BrowserTabs } from './browser-tabs-service.js'
 import { DEFAULT_HISTORY_RANGE } from './history-range.js'
-import { annotateSavedPageHints, mergeSavedPagesWithTabs, savedPageKeyForUrl, savedPageKeysFromStore, type SavedPageMetadataUpdates, type SavedPagesStore } from './saved-pages.js'
+import { annotateSavedPageHints, savedPageKeyForUrl, savedPageKeysFromStore, type SavedPageMetadataUpdates, type SavedPagesStore } from './saved-pages.js'
 import { loadSavedPagesStoreEffect } from './saved-pages-storage.js'
 import { buildDomainGroups } from './domain-groups.js'
 import { computeDomainCardViewModel } from './domain-card-view-model.js'
@@ -27,6 +27,8 @@ import { dashboardSourceAllowsTabActions, isClosedSavedDashboardTab } from './da
 import { getFilteredCloseableTabsForQuery, tabMatchesCompiledFilter } from './filter-match.js'
 import { compileFilterQuery } from './filter-query.js'
 import { unwrapSuspenderUrl } from './suspension.js'
+import { projectTabsPageSources } from './tabs-page-projection.js'
+import { RETAINED_PAGE_LIFETIME_MS, type RetainedPageRecord } from './retained-pages-ledger.js'
 import type { DashboardCardEntry, DashboardChipOrderByCard, DashboardChipPriorityMap, DashboardData, DashboardSource, DashboardTab, DashboardViewModel, DomainGroup, HistorySearchStatus, WorkingSetSnapshot } from './types'
 import type { PinnedPageChipIndex } from './page-chip-pins.js'
 import type { CompiledFilterQuery } from './filter-query.js'
@@ -71,6 +73,10 @@ export type BuildDashboardDataOptions = {
   bookmarkTabs?: DashboardTab[]
   historyTabs?: DashboardTab[]
   savedPagesStore?: SavedPagesStore
+  retainedPages?: readonly RetainedPageRecord[]
+  /** Full live inventory used only to suppress hidden retained matches. */
+  retainedLiveTabs?: readonly DashboardTab[]
+  now?: number
 }
 export function buildDashboardViewModel({ realTabs, domainGroups: groups = [], filter = '', source = 'tabs', currentWindowId = null, chipOrder, chipPriority, pinnedSections, pinnedPageChips }: DashboardViewModelOptions): DashboardViewModel {
   const filterQuery = compileFilterQuery(filter)
@@ -247,7 +253,10 @@ export const buildDashboardDataFromTabsEffect = Effect.fn(
     historySearchStatus = 'ready',
     bookmarkTabs = [],
     historyTabs = [],
-    savedPagesStore
+    savedPagesStore,
+    retainedPages = [],
+    retainedLiveTabs = dashboardTabs,
+    now = Date.now()
   }: BuildDashboardDataOptions = {}
 ) {
   const historyQuery = includeHistoryMatches ? searchQuery.trim() : ''
@@ -256,9 +265,15 @@ export const buildDashboardDataFromTabsEffect = Effect.fn(
     try: (): DashboardDataBuild => {
       const companionBookmarkTabs = includeBookmarkMatches ? bookmarkTabs : []
       const companionHistoryTabs = includeHistoryMatches ? historyTabs : []
-      const savedPagesMerge = mergeSavedPagesWithTabs(dashboardTabs, resolvedSavedPagesStore)
-      const realTabs = savedPagesMerge.tabs
-      const annotatedBookmarkTabs = annotateSavedPageHints(companionBookmarkTabs, savedPagesMerge.store)
+      const tabsProjection = projectTabsPageSources(
+        dashboardTabs,
+        resolvedSavedPagesStore,
+        retainedPages,
+        now,
+        retainedLiveTabs
+      )
+      const realTabs = tabsProjection.tabs
+      const annotatedBookmarkTabs = annotateSavedPageHints(companionBookmarkTabs, tabsProjection.store)
       const domainGroups = buildDomainGroups(realTabs, { previousOrder, pinnedDomains })
       const bookmarkDomainGroups = buildDomainGroups(annotatedBookmarkTabs, { previousOrder: bookmarkPreviousOrder, pinnedDomains })
       const historyDomainGroups = buildDomainGroups(companionHistoryTabs, { previousOrder: historyPreviousOrder, pinnedDomains })
@@ -266,6 +281,12 @@ export const buildDashboardDataFromTabsEffect = Effect.fn(
         dashboard: {
           realTabs,
           domainGroups,
+          retainedPageSurfaceMatches: retainedPages
+            .filter((page) => page.closedAt + RETAINED_PAGE_LIFETIME_MS > now)
+            .map(({ canonicalKey, surfaceKind }) => ({
+              canonicalKey,
+              surfaceKind
+            })),
           currentWindowId,
           bookmarkTabs: annotatedBookmarkTabs,
           bookmarkDomainGroups,
@@ -275,9 +296,9 @@ export const buildDashboardDataFromTabsEffect = Effect.fn(
           historySearchQuery: historyQuery,
           historyRange,
           historySearchStatus: includeHistoryMatches ? historySearchStatus : 'idle',
-          savedKeys: savedPageKeysFromStore(savedPagesMerge.store)
+          savedKeys: savedPageKeysFromStore(tabsProjection.store)
         },
-        savedPageUpdates: { base: resolvedSavedPagesStore, merged: savedPagesMerge.store }
+        savedPageUpdates: { base: resolvedSavedPagesStore, merged: tabsProjection.store }
       }
     },
     catch: (cause) => DashboardDataBuildError.make({ cause })

@@ -4,6 +4,18 @@ import { isPinnableDomain, normalizePinnedDomains } from './domain-pins.js'
 import { isClosedSavedDashboardTab } from './dashboard-source.js'
 import type { DashboardTab, DomainGroup, DomainGroupBuildOptions } from './types'
 
+function presentationHostname(url: string): string | null {
+  if (!url) return null
+  if (url.startsWith('file://')) return 'local-files'
+  const parsed = URL.parse(url)
+  if (!parsed) return null
+  if (parsed.hostname) return parsed.hostname
+  if (parsed.protocol === 'view-source:') {
+    return URL.parse(url.slice('view-source:'.length))?.hostname || '__hostless-pages__'
+  }
+  return '__hostless-pages__'
+}
+
 /**
  * @param {DashboardTab[]} realTabs
  * @param {DomainGroupBuildOptions} [opts]
@@ -30,9 +42,7 @@ export function buildDomainGroups(
       continue
     }
 
-    const hostname = tab.url && tab.url.startsWith('file://')
-      ? 'local-files'
-      : URL.parse(tab.url)?.hostname
+    const hostname = presentationHostname(tab.url)
     if (!hostname) continue
 
     // Roll up subdomains so dev1.foo.com + dev2.foo.com share one
@@ -48,6 +58,8 @@ export function buildDomainGroups(
   if (appTabs.length > 0) {
     groupMap.set('__standalone-apps__', { domain: '__standalone-apps__', label: 'Apps', tabs: appTabs })
   }
+  const hostlessPages = groupMap.get('__hostless-pages__')
+  if (hostlessPages) hostlessPages.label = 'Other pages'
 
   const normalizedPinnedDomains = normalizePinnedDomains(pinnedDomains)
   const pinnedOrder = new Map(normalizedPinnedDomains.map((domain, index) => [domain, index]))

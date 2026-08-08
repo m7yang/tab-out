@@ -31,6 +31,7 @@ The agent will walk you through it. Takes about 1 minute.
 - **Move or open with a modifier-click** — Cmd/Ctrl-click any chip or history row to pull that tab into the current window in the background, Cmd/Ctrl+Shift-click to pull it here and switch to it, or Shift-click to move the tab into a new Chrome window; if the page has no live tab, the current-window move gesture opens it in a new tab and Shift-click opens it in a new window
 - **Activation history column** — your chronological tab-switching path with working-set hints and recently closed rows you can restore or forget
 - **Saved pages** — explicitly keep a page on its card after the tab closes, and reopen it with one click (local state, not a Chrome bookmark)
+- **Closed-page retention** — genuinely closed pages remain on their usual cards for up to 30 days, using the same closed-chip presentation as Saved Pages; reopen them, save them permanently, or remove them from Tabs
 - **Audio at a glance** — chips and history rows show Chrome-style play/mute indicators with a click-to-mute toggle
 - **Suspend tabs** — bulk-suspend a card from its actions menu, or suspend a single page from its right-click menu, through your own suspender extension
 - **Right-click menus** — copy a page title, save a page, or suspend it from any chip or history row; group chips can close all their URL variants at once
@@ -125,7 +126,7 @@ Everything runs inside the Chrome extension. No external server, no API calls, n
 | macOS placement bridge | Optional Swift native-messaging host under `native/bridge-host/`, installed per user |
 | Layout | JS-driven Pinterest-style masonry |
 | Animations | CSS transitions + JS-driven close and move animations |
-| State | In-memory cache over `chrome.tabs` / `chrome.tabGroups` / `chrome.windows`; `chrome.storage.local` stores user state such as card/section/page pins, saved pages, activation history, working-set activity, and the detected suspender |
+| State | In-memory cache over `chrome.tabs` / `chrome.tabGroups` / `chrome.windows`; trusted extension storage keeps user state such as pins, Saved Pages, temporary closed-page retention, activation history, working-set activity, and the detected suspender |
 
 ## Development
 

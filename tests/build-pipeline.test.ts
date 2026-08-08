@@ -752,7 +752,7 @@ test('extension HTML loads the Vite-built React entry', async () => {
   assert.match(useHoverMatchSource, /nativeTabHighlightController\.setTarget\(nextUrl \? tabId : null\)/)
   assert.match(pageChipSource, /function setPreview\(url: string, matchUrls: readonly string\[\] = \[url\], target\?: Pick<DashboardChipData, 'tabId'>\)[\s\S]*onHoverUrlChange\?\.\(url \|\| '', 'chip', matchUrls, tabId\)/)
   assert.match(pageChipSource, /async function activateChipTarget\([\s\S]*await setPreview\(''\)[\s\S]*performDashboardItemActivation/)
-  assert.match(pageChipSource, /function onEnvClick\(e: MouseEvent<HTMLButtonElement>, env: DashboardChipEnv\)[\s\S]*activateChipTarget\(e, env\.tabUrl, env\.sourceType \|\| chip\.sourceType, env\)/)
+  assert.match(pageChipSource, /function onEnvClick\(e: MouseEvent<HTMLButtonElement>, env: DashboardChipEnv\)[\s\S]*await activateChipTarget\(e, env\.tabUrl, env\.sourceType \|\| chip\.sourceType, env, e\.currentTarget\)/)
   assert.match(tabHistoryPanelSource, /async function activateHistoryEntry\([\s\S]*await onHoverUrlChange\?\.\(''\)[\s\S]*chipActivationMode/)
   assert.match(tabHistoryPanelSource, /const tabId = workingSetItem\?\.tabId \?\? \(entry\.exists \? entry\.tabId : undefined\)[\s\S]*onHoverUrlChange\?\.\(hoverUrl, hoverSource, hoverUrls, tabId\)/)
   assert.match(useHoverMatchSource, /hoverStateStore\.setSnapshot/)

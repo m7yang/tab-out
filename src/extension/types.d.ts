@@ -20,10 +20,12 @@ export interface DashboardTab {
   isApp: boolean
   audible?: boolean
   muted?: boolean
-  sourceType?: 'tab' | 'bookmark' | 'history' | 'saved-page'
+  sourceType?: 'tab' | 'bookmark' | 'history' | 'saved-page' | 'retained-page'
   saved?: boolean
   closedSaved?: boolean
   savedPageKey?: string
+  retainedPageIdentity?: string
+  retainedPageClosureToken?: string
   index?: number
 }
 
@@ -118,8 +120,13 @@ export interface DashboardChipEnv {
   saved?: boolean
   closedSaved?: boolean
   savedPageKey?: string
+  retainedPageIdentity?: string
+  retainedPageClosureToken?: string
   title?: string
   faviconUrl?: string
+  /** Raw persisted metadata used by Save page actions, separate from display transforms. */
+  actionTitle?: string
+  actionFaviconUrl?: string
   isApp?: boolean
   activeInOtherWindow?: boolean
 }
@@ -128,7 +135,7 @@ export interface DashboardChipData {
   tabId?: number | string
   tabUrl: string
   rawUrl: string
-  sourceType?: 'tab' | 'bookmark' | 'history' | 'saved-page'
+  sourceType?: 'tab' | 'bookmark' | 'history' | 'saved-page' | 'retained-page'
   saved?: boolean
   closedSaved?: boolean
   /** Every open tab behind this chip is suspended (none live). */
@@ -136,6 +143,8 @@ export interface DashboardChipData {
   /** At least one live open tab represented by this chip is loading. */
   loading?: boolean
   savedPageKey?: string
+  retainedPageIdentity?: string
+  retainedPageClosureToken?: string
   pagePinId?: string
   pagePinned?: boolean
   pagePinDisabled?: boolean
@@ -148,6 +157,9 @@ export interface DashboardChipData {
   tooltip: string
   dupeCount: number
   faviconUrl: string
+  /** Raw persisted metadata used by Save page actions, separate from display transforms. */
+  actionTitle?: string
+  actionFaviconUrl?: string
   isGrouped: boolean
   groupDotColor: string | null
   isApp: boolean
@@ -274,9 +286,16 @@ export interface DashboardViewModel {
   filteredCloseTargets: DashboardTabMutationTarget[]
 }
 
+export interface RetainedPageSurfaceMatch {
+  canonicalKey: string
+  surfaceKind: 'normal-tab' | 'app'
+}
+
 export interface DashboardData {
   realTabs: DashboardTab[]
   domainGroups: DomainGroup[]
+  /** Surface-only retained matches used by Activation History Saved Page actions. */
+  retainedPageSurfaceMatches?: readonly RetainedPageSurfaceMatch[]
   currentWindowId?: number | null
   bookmarkTabs?: DashboardTab[]
   bookmarkDomainGroups?: DomainGroup[]

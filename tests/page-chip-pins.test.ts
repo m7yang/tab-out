@@ -6,6 +6,7 @@ import {
   createPinnedPageChipIndex,
   normalizePinnedPageChips,
   pageChipPinId,
+  pageChipPinKeyForFoldUrls,
   pageChipPinKeyForUrl,
   pageChipPinScopeId,
   pinnedPageChipOrder
@@ -21,6 +22,31 @@ test('pageChipPinId produces a source-scoped encoded page chip identity', () => 
   )
 })
 
+test('folded page chip keys use one deterministic representative URL', () => {
+  const alpha = 'https://env-alpha.example.test/docs'
+  const bravo = 'https://env-bravo.example.test/docs'
+  const charlie = 'https://env-charlie.example.test/docs'
+
+  assert.equal(
+    pageChipPinKeyForFoldUrls([charlie, alpha, bravo]),
+    `fold:${alpha}`
+  )
+  assert.equal(
+    pageChipPinKeyForFoldUrls([bravo, charlie, alpha]),
+    `fold:${alpha}`
+  )
+  assert.equal(
+    pageChipPinKeyForFoldUrls([alpha, charlie]),
+    `fold:${alpha}`,
+    'non-representative membership changes keep the fold identity stable'
+  )
+  assert.equal(
+    pageChipPinKeyForFoldUrls([charlie, bravo]),
+    `fold:${bravo}`,
+    'removing the representative advances the fold identity'
+  )
+})
+
 test('normalizePinnedPageChips preserves valid ids in pin order and dedupes by identity', () => {
   const scopeId = pageChipPinScopeId('example.com', '', '', '')
   const first = pageChipPinId('tabs', scopeId, pageChipPinKeyForUrl('https://example.com/a'))
@@ -32,6 +58,22 @@ test('normalizePinnedPageChips preserves valid ids in pin order and dedupes by i
   )
 })
 
+test('normalizePinnedPageChips compacts legacy folded ids and preserves first pin order', () => {
+  const scopeId = pageChipPinScopeId('example.test', '__shared__', '', '')
+  const alpha = 'https://env-alpha.example.test/docs'
+  const bravo = 'https://env-bravo.example.test/docs'
+  const charlie = 'https://env-charlie.example.test/docs'
+  const legacyAlpha = pageChipPinId('tabs', scopeId, `fold:${alpha}\u0000${bravo}`)
+  const compactAlpha = pageChipPinId('tabs', scopeId, `fold:${alpha}`)
+  const legacyCharlie = pageChipPinId('tabs', scopeId, `fold:${charlie}\u0000https://env-delta.example.test/docs`)
+  const compactCharlie = pageChipPinId('tabs', scopeId, `fold:${charlie}`)
+
+  assert.deepEqual(
+    normalizePinnedPageChips([legacyAlpha, compactAlpha, legacyCharlie]),
+    [compactAlpha, compactCharlie]
+  )
+})
+
 test('applyPinnedPageChipMutation removes an existing pin and appends a new pin', () => {
   const scopeId = pageChipPinScopeId('example.com', '', '', '')
   const first = pageChipPinId('tabs', scopeId, pageChipPinKeyForUrl('https://example.com/a'))
@@ -39,6 +81,27 @@ test('applyPinnedPageChipMutation removes an existing pin and appends a new pin'
 
   assert.deepEqual(applyPinnedPageChipMutation([first], { type: 'set-pinned', id: first, pinned: false }), [])
   assert.deepEqual(applyPinnedPageChipMutation([first], { type: 'set-pinned', id: second, pinned: true }), [first, second])
+})
+
+test('applyPinnedPageChipMutation unpins a compact folded id stored in legacy form', () => {
+  const scopeId = pageChipPinScopeId('example.test', '__shared__', '', '')
+  const alpha = 'https://env-alpha.example.test/docs'
+  const bravo = 'https://env-bravo.example.test/docs'
+  const legacy = pageChipPinId('tabs', scopeId, `fold:${alpha}\u0000${bravo}`)
+  const compact = pageChipPinId('tabs', scopeId, `fold:${alpha}`)
+
+  assert.deepEqual(
+    applyPinnedPageChipMutation([legacy], { type: 'set-pinned', id: compact, pinned: false }),
+    []
+  )
+  assert.deepEqual(
+    applyPinnedPageChipMutation([compact], { type: 'set-pinned', id: legacy, pinned: false }),
+    []
+  )
+  assert.deepEqual(
+    applyPinnedPageChipMutation([compact], { type: 'set-pinned', id: legacy, pinned: true }),
+    [compact]
+  )
 })
 
 test('createPinnedPageChipIndex exposes per-source and per-scope pin order', () => {

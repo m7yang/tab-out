@@ -15,6 +15,7 @@ import type { CapturedDashboardServiceState } from '../dashboard-service-message
 import { buildDomainGroups } from '../domain-groups.js'
 import { domainGroupCardId } from '../domain-card-id.js'
 import { DOMAIN_PIN_STORAGE_KEY, normalizePinnedDomains } from '../domain-pins.js'
+import { RETAINED_PAGES_STORAGE_KEY } from '../retained-pages-storage.js'
 import { SAVED_PAGES_STORAGE_KEY, mergeSavedPagesWithTabs } from '../saved-pages.js'
 import { loadSavedPagesStoreResultEffect } from '../saved-pages-storage.js'
 import {
@@ -40,7 +41,11 @@ export const STARTUP_SNAPSHOT_MAX_WAIT_MS = 30_000
 export const STARTUP_SNAPSHOT_DURABLE_CHECKPOINT_INTERVAL_MS = 5 * 60_000
 export const STARTUP_SNAPSHOT_DURABLE_CHECKPOINT_ALARM = 'tab-out:startup-snapshot-durable-checkpoint'
 export const STARTUP_SNAPSHOT_CACHE_SEED_RETRY_MS = 250
-const STARTUP_SEED_SOURCE_KEYS = [DOMAIN_PIN_STORAGE_KEY, SAVED_PAGES_STORAGE_KEY]
+const STARTUP_SEED_SOURCE_KEYS = [
+  DOMAIN_PIN_STORAGE_KEY,
+  RETAINED_PAGES_STORAGE_KEY,
+  SAVED_PAGES_STORAGE_KEY
+]
 
 export function startupSnapshotStorageChangesRequireRefresh(
   changes: Record<string, chrome.storage.StorageChange>,

@@ -22,7 +22,7 @@ import {
   type ClosedTabEntry
 } from './closed-tabs.js'
 import { DEFAULT_HISTORY_RANGE, isHistoryFilterEnabled } from './history-range.js'
-import { fetchDashboardServiceStateResultEffect } from './dashboard-service-state.js'
+import { fetchDashboardServiceStateResultEffect, type DashboardServiceStateResult } from './dashboard-service-state.js'
 import { fetchDashboardDataEffect } from './dashboard-data-fetch.js'
 import { buildFilterSearchRequest } from './filter-search.js'
 import { buildDashboardDataFromTabsEffect, getCurrentWindowIdResultEffect } from './render.js'
@@ -66,6 +66,7 @@ export type DashboardSnapshotOptions = {
   historyFilterEnabled: boolean
   pinnedDomains: string[]
   prefetchedBookmarkTabs?: DashboardTab[]
+  prefetchedServiceStateResult?: DashboardServiceStateResult
   savedPagesStore?: SavedPagesStore
   previousOrder: MissionOrderMap
 }
@@ -304,11 +305,13 @@ function dashboardStartupSnapshotReadError(message: string): DashboardStartupSna
 
 const fetchTabsDashboardSnapshotEffect = Effect.fn(
   'dashboardIntake.fetchTabsSnapshot'
-)(function*({ source, filter, historyRange, historyFilterEnabled, pinnedDomains, prefetchedBookmarkTabs, savedPagesStore, previousOrder }: DashboardSnapshotOptions) {
+)(function*({ source, filter, historyRange, historyFilterEnabled, pinnedDomains, prefetchedBookmarkTabs, prefetchedServiceStateResult, savedPagesStore, previousOrder }: DashboardSnapshotOptions) {
   const filterSearch = buildFilterSearchRequest({ source, filter, historyRange, historyFilterEnabled })
   const [currentWindowResult, serviceStateResult, savedPagesResult, bookmarkTabsResult, historySearch] = yield* Effect.all([
     getCurrentWindowIdResultEffect(),
-    fetchDashboardServiceStateResultEffect(),
+    prefetchedServiceStateResult
+      ? Effect.succeed(prefetchedServiceStateResult)
+      : fetchDashboardServiceStateResultEffect(),
     savedPagesStore
       ? Effect.succeed({ ok: true as const, value: savedPagesStore })
       : loadSavedPagesStoreResultEffect(),
@@ -347,7 +350,9 @@ const fetchTabsDashboardSnapshotEffect = Effect.fn(
       historySearchStatus: historySearch.status,
       bookmarkTabs: bookmarkTabsResult.value,
       historyTabs: historySearch.tabs,
-      savedPagesStore: resolvedSavedPagesStore
+      savedPagesStore: resolvedSavedPagesStore,
+      retainedPages: serviceState.retainedPages,
+      retainedLiveTabs: openTabs
     }
   ).pipe(
     Effect.mapError((error) => DashboardSnapshotFetchError.make({ cause: error.cause }))
@@ -424,7 +429,9 @@ const fetchDashboardStartupSnapshotOnceEffect = Effect.fn(
     historySearch
   ] = yield* Effect.all([
     getCurrentWindowIdResultEffect(),
-    fetchDashboardServiceStateResultEffect(),
+    options.prefetchedServiceStateResult
+      ? Effect.succeed(options.prefetchedServiceStateResult)
+      : fetchDashboardServiceStateResultEffect(),
     options.savedPagesStore
       ? Effect.succeed({ ok: true as const, value: options.savedPagesStore })
       : loadSavedPagesStoreResultEffect(),
@@ -446,10 +453,12 @@ const fetchDashboardStartupSnapshotOnceEffect = Effect.fn(
   if (!openTabsResult.ok) return yield* Effect.fail(dashboardStartupSnapshotReadError('Could not read open tabs'))
   const { snapshot, savedPageUpdates } = yield* buildTabsDashboardStartupSnapshotEffect({
     dashboardTabs: getDashboardTabsFromOpenTabs(openTabsResult.tabs),
+    retainedLiveTabs: openTabsResult.tabs,
     currentWindowId: currentWindowResult.value,
     tabHistory: serviceStateResult.value.tabHistory,
     workingSetActivity: serviceStateResult.value.workingSetActivity,
     savedPagesStore: savedPagesResult.value,
+    retainedPages: serviceStateResult.value.retainedPages,
     closedTabs: closedTabsResult.value,
     pinnedDomains: options.pinnedDomains,
     tabPreviousOrder: options.previousOrder.tabs || new Map(),

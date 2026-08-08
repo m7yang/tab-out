@@ -2643,7 +2643,7 @@ test('history layout collapses while off and restores its prior card width', asy
   ).toBeLessThanOrEqual(1)
 })
 
-test('closing an open search match promotes its matching history result', async ({ page }) => {
+test('closing an open search match keeps its retained result ahead of matching History', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html')
   await expect.poll(() => page.locator('[data-tabout="domain-card"]').count()).toBeGreaterThanOrEqual(12)
 
@@ -2666,11 +2666,14 @@ test('closing an open search match promotes its matching history result', async 
   const openChip = openCard.locator('[data-tabout="page-chip"]')
   await openChip.hover()
   await openChip.locator('[data-tabout-part="close-button"]').click({ force: true })
-  await expect(openCard).toHaveCount(0)
-  await expect(historyCard).toHaveCount(1)
-  await expect(historyStatus).toContainText('1 returned History match')
-  await expect(historyStatus).toContainText('All returned matches appear below')
-  await expect(historyCard).toContainText('Example 2 with enough tooltip text')
+  await expect(openCard).toHaveCount(1)
+  await expect(openCard.locator('.tab-count-badge')).toHaveText('1 closed')
+  await expect(openChip).toHaveAttribute('data-tabout-retained-page-identity', /\S+/)
+  await expect(openChip.locator('[data-tabout-part="close-button"]')).toHaveCount(0)
+  await expect(historyCard).toHaveCount(0)
+  await expect(historyStatus).toContainText('1 shown in Tabs')
+  await expect(historyStatus).toContainText('No returned matches repeated below')
+  await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible()
 })
 
 test('a Tab Out filter URL update does not restart the current result-card move', async ({ page }) => {
@@ -2905,7 +2908,7 @@ test('Page Chip overflow expansion repacks downstream Domain Cards without overl
   expect(overlaps, JSON.stringify(overlaps, null, 2)).toEqual([])
 })
 
-test('closing the last rendered Page Chip before overflow uses the refresh move path', async ({ page }) => {
+test('closing the last rendered Page Chip keeps the overflow layout and retains the page', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?motion=1&slowCloseRefresh=1')
   const card = page.locator('[data-tabout="domain-card"][data-tabout-domain="overflow-motion.test"]')
   const slots = card.locator('[data-tabout-part="slot"][data-tabout-layout-item]')
@@ -2915,7 +2918,10 @@ test('closing the last rendered Page Chip before overflow uses the refresh move 
 
   const slot = slots.last()
   const scope = await slot.getAttribute('data-tabout-layout-scope')
+  const visibleSlotCount = await slots.count()
+  const targetLabel = await slot.locator('[data-tabout="page-chip"]').getAttribute('aria-label')
   expect(scope).toBeTruthy()
+  expect(targetLabel).toBeTruthy()
   await slot.evaluate((element) => element.setAttribute('data-motion-target-slot', ''))
   await slot.locator('[data-tabout-part="close-button"]').evaluate((element) => element.setAttribute('data-motion-trigger', ''))
 
@@ -2936,10 +2942,22 @@ test('closing the last rendered Page Chip before overflow uses the refresh move 
   }))
 
   expect(firstFrame).toEqual({
-    closing: true,
+    closing: false,
     connected: true,
     display: ''
   })
+  await expect(slots).toHaveCount(visibleSlotCount)
+  await expect(page.locator('[data-motion-target-slot]')).toBeVisible()
+  await expect(expander).toHaveText(/\+\d+ more/)
+  await expect(page.locator('.page-chip-closing-ghost')).toHaveCount(0)
+  await expect(card.locator('.intra-card-layout-moving')).toHaveCount(0)
+  await expect(page.locator('.layout-moving')).toHaveCount(0)
+  await expander.click()
+  const retainedChip = card.locator('[data-tabout="page-chip"]', { hasText: targetLabel || '' })
+  await expect(retainedChip).toHaveAttribute(
+    'data-tabout-retained-page-identity',
+    /\S+/
+  )
 })
 
 test('pinning an intra-card section keeps the moved section and its siblings continuous', async ({ page }) => {
@@ -2978,41 +2996,28 @@ test('pinning an intra-card section keeps the moved section and its siblings con
   expect(afterTop).toBeLessThan(beforeTop)
 })
 
-test('closing a Page Chip leaves an exit ghost while sibling chips and cards settle', async ({ page }) => {
+test('closing a Page Chip retains it without an exit or card reflow', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?motion=1')
   const card = page.locator('[data-tabout="domain-card"][data-tabout-domain="overflow-motion.test"]')
   const chip = card.locator('[data-tabout="page-chip"]').first()
+  const chipLabel = await chip.getAttribute('aria-label')
+  expect(chipLabel).toBeTruthy()
   await chip.hover()
   await chip.locator('[data-tabout-part="close-button"]').click({ force: true })
 
-  await expect.poll(() => page.evaluate(() => ({
-    cardMoves: document.querySelectorAll('.layout-moving').length,
-    chipMoves: document.querySelectorAll('.intra-card-layout-moving').length,
-    ghosts: document.querySelectorAll('.page-chip-closing-ghost').length
-  })), {
-    message: 'Page Chip removal should bridge both local and masonry reflow',
-    timeout: 1_000,
-    intervals: [16, 32, 50]
-  }).toEqual(expect.objectContaining({
-    ghosts: 1
-  }))
-
-  const ghostMotion = await page.locator('.page-chip-closing-ghost').evaluate((ghost) => (
-    ghost.getAnimations().flatMap((animation) => (
-      (animation.effect as KeyframeEffect | null)?.getKeyframes() ?? []
-    ))
-  ))
-  expect(ghostMotion.some((frame) => Number(frame.opacity) === 0)).toBe(true)
-  expect(ghostMotion.some((frame) => frame.transform === 'scale(0.96)')).toBe(true)
-  await expect.poll(() => page.locator('.intra-card-layout-moving').count()).toBeGreaterThan(0)
-  await expect.poll(() => page.locator('.page-chip-closing-ghost').count(), {
-    timeout: 1_000,
-    intervals: [50, 100]
-  }).toBe(0)
-  await expect(card.locator('[data-tabout="page-chip"]')).toHaveCount(6)
+  const expander = card.locator('[data-tabout-part="overflow-expander"]')
+  await expect(expander).toHaveText(/\+\d+ more/)
+  await expect(card.locator('.tab-count-badge')).toHaveText('6 + 1 closed')
+  await expect(page.locator('.page-chip-closing-ghost')).toHaveCount(0)
+  await expect(card.locator('.intra-card-layout-moving')).toHaveCount(0)
+  await expect(page.locator('.layout-moving')).toHaveCount(0)
+  await expander.click()
+  const retainedChip = card.locator('[data-tabout="page-chip"]', { hasText: chipLabel || '' })
+  await expect(retainedChip).toHaveAttribute('data-tabout-retained-page-identity', /\S+/)
+  await expect(retainedChip.locator('[data-tabout-part="close-button"]')).toHaveCount(0)
 })
 
-test('closing the final Page Chip in a scope keeps regrouped survivors continuous', async ({ page }) => {
+test('closing the final Page Chip in a scope keeps that retained scope in place', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?motion=1&slowCloseRefresh=1')
   const card = page.locator('[data-tabout="domain-card"][data-tabout-domain="last-scope-motion.test"]')
   const chip = card.locator('[data-tabout="page-chip"]', { hasText: 'Last Scope Only' })
@@ -3028,35 +3033,94 @@ test('closing the final Page Chip in a scope keeps regrouped survivors continuou
   const beforeTop = await followingSlot.evaluate((element) => element.getBoundingClientRect().top)
 
   await chip.hover()
-  const closeButton = chip.locator('[data-tabout-part="close-button"]')
-  await closeButton.focus()
-  await closeButton.press('Enter')
-  await expect(page.locator('.page-chip-closing-ghost')).toHaveCount(1)
-  await expect(page.locator('.page-chip-closing-ghost')).toHaveAttribute('inert', '')
-  await expect(slot).toHaveAttribute('inert', '')
-  await expect(followingSlot.locator('[data-tabout="page-chip"]')).toBeFocused()
+  await chip.locator('[data-tabout-part="close-button"]').click({ force: true })
+  await expect(chip).toHaveAttribute('data-tabout-retained-page-identity', /\S+/)
+  await expect(slot).toBeVisible()
+  await expect(card.locator(`[data-tabout-layout-scope="${scope}"][data-tabout-layout-item]`)).toHaveCount(1)
   await expect(followingSlot).toHaveAttribute('data-tabout-removal-key', followingRemovalKey || '')
-  await expect.poll(() => followingSlot.evaluate((element) => ({
-    moving: element.classList.contains('intra-card-layout-moving'),
-    top: element.getBoundingClientRect().top
-  })), {
-    message: 'the next stable chip should FLIP across the scope regroup',
-    timeout: 1_000,
-    intervals: [16, 32, 50]
-  }).toEqual(expect.objectContaining({ moving: true }))
-
-  await expect.poll(() => followingSlot.evaluate((element) => ({
-    moving: element.classList.contains('intra-card-layout-moving'),
-    top: element.getBoundingClientRect().top
-  })), {
-    timeout: 1_000,
-    intervals: [50, 100]
-  }).toEqual(expect.objectContaining({ moving: false }))
   const afterTop = await followingSlot.evaluate((element) => element.getBoundingClientRect().top)
-  expect(afterTop).toBeLessThan(beforeTop)
+  expect(Math.abs(afterTop - beforeTop)).toBeLessThanOrEqual(1)
+  await expect(page.locator('.page-chip-closing-ghost')).toHaveCount(0)
+  await expect(card.locator('.intra-card-layout-moving')).toHaveCount(0)
+  await expect(page.locator('.layout-moving')).toHaveCount(0)
 })
 
-test('a stalled close refresh releases the reserved Page Chip slot with a fallback move', async ({ page }) => {
+test('retained Page Chip actions hand focus to next, previous, then Filter Query', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html?retainedFocus=1')
+  let card = page.locator('[data-tabout="domain-card"][data-tabout-domain="retained-focus.test"]')
+  let chips = card.locator('[data-tabout="page-chip"]')
+  await expect(chips).toHaveCount(3)
+
+  const middleChip = chips.nth(1)
+  const nextChip = chips.nth(2)
+  const nextLabel = await nextChip.getAttribute('aria-label')
+  expect(nextLabel).toBeTruthy()
+  await middleChip.focus()
+  await page.evaluate(() => {
+    const fixtureWindow = window as typeof window & {
+      __tabOutSmokeSetRetainedFocusVisibility?: (visibilityState: 'hidden' | 'visible') => void
+    }
+    fixtureWindow.__tabOutSmokeSetRetainedFocusVisibility?.('hidden')
+  })
+  await middleChip.press('Enter')
+  await expect(chips).toHaveCount(3)
+  await page.evaluate(() => {
+    const fixtureWindow = window as typeof window & {
+      __tabOutSmokeSetRetainedFocusVisibility?: (visibilityState: 'hidden' | 'visible') => void
+    }
+    fixtureWindow.__tabOutSmokeSetRetainedFocusVisibility?.('visible')
+  })
+  await expect(chips).toHaveCount(2)
+  await expect(card.locator('[data-tabout="page-chip"]', { hasText: nextLabel || '' })).toBeFocused()
+
+  await page.goto('/tests/fixtures/dashboard-resize.html?retainedFocus=1')
+  card = page.locator('[data-tabout="domain-card"][data-tabout-domain="retained-focus.test"]')
+  chips = card.locator('[data-tabout="page-chip"]')
+  await expect(chips).toHaveCount(3)
+  const lastChip = chips.nth(2)
+  const previousChip = chips.nth(1)
+  const previousLabel = await previousChip.getAttribute('aria-label')
+  expect(previousLabel).toBeTruthy()
+  await lastChip.focus()
+  await lastChip.click({ button: 'right' })
+  const removeFromTabs = page.getByRole('menuitem', { name: 'Remove from Tabs' })
+  await expect(removeFromTabs).toBeVisible()
+  await removeFromTabs.press('Enter')
+  await expect(chips).toHaveCount(2)
+  await expect(card.locator('[data-tabout="page-chip"]', { hasText: previousLabel || '' })).toBeFocused()
+
+  const onlyCard = page.locator('[data-tabout="domain-card"][data-tabout-domain="retained-focus-only.test"]')
+  const onlyChip = onlyCard.locator('[data-tabout="page-chip"]')
+  await expect(onlyChip).toHaveCount(1)
+  await onlyChip.focus()
+  await onlyChip.click({ button: 'right' })
+  await expect(removeFromTabs).toBeVisible()
+  await removeFromTabs.press('Enter')
+  await expect(onlyCard).toHaveCount(0)
+  await expect(page.locator('[data-tabout="filter-query"] input')).toBeFocused()
+})
+
+test('retained focus follows the next chip promoted out of collapsed overflow', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html?retainedFocus=1')
+  const card = page.locator(
+    '[data-tabout="domain-card"][data-tabout-domain="retained-focus-overflow.test"]'
+  )
+  const chips = card.locator('[data-tabout="page-chip"]')
+  await expect(chips).toHaveCount(5)
+  await expect(card.locator('[data-tabout-part="overflow-expander"]')).toHaveText('+2 more')
+
+  const lastVisibleChip = chips.nth(4)
+  await lastVisibleChip.focus()
+  await lastVisibleChip.press('Enter')
+
+  await expect(chips).toHaveCount(6)
+  await expect(card.locator('[data-tabout-part="overflow-expander"]')).toHaveCount(0)
+  await expect.poll(() => page.evaluate(() => (
+    document.activeElement?.getAttribute('aria-label') || document.activeElement?.tagName || ''
+  ))).toBe('Retained Focus Overflow 6')
+})
+
+test('a stalled retention refresh keeps the closing Page Chip slot visible', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?motion=1&stalledCloseRefresh=1')
   const card = page.locator('[data-tabout="domain-card"][data-tabout-domain="last-scope-motion.test"]')
   const chip = card.locator('[data-tabout="page-chip"]', { hasText: 'Last Scope Only' })
@@ -3066,17 +3130,20 @@ test('a stalled close refresh releases the reserved Page Chip slot with a fallba
   await chip.locator('[data-tabout-part="close-button"]').click({ force: true })
   expect(await slot.evaluate((element) => element.style.display)).toBe('')
   await expect.poll(() => slot.evaluate((element) => element.style.display), {
-    message: 'the fallback should release the reserved slot even while refresh is stalled',
+    message: 'retention settlement should keep the existing slot visible while refresh is stalled',
     timeout: 1_300,
     intervals: [50, 100]
-  }).toBe('none')
-  await expect.poll(() => card.locator('.intra-card-layout-moving').count(), {
-    timeout: 300,
-    intervals: [16, 32]
-  }).toBeGreaterThan(0)
+  }).toBe('')
+  await expect(slot.locator('[data-tabout="page-chip"]')).toHaveAttribute(
+    'data-tabout-retained-page-identity',
+    /\S+/,
+    { timeout: 3_000 }
+  )
+  await expect(page.locator('.page-chip-closing-ghost')).toHaveCount(0)
+  await expect(card.locator('.intra-card-layout-moving')).toHaveCount(0)
 })
 
-test('closing the last Page Chip in a section moves the following section as one surface', async ({ page }) => {
+test('closing the last Page Chip in a section keeps both sections in place', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?motion=1&slowCloseRefresh=1')
   const card = page.locator('[data-tabout="domain-card"][data-tabout-domain="google.com"]')
   const documentSection = card.locator('[data-tabout="website-path-section"][data-tabout-layout-key$="|/document"]')
@@ -3099,57 +3166,14 @@ test('closing the last Page Chip in a section moves the following section as one
 
   const beforeTop = await spreadsheetSection.evaluate((element) => element.getBoundingClientRect().top)
   await chip.hover()
-  await spreadsheetSection.evaluate((element) => element.setAttribute('data-motion-probe', ''))
-  await chip.locator('[data-tabout-part="close-button"]').evaluate((element) => element.setAttribute('data-motion-trigger', ''))
-  const samples = await page.evaluate(async () => {
-    const startedAt = performance.now()
-    const frames: Array<{
-      cardTop: number
-      elapsed: number
-      localTop: number
-      moving: boolean
-      nestedMovers: number
-      top: number
-      transform: string
-    }> = []
-    document.querySelector<HTMLElement>('[data-motion-trigger]')?.click()
-    return new Promise<typeof frames>((resolve) => {
-      function sampleFrame() {
-        const section = document.querySelector<HTMLElement>('[data-motion-probe]')
-        const cardElement = section?.closest<HTMLElement>('[data-tabout="domain-card"]')
-        if (section && cardElement) {
-          const rect = section.getBoundingClientRect()
-          const cardRect = cardElement.getBoundingClientRect()
-          frames.push({
-            cardTop: cardRect.top,
-            elapsed: performance.now() - startedAt,
-            localTop: rect.top - cardRect.top,
-            moving: section.classList.contains('intra-card-layout-moving'),
-            nestedMovers: section.querySelectorAll('.intra-card-layout-moving').length,
-            top: rect.top,
-            transform: section.style.transform
-          })
-        }
-        if (performance.now() - startedAt >= 500) resolve(frames)
-        else requestAnimationFrame(sampleFrame)
-      }
-      requestAnimationFrame(sampleFrame)
-    })
-  })
-
-  const firstUpwardFrame = samples.find((sample) => sample.top < beforeTop - 1)
-  expect(firstUpwardFrame, `first upward frames: ${JSON.stringify(samples.slice(0, 12))}`).toEqual(expect.objectContaining({
-    moving: true,
-    nestedMovers: 0,
-    transform: expect.stringMatching(/^translate/)
-  }))
-  const reversalFrameIndex = samples.findIndex((sample, index) => (
-    index > 0 && sample.top > (samples[index - 1]?.top ?? sample.top) + 1
-  ))
-  expect(reversalFrameIndex, `non-monotonic frames: ${JSON.stringify(samples)}`).toBe(-1)
-  const settledFrame = samples.at(-1)
-  expect(settledFrame).toEqual(expect.objectContaining({ moving: false }))
-  expect(settledFrame?.top).toBeLessThan(beforeTop)
+  await chip.locator('[data-tabout-part="close-button"]').click({ force: true })
+  await expect(chip).toHaveAttribute('data-tabout-retained-page-identity', /\S+/)
+  await expect(scopeItems).toHaveCount(3)
+  const afterTop = await spreadsheetSection.evaluate((element) => element.getBoundingClientRect().top)
+  expect(Math.abs(afterTop - beforeTop)).toBeLessThanOrEqual(1)
+  await expect(page.locator('.page-chip-closing-ghost')).toHaveCount(0)
+  await expect(card.locator('.intra-card-layout-moving')).toHaveCount(0)
+  await expect(page.locator('.layout-moving')).toHaveCount(0)
 })
 
 test('closing an Activation History entry leaves an exit ghost while survivor rows fill the gap', async ({ page }) => {

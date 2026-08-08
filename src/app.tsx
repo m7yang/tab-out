@@ -15,16 +15,22 @@ import {
 import { getAppRuntime } from './extension/app-runtime.js'
 import { filterInputFromSearch } from './extension/app-url.js'
 import { appDashboardStore, requestDashboardRefresh, settleDashboardRefresh, type DashboardRefreshOptions } from './extension/dashboard-intake.js'
-import { createDashboardPageRefreshScheduler } from './extension/dashboard-page-refresh.js'
+import {
+  createDashboardPageRefreshScheduler,
+  dashboardTabUpdateRefreshOptions
+} from './extension/dashboard-page-refresh.js'
 import { DASHBOARD_LOCAL_STORAGE_KEYS } from './extension/dashboard-local-state.js'
 import { groupColorChanged } from './extension/groups.js'
 import { readFilterFocusPendingInput } from './extension/filter-focus-buffer.js'
 import { subscribeClosedGhostDismissals } from './extension/closed-ghost-dismissals.js'
 import { HISTORY_RANGE_STORAGE_KEY } from './extension/history-range-storage.js'
+import { CLOSED_TAB_RETENTION_SETTLE_MESSAGE } from './extension/runtime-messages.js'
+import { RETAINED_PAGES_STORAGE_KEY } from './extension/retained-pages-storage.js'
+import { reportRetentionHealthEpisode } from './extension/retention-health-client.js'
+import { RETENTION_HEALTH_STORAGE_KEY } from './extension/retention-health.js'
 import { SAVED_PAGES_STORAGE_KEY } from './extension/saved-pages.js'
 import { captureAppStartupFrameEffect } from './extension/startup-frame.js'
 import { createStartupAdmissionController } from './extension/startup-frame-controller.js'
-import { isTabOutDashboardUrl } from './extension/tab-out-url.js'
 import { STARTUP_ORDER_DEBUG_CAPTURE, recordStartupTiming } from './components/startup-order-debug'
 
 recordStartupTiming(STARTUP_ORDER_DEBUG_CAPTURE, 'app-module-evaluated')
@@ -70,30 +76,22 @@ function schedulePassiveDashboardRefresh() {
 
 chrome.tabs.onCreated.addListener(scheduleAnimatedDashboardRefresh)
 chrome.tabs.onActivated.addListener(schedulePassiveDashboardRefresh)
-chrome.tabs.onRemoved.addListener(scheduleAnimatedDashboardRefresh)
+chrome.tabs.onRemoved.addListener((tabId) => {
+  // The worker acknowledges this physical lifetime only after retained state
+  // is durable (or the capture is known to have failed). Refreshing earlier
+  // can transiently remove a chip that should settle into its closed state.
+  void chrome.runtime.sendMessage({
+    type: CLOSED_TAB_RETENTION_SETTLE_MESSAGE,
+    tabId
+  }).catch(() => undefined).then(schedulePassiveDashboardRefresh)
+})
 chrome.tabs.onMoved.addListener(scheduleAnimatedDashboardRefresh)
 chrome.tabs.onAttached.addListener(scheduleAnimatedDashboardRefresh)
 chrome.tabs.onDetached.addListener(scheduleAnimatedDashboardRefresh)
 chrome.tabs.onReplaced.addListener(scheduleAnimatedDashboardRefresh)
-chrome.tabs.onUpdated.addListener((_id, changeInfo) => {
-  if (
-    changeInfo.title !== undefined ||
-    changeInfo.url !== undefined ||
-    changeInfo.favIconUrl !== undefined ||
-    changeInfo.groupId !== undefined ||
-    changeInfo.pinned !== undefined ||
-    changeInfo.discarded !== undefined ||
-    changeInfo.audible !== undefined ||
-    changeInfo.mutedInfo !== undefined ||
-    changeInfo.status !== undefined
-  )
-    scheduleDashboardRefresh({
-      animateCards:
-        (changeInfo.url !== undefined && !isTabOutDashboardUrl(changeInfo.url)) ||
-        changeInfo.groupId !== undefined ||
-        changeInfo.pinned !== undefined ||
-        changeInfo.discarded !== undefined
-    })
+chrome.tabs.onUpdated.addListener((_id, changeInfo, tab) => {
+  const refreshOptions = dashboardTabUpdateRefreshOptions(changeInfo, tab)
+  if (refreshOptions) scheduleDashboardRefresh(refreshOptions)
 })
 
 chrome.windows.onFocusChanged.addListener(schedulePassiveDashboardRefresh)
@@ -124,10 +122,21 @@ chrome.sessions?.onChanged?.addListener(() => {
 const startupLocalStorageKeys = new Set<string>([
   ...DASHBOARD_LOCAL_STORAGE_KEYS,
   HISTORY_RANGE_STORAGE_KEY,
+  RETAINED_PAGES_STORAGE_KEY,
   SAVED_PAGES_STORAGE_KEY
 ])
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (
+    areaName === 'session' &&
+    Object.hasOwn(changes, RETENTION_HEALTH_STORAGE_KEY)
+  ) {
+    if (changes[RETENTION_HEALTH_STORAGE_KEY]?.newValue === undefined) {
+      reportRetentionHealthEpisode(null)
+    }
+    schedulePassiveDashboardRefresh()
+    return
+  }
   if (areaName !== 'local') return
   if (
     startupAdmissionController.read().phase !== 'ready' &&
@@ -136,8 +145,13 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     startupAdmissionController.materialChanged()
     return
   }
-  if (Object.hasOwn(changes, SAVED_PAGES_STORAGE_KEY)) {
-    scheduleAnimatedDashboardRefresh()
+  if (
+    Object.hasOwn(changes, SAVED_PAGES_STORAGE_KEY) ||
+    Object.hasOwn(changes, RETAINED_PAGES_STORAGE_KEY)
+  ) {
+    // Background retention expiry/capacity/reconciliation is authoritative
+    // state convergence, not a direct user removal gesture.
+    schedulePassiveDashboardRefresh()
   }
 })
 

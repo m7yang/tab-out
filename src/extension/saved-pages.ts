@@ -1,11 +1,15 @@
 import { makeDashboardItem } from './dashboard-item.js'
+import { isRetainedPageCaptureEligible } from './retained-page-identity.js'
+import { isTabOutPageUrl } from './tab-out-url.js'
 import type { DashboardTab } from './types'
-import { isBrowserInternalUrl } from './browser-url-policy.js'
 
+/** Stable storage location; the legacy name is retained for in-place envelope migration. */
 export const SAVED_PAGES_STORAGE_KEY = 'tabOutSavedPagesV1'
-const SAVED_PAGES_VERSION = 1
+const SAVED_PAGES_VERSION = 2
+export type SavedPageSurfaceKind = 'normal-tab' | 'app'
 export interface SavedPageRecord {
   key: string
+  surfaceKind: SavedPageSurfaceKind
   url: string
   title: string
   favIconUrl?: string
@@ -15,7 +19,7 @@ export interface SavedPageRecord {
 }
 
 export interface SavedPagesStore {
-  version: 1
+  version: 2
   pages: Record<string, SavedPageRecord>
 }
 
@@ -44,16 +48,43 @@ export function emptySavedPagesStore(): SavedPagesStore {
   return { version: SAVED_PAGES_VERSION, pages: {} }
 }
 
-export function savedPageKeyForUrl(url = ''): string {
+/**
+ * Stable exact-target key. Normal-tab keys retain the v1 URL shape so legacy
+ * records migrate in place; app keys use a tuple encoding that cannot collide
+ * with an absolute URL key for the same target.
+ */
+export function savedPageKeyForUrl(url = '', surfaceKind: SavedPageSurfaceKind = 'normal-tab'): string {
   if (!url) return ''
   const parsed = URL.parse(url)
-  if (!parsed || isBrowserInternalUrl(parsed.href)) return ''
-  return parsed.href
+  if (!parsed) return ''
+  return surfaceKind === 'normal-tab'
+    ? parsed.href
+    : JSON.stringify([surfaceKind, parsed.href])
 }
 
-export function isSavedPageEligible(candidate: Pick<DashboardTab, 'url'> & Partial<Pick<DashboardTab, 'isTabOut' | 'isApp'>>): boolean {
-  if (candidate.isTabOut || candidate.isApp) return false
-  return !!savedPageKeyForUrl(candidate.url || '')
+export function savedPageSurfaceKindForCandidate(candidate: Partial<Pick<DashboardTab, 'isApp'>>): SavedPageSurfaceKind {
+  return candidate.isApp ? 'app' : 'normal-tab'
+}
+
+function isCurrentTabOutExtensionUrl(url: string, runtimeId: string | null | undefined): boolean {
+  if (!runtimeId) return false
+  const parsed = URL.parse(url)
+  return parsed?.protocol === 'chrome-extension:' && parsed.hostname === runtimeId
+}
+
+export function isSavedPageEligible(
+  candidate: Pick<DashboardTab, 'url'> & Partial<Pick<DashboardTab, 'isTabOut' | 'isApp'>>,
+  runtimeId: string | null | undefined = globalThis.chrome?.runtime?.id
+): boolean {
+  if (
+    candidate.isTabOut ||
+    isTabOutPageUrl(candidate.url, runtimeId) ||
+    isCurrentTabOutExtensionUrl(candidate.url, runtimeId)
+  ) return false
+  return isRetainedPageCaptureEligible({
+    surfaceKind: savedPageSurfaceKindForCandidate(candidate),
+    url: candidate.url || ''
+  }, { runtimeId })
 }
 
 export function normalizeSavedPagesStore(store: Partial<SavedPagesStore> | null | undefined): SavedPagesStore {
@@ -64,12 +95,19 @@ export function normalizeSavedPagesStore(store: Partial<SavedPagesStore> | null 
   const pages: Record<string, SavedPageRecord> = {}
   for (const record of Object.values(store.pages)) {
     if (!record || typeof record !== 'object') continue
-    const key = savedPageKeyForUrl(record.url || record.key || '')
+    const surfaceKind = record.surfaceKind
+    if (surfaceKind !== 'normal-tab' && surfaceKind !== 'app') continue
+    if (!isSavedPageEligible({
+      url: record.url || '',
+      isApp: surfaceKind === 'app'
+    })) continue
+    const key = savedPageKeyForUrl(record.url || '', surfaceKind)
     if (!key || key !== record.key) continue
     const savedAt = numberOrNow(record.savedAt, 0)
     const updatedAt = numberOrNow(record.updatedAt, savedAt)
     pages[key] = {
       key,
+      surfaceKind,
       url: record.url || key,
       title: String(record.title || ''),
       ...(record.favIconUrl ? { favIconUrl: String(record.favIconUrl) } : {}),
@@ -93,14 +131,17 @@ function numberOrNow(value: unknown, fallback: number): number {
 export function addSavedPageToStore(store: Partial<SavedPagesStore> | null | undefined, tab: SavedPageCandidate, at = Date.now()): SavedPagesStore {
   const next = normalizeSavedPagesStore(store)
   if (!isSavedPageEligible(tab)) return next
-  const key = savedPageKeyForUrl(tab.url || tab.rawUrl || '')
+  const surfaceKind = savedPageSurfaceKindForCandidate(tab)
+  const savedUrl = tab.url || tab.rawUrl || ''
+  const key = savedPageKeyForUrl(savedUrl, surfaceKind)
   if (!key) return next
   const existing = next.pages[key]
   const favIconUrl = tab.favIconUrl || existing?.favIconUrl
   next.pages[key] = {
     key,
-    url: tab.url || key,
-    title: tab.title || existing?.title || displayUrlForSavedPage(key),
+    surfaceKind,
+    url: savedUrl,
+    title: tab.title || existing?.title || displayUrlForSavedPage(savedUrl),
     ...(favIconUrl ? { favIconUrl } : {}),
     savedAt: existing?.savedAt || at,
     updatedAt: at,
@@ -111,7 +152,7 @@ export function addSavedPageToStore(store: Partial<SavedPagesStore> | null | und
 
 export function removeSavedPageFromStore(store: Partial<SavedPagesStore> | null | undefined, keyOrUrl: string): { store: SavedPagesStore; removed: SavedPageRecord | null } {
   const next = normalizeSavedPagesStore(store)
-  const key = savedPageKeyForUrl(keyOrUrl)
+  const key = next.pages[keyOrUrl] ? keyOrUrl : savedPageKeyForUrl(keyOrUrl)
   const removed = key ? next.pages[key] || null : null
   if (key) delete next.pages[key]
   return { store: next, removed }
@@ -142,7 +183,10 @@ export function mergeSavedPagesWithTabs(tabs: DashboardTab[], store: Partial<Sav
   let changed = false
 
   const mergedOpenTabs = tabs.map((tab) => {
-    const key = savedPageKeyForUrl(tab.url || tab.rawUrl || '')
+    const key = savedPageKeyForUrl(
+      tab.url || tab.rawUrl || '',
+      savedPageSurfaceKindForCandidate(tab)
+    )
     if (!key || !normalized.pages[key]) return tab
     openKeys.add(key)
     const record = normalized.pages[key]
@@ -205,7 +249,10 @@ export function mergeSavedPagesWithTabs(tabs: DashboardTab[], store: Partial<Sav
 export function annotateSavedPageHints(tabs: DashboardTab[], store: Partial<SavedPagesStore> | null | undefined): DashboardTab[] {
   const normalized = normalizeSavedPagesStore(store)
   return tabs.map((tab) => {
-    const key = savedPageKeyForUrl(tab.url || tab.rawUrl || '')
+    const key = savedPageKeyForUrl(
+      tab.url || tab.rawUrl || '',
+      savedPageSurfaceKindForCandidate(tab)
+    )
     if (!key || !normalized.pages[key]) return tab
     return {
       ...tab,
@@ -235,6 +282,7 @@ export function savedPagesStoresEqual(a: Partial<SavedPagesStore> | null | undef
 export function savedPageRecordsEqual(a: SavedPageRecord, b: SavedPageRecord): boolean {
   return (
     a.key === b.key &&
+    a.surfaceKind === b.surfaceKind &&
     a.url === b.url &&
     a.title === b.title &&
     (a.favIconUrl || '') === (b.favIconUrl || '') &&
@@ -251,6 +299,7 @@ function savedPageRecordToDashboardTab(record: SavedPageRecord): DashboardTab {
     title: record.title || displayUrlForSavedPage(record.url),
     favIconUrl: record.favIconUrl || '',
     windowId: 0,
+    isApp: record.surfaceKind === 'app',
     sourceType: 'saved-page',
     saved: true,
     closedSaved: true,
