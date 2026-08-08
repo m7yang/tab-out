@@ -1,4 +1,5 @@
 import { dashboardSourceAllowsTabActions, dashboardSourceItemName } from '../extension/dashboard-source.js'
+import { cn } from '@/lib/utils'
 import type { DashboardSource, DashboardStats } from './types'
 
 interface HeaderStatsProps extends DashboardStats {
@@ -34,11 +35,11 @@ export function HeaderStats({
   }
 
   const canUseTabActions = dashboardSourceAllowsTabActions(source)
+  const hasDedupeAction = canUseTabActions && dedupCount > 0
   const itemName = dashboardSourceItemName(source)
   const itemLabel = pluralize(totalTabs, itemName)
   const tabsLabel = filtering ? `${visibleTabs}/${totalTabs} ${itemLabel}` : `${totalTabs} ${itemLabel}`
-  const windowsLabel =
-    visibleWindows === totalWindows ? `${totalWindows} ${pluralize(totalWindows, 'window')}` : `${visibleWindows}/${totalWindows} ${pluralize(totalWindows, 'window')}`
+  const windowsCount = visibleWindows === totalWindows ? `${totalWindows}` : `${visibleWindows}/${totalWindows}`
   const domainsLabel =
     visibleDomains === totalDomains ? `${totalDomains} ${pluralize(totalDomains, 'domain')}` : `${visibleDomains}/${totalDomains} ${pluralize(totalDomains, 'domain')}`
 
@@ -46,11 +47,11 @@ export function HeaderStats({
 
   return (
     <div data-tabout="header-stats" className="inline-flex min-h-(--header-control-height) min-w-0 items-center gap-2 text-[13px] font-normal tabular-nums text-muted-foreground">
-      <span className="font-medium text-foreground">
+      <span data-tabout-part="tab-count" className="font-medium text-foreground">
         {tabsLabel}
         {activeTabs < totalTabs && <span className="font-normal text-muted-foreground"> ({activeTabs} active)</span>}
       </span>
-      {canUseTabActions && dedupCount > 0 && (
+      {hasDedupeAction && (
         <button
           type="button"
           data-tabout="tab-action"
@@ -61,16 +62,27 @@ export function HeaderStats({
           Dedupe {dedupCount}
         </button>
       )}
-      {canUseTabActions && (
-        <>
-          <span className="text-muted-foreground opacity-50">·</span>
-          <span>{windowsLabel}</span>
-        </>
-      )}
-      {hasCards && (
-        <span className="inline-flex items-center gap-2">
-          <span className="text-muted-foreground opacity-50">·</span>
-          <span className="inline-flex items-center gap-2 whitespace-nowrap text-[13px] font-normal tabular-nums text-muted-foreground">{domainsLabel}</span>
+      {(canUseTabActions || hasCards) && (
+        <span
+          data-tabout-part="secondary-counts"
+          className={cn('inline-flex items-center gap-2.5', !hasDedupeAction && 'ml-0.5')}
+        >
+          <span className="sr-only">, </span>
+          {canUseTabActions && (
+            <span data-tabout-part="window-count" className="inline-flex items-center gap-1 whitespace-nowrap">
+              {windowsCount}
+              <span className="sr-only"> {pluralize(totalWindows, 'window')}</span>
+              <span
+                data-tabout-part="window-icon"
+                className="icon-[lucide--app-window-mac]"
+                aria-hidden="true"
+              />
+            </span>
+          )}
+          {canUseTabActions && hasCards && <span className="sr-only">, </span>}
+          {hasCards && (
+            <span data-tabout-part="domain-count" className="whitespace-nowrap text-[13px] font-normal tabular-nums text-muted-foreground">{domainsLabel}</span>
+          )}
         </span>
       )}
       {canUseTabActions && filteredCloseCount > 0 && (

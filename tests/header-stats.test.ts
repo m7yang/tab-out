@@ -46,3 +46,37 @@ test('HeaderStats hides the active count when no tabs are suspended', () => {
   assert.match(html, /200 tabs/)
   assert.doesNotMatch(html, /active/)
 })
+
+test('HeaderStats renders compact accessible counts without visible separators', () => {
+  const html = renderHeaderStats(makeStats({
+    totalTabs: 3,
+    activeTabs: 3,
+    totalWindows: 3,
+    visibleWindows: 2,
+    totalDomains: 2,
+    visibleDomains: 2,
+    hasCards: true
+  }))
+
+  assert.match(html, /data-tabout-part="tab-count"/)
+  assert.match(html, /data-tabout-part="secondary-counts" class="[^"]*gap-2\.5[^"]*ml-0\.5[^"]*"><span class="sr-only">, <\/span>/)
+  assert.match(html, /data-tabout-part="window-count" class="inline-flex items-center gap-1 whitespace-nowrap">2\/3<span class="sr-only"> windows<\/span><span data-tabout-part="window-icon"/)
+  assert.match(html, /data-tabout-part="window-icon" class="icon-\[lucide--app-window-mac\]"/)
+  assert.match(html, /<span class="sr-only">, <\/span><span data-tabout-part="domain-count"[^>]*>2 domains<\/span>/)
+  assert.doesNotMatch(html, /·/)
+})
+
+test('HeaderStats preserves the standard gap beside its dedupe action', () => {
+  const html = renderHeaderStats(makeStats({
+    totalTabs: 3,
+    activeTabs: 3,
+    totalWindows: 1,
+    visibleWindows: 1,
+    dedupCount: 1
+  }))
+
+  assert.match(html, /data-tabout-part="dedupe-button"/)
+  assert.match(html, /data-tabout-part="secondary-counts" class="inline-flex items-center gap-2\.5"/)
+  assert.doesNotMatch(html, /data-tabout-part="secondary-counts" class="[^"]*ml-0\.5/)
+  assert.match(html, /data-tabout-part="window-count" class="inline-flex items-center gap-1 whitespace-nowrap"/)
+})

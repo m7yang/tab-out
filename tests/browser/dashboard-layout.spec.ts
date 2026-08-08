@@ -402,6 +402,115 @@ test('dashboard repacks across viewport sizes', async ({ page }) => {
   expect(pageErrors).toEqual([])
 })
 
+test('header window count precedes its vertically centered icon', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html')
+
+  const windowCount = page.locator('[data-tabout-part="window-count"]')
+  await expect(windowCount).toHaveText('1 window')
+
+  const geometry = await windowCount.evaluate((element) => {
+    const icon = element.querySelector<HTMLElement>('[data-tabout-part="window-icon"]')
+    const countText = Array.from(element.childNodes).find((node) => (
+      node.nodeType === Node.TEXT_NODE && node.textContent?.trim()
+    ))
+    if (!icon || !countText) return null
+
+    const countRange = document.createRange()
+    countRange.selectNodeContents(countText)
+    const countRect = countRange.getBoundingClientRect()
+    const countBoxRect = element.getBoundingClientRect()
+    const iconRect = icon.getBoundingClientRect()
+    const iconStyle = getComputedStyle(icon)
+    const countStyle = getComputedStyle(element)
+    const fontSize = Number.parseFloat(countStyle.fontSize)
+
+    return {
+      centerDelta: (iconRect.top + iconRect.bottom - countRect.top - countRect.bottom) / 2,
+      countDisplay: countStyle.display,
+      countBeforeIcon: Boolean(
+        countText.compareDocumentPosition(icon) & Node.DOCUMENT_POSITION_FOLLOWING
+      ),
+      display: iconStyle.display,
+      gap: iconRect.left - countRect.right,
+      heightRatio: iconRect.height / fontSize,
+      iconLast: element.lastElementChild === icon,
+      lineBoxHeightDelta: countBoxRect.height - countRect.height,
+      maskImage: iconStyle.maskImage,
+      widthRatio: iconRect.width / fontSize
+    }
+  })
+
+  expect(geometry).not.toBeNull()
+  expect(geometry?.countBeforeIcon).toBe(true)
+  expect(geometry?.iconLast).toBe(true)
+  expect(geometry?.countDisplay).toMatch(/flex/)
+  expect(geometry?.display).toBe('block')
+  expect(geometry?.maskImage).not.toBe('none')
+  expect(geometry?.centerDelta).toBeCloseTo(0, 3)
+  expect(geometry?.gap).toBeCloseTo(4, 1)
+  expect(geometry?.widthRatio).toBeCloseTo(1, 3)
+  expect(geometry?.heightRatio).toBeCloseTo(1, 3)
+  expect(geometry?.lineBoxHeightDelta).toBeCloseTo(0, 3)
+})
+
+test('header stat groups use compact spacing without visible separators', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html')
+
+  const headerStats = page.locator('[data-tabout="header-stats"]')
+  await expect(headerStats).toHaveText('42 tabs, 1 window, 28 domains')
+  await expect(headerStats).not.toContainText('·')
+
+  const gaps = await headerStats.evaluate((element) => {
+    const tabCount = element.querySelector<HTMLElement>('[data-tabout-part="tab-count"]')
+    const secondaryCounts = element.querySelector<HTMLElement>('[data-tabout-part="secondary-counts"]')
+    const windowCount = element.querySelector<HTMLElement>('[data-tabout-part="window-count"]')
+    const domainCount = element.querySelector<HTMLElement>('[data-tabout-part="domain-count"]')
+    if (!tabCount || !secondaryCounts || !windowCount || !domainCount) return null
+
+    const tabRect = tabCount.getBoundingClientRect()
+    const secondaryRect = secondaryCounts.getBoundingClientRect()
+    const windowRect = windowCount.getBoundingClientRect()
+    const domainRect = domainCount.getBoundingClientRect()
+
+    return {
+      tabsToSecondary: secondaryRect.left - tabRect.right,
+      windowToDomains: domainRect.left - windowRect.right
+    }
+  })
+
+  expect(gaps).not.toBeNull()
+  expect(gaps?.tabsToSecondary).toBeCloseTo(10, 1)
+  expect(gaps?.windowToDomains).toBeCloseTo(10, 1)
+
+  await page.evaluate(() => {
+    const fixtureWindow = window as typeof window & { __tabOutSmokeAddDuplicateStackTabs?: () => Promise<void> }
+    return fixtureWindow.__tabOutSmokeAddDuplicateStackTabs?.()
+  })
+
+  const dedupeButton = headerStats.locator('[data-tabout-part="dedupe-button"]')
+  await expect(dedupeButton).toBeVisible()
+
+  const actionGaps = await headerStats.evaluate((element) => {
+    const tabCount = element.querySelector<HTMLElement>('[data-tabout-part="tab-count"]')
+    const dedupe = element.querySelector<HTMLElement>('[data-tabout-part="dedupe-button"]')
+    const secondaryCounts = element.querySelector<HTMLElement>('[data-tabout-part="secondary-counts"]')
+    if (!tabCount || !dedupe || !secondaryCounts) return null
+
+    const tabRect = tabCount.getBoundingClientRect()
+    const dedupeRect = dedupe.getBoundingClientRect()
+    const secondaryRect = secondaryCounts.getBoundingClientRect()
+
+    return {
+      tabsToDedupe: dedupeRect.left - tabRect.right,
+      dedupeToSecondary: secondaryRect.left - dedupeRect.right
+    }
+  })
+
+  expect(actionGaps).not.toBeNull()
+  expect(actionGaps?.tabsToDedupe).toBeCloseTo(8, 1)
+  expect(actionGaps?.dedupeToSecondary).toBeCloseTo(8, 1)
+})
+
 for (const scenario of [
   { label: 'wide', width: 1420, height: 900, reducedMotion: 'no-preference' as const },
   { label: 'narrow', width: 760, height: 700, reducedMotion: 'no-preference' as const },
