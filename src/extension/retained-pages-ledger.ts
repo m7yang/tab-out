@@ -96,9 +96,7 @@ function indexRemovalBoundaries(
   const tokensByIdentity = new Map<string, Set<string>>()
   for (const [closureToken, boundary] of Object.entries(boundaries)) {
     byToken.set(closureToken, boundary)
-    const identityTokens = tokensByIdentity.get(boundary.identityDigest) ?? new Set<string>()
-    identityTokens.add(closureToken)
-    tokensByIdentity.set(boundary.identityDigest, identityTokens)
+    tokensByIdentity.getOrInsertComputed(boundary.identityDigest, () => new Set()).add(closureToken)
     const latest = latestByIdentity.get(boundary.identityDigest)
     if (!latest || compareBoundaryOrder(boundary, latest) > 0) {
       latestByIdentity.set(boundary.identityDigest, boundary)

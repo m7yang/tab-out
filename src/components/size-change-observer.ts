@@ -14,18 +14,13 @@ function elementBorderBoxSize(target: HTMLElement): ObservedElementSize {
   return { height: rect.height, width: rect.width }
 }
 
-function entryBorderBoxSize(entry: ResizeObserverEntry, target: HTMLElement): ObservedElementSize {
-  const borderBoxSizes = entry.borderBoxSize
-  const borderBoxSize = Array.isArray(borderBoxSizes)
-    ? borderBoxSizes[0]
-    : borderBoxSizes as unknown as ResizeObserverSize
-  if (borderBoxSize) {
-    return {
-      height: borderBoxSize.blockSize,
-      width: borderBoxSize.inlineSize
-    }
+function entryBorderBoxSize(entry: ResizeObserverEntry): ObservedElementSize {
+  const borderBoxSize = entry.borderBoxSize[0]
+  if (!borderBoxSize) throw new Error('ResizeObserver entry missing border-box size')
+  return {
+    height: borderBoxSize.blockSize,
+    width: borderBoxSize.inlineSize
   }
-  return elementBorderBoxSize(target)
 }
 
 function elementSizeEqual(left: ObservedElementSize, right: ObservedElementSize) {
@@ -50,7 +45,7 @@ export function createSizeChangeObserver(onSizeChange: (target: HTMLElement) => 
       if (!(target instanceof HTMLElement) || !observedTargets.has(target)) continue
 
       const previousSize = observedSizes.get(target)
-      const nextSize = entryBorderBoxSize(entry, target)
+      const nextSize = entryBorderBoxSize(entry)
       observedSizes.set(target, nextSize)
       if (previousSize && elementSizeEqual(previousSize, nextSize)) continue
       onSizeChange(target)

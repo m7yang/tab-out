@@ -185,11 +185,7 @@ function storedSuspendTargetObservedAt(value: unknown): number | null {
 }
 
 function nextSuspendTargetObservationAt(): number {
-  if (typeof performance !== 'undefined') {
-    const highResolutionNow = performance.timeOrigin + performance.now()
-    if (Number.isFinite(highResolutionNow)) return highResolutionNow
-  }
-  return Date.now()
+  return performance.timeOrigin + performance.now()
 }
 
 export function createSuspendTargetStore(adapter: SuspendTargetStoreAdapter): SuspendTargetStore {

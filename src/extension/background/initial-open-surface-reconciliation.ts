@@ -9,12 +9,6 @@ export interface InitialOpenSurfaceReconciliationCoordinator {
   readonly whenReady: () => Promise<void>
 }
 
-interface ReconciliationAttempt {
-  readonly promise: Promise<void>
-  readonly resolve: () => void
-  readonly reject: (reason: unknown) => void
-}
-
 /** Keep Promise adaptation behind the lifecycle seam, not in background.ts. */
 export function initialOpenSurfaceReconciliationEffect(
   coordinator: InitialOpenSurfaceReconciliationCoordinator,
@@ -30,16 +24,6 @@ function deferToNextTask(task: () => void): () => void {
   return () => clearTimeout(timeoutId)
 }
 
-function createReconciliationAttempt(): ReconciliationAttempt {
-  let resolve!: () => void
-  let reject!: (reason: unknown) => void
-  const promise = new Promise<void>((attemptResolve, attemptReject) => {
-    resolve = attemptResolve
-    reject = attemptReject
-  })
-  return { promise, resolve, reject }
-}
-
 /**
  * Chooses the one lifecycle mode that owns a worker instance's initial
  * inventory reconciliation. Chrome dispatches the event that woke an extension
@@ -52,7 +36,7 @@ export function createInitialOpenSurfaceReconciliationCoordinator(options: {
   readonly reconcile: (mode: OpenSurfaceReconciliationMode) => PromiseLike<void>
   readonly defer?: DeferredTaskScheduler
 }): InitialOpenSurfaceReconciliationCoordinator {
-  let attempt = createReconciliationAttempt()
+  let attempt = Promise.withResolvers<void>()
   let reconciliationReady = false
   let reconciliationStarted = false
   let modeSelectionClosed = false
@@ -81,7 +65,7 @@ export function createInitialOpenSurfaceReconciliationCoordinator(options: {
         (reason) => {
           reconciliationStarted = false
           currentAttempt.reject(reason)
-          if (attempt === currentAttempt) attempt = createReconciliationAttempt()
+          if (attempt === currentAttempt) attempt = Promise.withResolvers<void>()
         }
       )
   }

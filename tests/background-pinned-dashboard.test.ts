@@ -715,6 +715,18 @@ async function flushBackgroundWork() {
   for (let pass = 0; pass < 6; pass += 1) await setImmediate()
 }
 
+async function waitForBackgroundState(
+  condition: () => boolean | Promise<boolean>,
+  description: string
+) {
+  const deadline = performance.now() + 2_000
+  do {
+    if (await condition()) return
+    await setImmediate()
+  } while (performance.now() < deadline)
+  assert.fail(`Timed out waiting for ${description}`)
+}
+
 async function loadBackground(initialTabs: any[], options: any = {}) {
   const mock = createChromeMock(initialTabs, options)
   ;(globalThis as any).chrome = mock.chrome
@@ -2116,7 +2128,14 @@ test('first installation seeds current surfaces before the deferred worker-resum
   onInstalled({ reason: 'install' })
   await flushBackgroundWork()
   await backgroundClock.tickAsync(0)
-  await flushBackgroundWork()
+  await waitForBackgroundState(() => (
+    parseOpenSurfaceInventoryValue(
+      mock.storageValues.session[OPEN_SURFACE_SESSION_STORAGE_KEY]
+    ).status === 'valid' &&
+    parseOpenSurfaceInventoryValue(
+      mock.storageValues.local[OPEN_SURFACE_DURABLE_STORAGE_KEY]
+    ).status === 'valid'
+  ), 'first-install inventory reconciliation')
 
   assert.equal(mock.storageValues.local[RETAINED_PAGES_STORAGE_KEY], undefined)
   const session = parseOpenSurfaceInventoryValue(
@@ -2175,7 +2194,12 @@ test('extension update owns initial reconciliation and preserves surviving live 
   onInstalled({ reason: 'update' })
   await flushBackgroundWork()
   await backgroundClock.tickAsync(0)
-  await flushBackgroundWork()
+  await waitForBackgroundState(() => (
+    mock.storageValues.local[RETAINED_PAGES_STORAGE_KEY] !== undefined &&
+    parseOpenSurfaceInventoryValue(
+      mock.storageValues.session[OPEN_SURFACE_SESSION_STORAGE_KEY]
+    ).status === 'valid'
+  ), 'extension-update inventory reconciliation')
 
   const ledger = await parseStoredRetainedPageLedger(
     mock.storageValues.local[RETAINED_PAGES_STORAGE_KEY]
@@ -2240,7 +2264,12 @@ test('tab replacement rebases live state while the URL-keyed Warm seed remains s
   }
   await flushBackgroundWork()
   onInstalled({ reason: 'install' })
-  await flushBackgroundWork()
+  await waitForBackgroundState(() => {
+    const value = parseDashboardStartupSeedBoundary(
+      mock.storageValues.session[DASHBOARD_STARTUP_SNAPSHOT_CACHE_KEY]
+    )
+    return value?.workingSetPriority.keys.includes('https://one.example.test/') ?? false
+  }, 'first-install startup seed')
 
   const warmBefore = requireStartupSeed(
     mock.storageValues.session[DASHBOARD_STARTUP_SNAPSHOT_CACHE_KEY]
@@ -2327,7 +2356,12 @@ test('tab lifecycle events invalidate session-only title retention before the de
 
   const onCreated = valueAt(mock.listeners.tabsOnCreated, 0)
   onCreated(clone(mock.state.tabsById[701]))
-  await flushBackgroundWork()
+  await waitForBackgroundState(() => {
+    const value = parseDashboardStartupSeedBoundary(
+      mock.storageValues.session[DASHBOARD_STARTUP_SNAPSHOT_CACHE_KEY]
+    )
+    return value?.titleRetention?.map((entry) => entry.tabId).join(',') === '702,703,704'
+  }, 'created-tab title invalidation')
   assert.deepEqual(
     requireStartupSeed(mock.storageValues.session[DASHBOARD_STARTUP_SNAPSHOT_CACHE_KEY])
       .titleRetention?.map((entry) => entry.tabId),
@@ -2335,7 +2369,12 @@ test('tab lifecycle events invalidate session-only title retention before the de
   )
 
   await mock.chrome.tabs.remove(702)
-  await flushBackgroundWork()
+  await waitForBackgroundState(() => {
+    const value = parseDashboardStartupSeedBoundary(
+      mock.storageValues.session[DASHBOARD_STARTUP_SNAPSHOT_CACHE_KEY]
+    )
+    return value?.titleRetention?.map((entry) => entry.tabId).join(',') === '703,704'
+  }, 'removed-tab title invalidation')
   assert.deepEqual(
     requireStartupSeed(mock.storageValues.session[DASHBOARD_STARTUP_SNAPSHOT_CACHE_KEY])
       .titleRetention?.map((entry) => entry.tabId),
@@ -3221,7 +3260,11 @@ test('recently closed session changes do not rewrite the compact Warm seed', asy
   assert.equal(typeof onSessionsChanged, 'function')
 
   onInstalled({ reason: 'install' })
-  await flushBackgroundWork()
+  await waitForBackgroundState(() => (
+    parseDashboardStartupSeedBoundary(
+      mock.storageValues.session[DASHBOARD_STARTUP_SNAPSHOT_CACHE_KEY]
+    ) !== null
+  ), 'first-install startup seed')
   const beforeSeed = requireStartupSeed(
     mock.storageValues.session[DASHBOARD_STARTUP_SNAPSHOT_CACHE_KEY]
   )

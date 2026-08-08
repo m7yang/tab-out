@@ -73,10 +73,7 @@ export class StartupSnapshotCacheMutationError extends Schema.TaggedErrorClass<S
 const startupSeedCacheMutationSemaphore = Semaphore.makeUnsafe(1)
 
 export function captureDashboardStartupSnapshotStartedAt(): number {
-  const monotonicEpoch = typeof performance === 'undefined'
-    ? Number.NaN
-    : performance.timeOrigin + performance.now()
-  return Number.isFinite(monotonicEpoch) ? monotonicEpoch : Date.now()
+  return performance.timeOrigin + performance.now()
 }
 
 function startupSeedWarmStorage(): chrome.storage.StorageArea | null {

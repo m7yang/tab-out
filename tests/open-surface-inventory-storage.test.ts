@@ -48,6 +48,34 @@ test('Open Surface Inventory storage keeps session and durable checkpoints separ
   assert.equal((await runtime.runPromise(storage.readDurable())).status, 'valid')
 })
 
+test('Open Surface Inventory storage preserves backend method receivers', async (t) => {
+  const backend = {
+    sessionStored: undefined as unknown,
+    durableStored: undefined as unknown,
+    async readSession() {
+      return this.sessionStored
+    },
+    async writeSession(value: unknown) {
+      this.sessionStored = value
+    },
+    async readDurable() {
+      return this.durableStored
+    },
+    async writeDurable(value: unknown) {
+      this.durableStored = value
+    }
+  }
+  const runtime = ManagedRuntime.make(OpenSurfaceInventoryStorage.layer(backend))
+  t.after(() => runtime.dispose())
+  const storage = runtime.runSync(OpenSurfaceInventoryStorage)
+  const inventory = emptyOpenSurfaceInventory()
+
+  await runtime.runPromise(storage.writeSession(inventory))
+  await runtime.runPromise(storage.writeDurable(inventory))
+  assert.equal((await runtime.runPromise(storage.readSession())).status, 'valid')
+  assert.equal((await runtime.runPromise(storage.readDurable())).status, 'valid')
+})
+
 test('Open Surface Inventory storage reindexes identities without collapsing physical tabs', async (t) => {
   const url = 'https://example.test/reindexed'
   let sessionStored: unknown = {

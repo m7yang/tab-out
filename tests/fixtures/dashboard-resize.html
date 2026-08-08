@@ -612,15 +612,6 @@
         return { version: 1, records }
       }
 
-      function bytesToBase64(bytes) {
-        const chunks = []
-        const chunkSize = 32_768
-        for (let index = 0; index < bytes.length; index += chunkSize) {
-          chunks.push(String.fromCharCode(...bytes.subarray(index, index + chunkSize)))
-        }
-        return btoa(chunks.join(''))
-      }
-
       async function retainedPagesWire(pages) {
         const compressed = new Blob([JSON.stringify(pages)]).stream().pipeThrough(
           new CompressionStream('gzip')
@@ -629,7 +620,7 @@
           schemaVersion: 1,
           identityVersion: 1,
           encoding: 'gzip-base64-json-v1',
-          data: bytesToBase64(new Uint8Array(await new Response(compressed).arrayBuffer()))
+          data: (await new Response(compressed).bytes()).toBase64()
         }
       }
 

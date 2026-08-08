@@ -8,10 +8,9 @@ import {
   type OpenSurfaceInventory
 } from './open-surface-inventory.js'
 import {
-  createRetainedPageIdentity,
+  createCachedRetainedPageIdentityResolver,
   isRetainedPageCaptureEligible,
-  type RetainedPageIdentity,
-  type RetainedPageIdentityCandidate,
+  type ResolveRetainedPageIdentities,
   type RetainedPageIdentityOptions
 } from './retained-page-identity.js'
 
@@ -114,38 +113,6 @@ export type OpenSurfaceInventoryParseResult =
   | { status: 'valid'; inventory: OpenSurfaceInventory }
   | { status: 'malformed'; inventory: OpenSurfaceInventory }
   | { status: 'newer'; raw: unknown }
-
-type ResolveRetainedPageIdentities = (
-  candidates: readonly RetainedPageIdentityCandidate[]
-) => Promise<readonly (RetainedPageIdentity | null)[]>
-
-function createCachedIdentityBatchResolver(
-  options: RetainedPageIdentityOptions
-): ResolveRetainedPageIdentities {
-  // Session and durable copies are read concurrently and usually contain the
-  // same entries. Keep only the current and previous batches while publishing
-  // in-flight hashes synchronously for the concurrent peer read to share.
-  let previous = new Map<string, Promise<RetainedPageIdentity | null>>()
-  let current = new Map<string, Promise<RetainedPageIdentity | null>>()
-  return (candidates) => {
-    const priorCurrent = current
-    const next = new Map<string, Promise<RetainedPageIdentity | null>>()
-    const identities = candidates.map((candidate) => {
-      const cacheKey = JSON.stringify([candidate.surfaceKind, candidate.url])
-      const identity = next.get(cacheKey) ?? priorCurrent.get(cacheKey) ??
-        previous.get(cacheKey) ?? createRetainedPageIdentity(candidate, options)
-      next.set(cacheKey, identity)
-      void identity.catch(() => {
-        if (current.get(cacheKey) === identity) current.delete(cacheKey)
-        if (previous.get(cacheKey) === identity) previous.delete(cacheKey)
-      })
-      return identity
-    })
-    previous = priorCurrent
-    current = next
-    return Promise.all(identities)
-  }
-}
 
 async function reindexOpenSurfaceInventory(
   inventory: OpenSurfaceInventory,
@@ -300,115 +267,89 @@ export class OpenSurfaceInventoryStorage extends Context.Service<OpenSurfaceInve
     backend: OpenSurfaceInventoryStorageBackend,
     options: OpenSurfaceInventoryStorageOptions = {}
   ): Layer.Layer<OpenSurfaceInventoryStorage> {
-    const resolveIdentities = createCachedIdentityBatchResolver(options)
-    const readSession = Effect.fn('OpenSurfaceInventoryStorage.readSession')(function*() {
-      const stored = yield* Effect.tryPromise({
-        try: backend.readSession,
-        catch: (cause) => OpenSurfaceInventoryStorageError.make({
-          operation: 'read-session',
-          cause
-        })
-      })
-      const originalParsed = parseOpenSurfaceInventoryValue(stored)
-      if (originalParsed.status === 'newer') return originalParsed
-      const legacy = options.reindexIdentities &&
-        isLegacyOpenSurfaceInventoryValue(stored)
-      const parsed = legacy
-        ? parseOpenSurfaceInventoryValue(normalizeLegacyOpenSurfaceInventoryValue(stored))
-        : originalParsed
-      if (
-        !legacy ||
-        (parsed.status !== 'valid' && parsed.status !== 'malformed') ||
-        parsed.inventory.schemaVersion === OPEN_SURFACE_INVENTORY_SCHEMA_VERSION
-      ) return parsed
-      const reindexed = yield* Effect.tryPromise({
-        try: () => reindexOpenSurfaceInventory(parsed.inventory, resolveIdentities),
-        catch: (cause) => OpenSurfaceInventoryStorageError.make({
-          operation: 'read-session',
-          cause
-        })
-      })
-      if (parsed.status === 'valid' && reindexed.changed) {
-        yield* Effect.tryPromise({
-          try: () => backend.writeSession(reindexed.inventory),
+    const resolveIdentities = createCachedRetainedPageIdentityResolver(options)
+    const makeChannel = (channel: {
+      readonly readName: string
+      readonly writeName: string
+      readonly readOperation: 'read-session' | 'read-durable'
+      readonly writeOperation: 'write-session' | 'write-durable'
+      readonly read: () => PromiseLike<unknown>
+      readonly write: (inventory: OpenSurfaceInventory) => PromiseLike<void>
+    }) => {
+      const read = Effect.fn(channel.readName)(function*() {
+        const stored = yield* Effect.tryPromise({
+          try: channel.read,
           catch: (cause) => OpenSurfaceInventoryStorageError.make({
-            operation: 'write-session',
+            operation: channel.readOperation,
             cause
           })
         })
-      }
-      return parsed.status === 'valid'
-        ? { status: 'valid' as const, inventory: reindexed.inventory }
-        : { status: 'malformed' as const, inventory: reindexed.inventory }
-    })
-    const writeSession = Effect.fn('OpenSurfaceInventoryStorage.writeSession')(function*(
-      inventory: OpenSurfaceInventory
-    ) {
-      yield* Effect.tryPromise({
-        try: () => backend.writeSession(inventory),
-        catch: (cause) => OpenSurfaceInventoryStorageError.make({
-          operation: 'write-session',
-          cause
-        })
-      })
-    })
-    const readDurable = Effect.fn('OpenSurfaceInventoryStorage.readDurable')(function*() {
-      const stored = yield* Effect.tryPromise({
-        try: backend.readDurable,
-        catch: (cause) => OpenSurfaceInventoryStorageError.make({
-          operation: 'read-durable',
-          cause
-        })
-      })
-      const originalParsed = parseOpenSurfaceInventoryValue(stored)
-      if (originalParsed.status === 'newer') return originalParsed
-      const legacy = options.reindexIdentities &&
-        isLegacyOpenSurfaceInventoryValue(stored)
-      const parsed = legacy
-        ? parseOpenSurfaceInventoryValue(normalizeLegacyOpenSurfaceInventoryValue(stored))
-        : originalParsed
-      if (
-        !legacy ||
-        (parsed.status !== 'valid' && parsed.status !== 'malformed') ||
-        parsed.inventory.schemaVersion === OPEN_SURFACE_INVENTORY_SCHEMA_VERSION
-      ) return parsed
-      const reindexed = yield* Effect.tryPromise({
-        try: () => reindexOpenSurfaceInventory(parsed.inventory, resolveIdentities),
-        catch: (cause) => OpenSurfaceInventoryStorageError.make({
-          operation: 'read-durable',
-          cause
-        })
-      })
-      if (parsed.status === 'valid' && reindexed.changed) {
-        yield* Effect.tryPromise({
-          try: () => backend.writeDurable(reindexed.inventory),
+        const originalParsed = parseOpenSurfaceInventoryValue(stored)
+        if (originalParsed.status === 'newer') return originalParsed
+        const legacy = options.reindexIdentities &&
+          isLegacyOpenSurfaceInventoryValue(stored)
+        const parsed = legacy
+          ? parseOpenSurfaceInventoryValue(normalizeLegacyOpenSurfaceInventoryValue(stored))
+          : originalParsed
+        if (
+          !legacy ||
+          (parsed.status !== 'valid' && parsed.status !== 'malformed') ||
+          parsed.inventory.schemaVersion === OPEN_SURFACE_INVENTORY_SCHEMA_VERSION
+        ) return parsed
+        const reindexed = yield* Effect.tryPromise({
+          try: () => reindexOpenSurfaceInventory(parsed.inventory, resolveIdentities),
           catch: (cause) => OpenSurfaceInventoryStorageError.make({
-            operation: 'write-durable',
+            operation: channel.readOperation,
             cause
           })
         })
-      }
-      return parsed.status === 'valid'
-        ? { status: 'valid' as const, inventory: reindexed.inventory }
-        : { status: 'malformed' as const, inventory: reindexed.inventory }
-    })
-    const writeDurable = Effect.fn('OpenSurfaceInventoryStorage.writeDurable')(function*(
-      inventory: OpenSurfaceInventory
-    ) {
-      yield* Effect.tryPromise({
-        try: () => backend.writeDurable(inventory),
-        catch: (cause) => OpenSurfaceInventoryStorageError.make({
-          operation: 'write-durable',
-          cause
+        if (parsed.status === 'valid' && reindexed.changed) {
+          yield* Effect.tryPromise({
+            try: () => channel.write(reindexed.inventory),
+            catch: (cause) => OpenSurfaceInventoryStorageError.make({
+              operation: channel.writeOperation,
+              cause
+            })
+          })
+        }
+        return parsed.status === 'valid'
+          ? { status: 'valid' as const, inventory: reindexed.inventory }
+          : { status: 'malformed' as const, inventory: reindexed.inventory }
+      })
+      const write = Effect.fn(channel.writeName)(function*(inventory: OpenSurfaceInventory) {
+        yield* Effect.tryPromise({
+          try: () => channel.write(inventory),
+          catch: (cause) => OpenSurfaceInventoryStorageError.make({
+            operation: channel.writeOperation,
+            cause
+          })
         })
       })
+      return { read, write }
+    }
+
+    const session = makeChannel({
+      readName: 'OpenSurfaceInventoryStorage.readSession',
+      writeName: 'OpenSurfaceInventoryStorage.writeSession',
+      readOperation: 'read-session',
+      writeOperation: 'write-session',
+      read: () => backend.readSession(),
+      write: (inventory) => backend.writeSession(inventory)
+    })
+    const durable = makeChannel({
+      readName: 'OpenSurfaceInventoryStorage.readDurable',
+      writeName: 'OpenSurfaceInventoryStorage.writeDurable',
+      readOperation: 'read-durable',
+      writeOperation: 'write-durable',
+      read: () => backend.readDurable(),
+      write: (inventory) => backend.writeDurable(inventory)
     })
 
     return Layer.succeed(OpenSurfaceInventoryStorage, OpenSurfaceInventoryStorage.of({
-      readSession,
-      writeSession,
-      readDurable,
-      writeDurable
+      readSession: session.read,
+      writeSession: session.write,
+      readDurable: durable.read,
+      writeDurable: durable.write
     }))
   }
 }

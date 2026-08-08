@@ -1027,8 +1027,8 @@ function getPageChipExpansionGeometry(chipEl: HTMLElement | null, textEl: HTMLEl
 
   const rect = chipEl.getBoundingClientRect()
   const contentBoxEl = chipEl.querySelector<HTMLElement>('.chip-text') || textEl
-  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0
-  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0
+  const viewportWidth = window.innerWidth
+  const viewportHeight = window.innerHeight
   const roomToRight = Math.max(0, viewportWidth - rect.left - PAGE_CHIP_EXPANDED_VIEWPORT_MARGIN_PX)
   const roomBelow = Math.max(0, viewportHeight - rect.top - PAGE_CHIP_EXPANDED_VIEWPORT_MARGIN_PX)
   const roomAbove = Math.max(0, rect.bottom - PAGE_CHIP_EXPANDED_VIEWPORT_MARGIN_PX)

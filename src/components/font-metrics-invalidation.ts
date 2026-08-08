@@ -54,7 +54,6 @@ function detachFontSetIfIdle(): void {
  * of installing a document-level listener for every Page Chip/history row.
  */
 export function subscribeFontMetricsInvalidation(subscriber: FontMetricsSubscriber): () => void {
-  if (typeof document === 'undefined' || !document.fonts) return () => {}
   subscribers.add(subscriber)
   attachFontSet(document.fonts)
 

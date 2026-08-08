@@ -89,9 +89,7 @@ export function createAdjacentCloseBatcher(
   function whenSettled(tabId: number): Promise<void> {
     if (!Number.isInteger(tabId) || settled.has(tabId)) return Promise.resolve()
     return new Promise((resolve) => {
-      const waiters = settlementWaiters.get(tabId) ?? new Set<() => void>()
-      waiters.add(resolve)
-      settlementWaiters.set(tabId, waiters)
+      settlementWaiters.getOrInsertComputed(tabId, () => new Set()).add(resolve)
       enqueue(tabId)
     })
   }

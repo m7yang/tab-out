@@ -774,9 +774,7 @@ async function readInstalledProfile(worker: Worker): Promise<InstalledProfileRea
         'SHA-256',
         new TextEncoder().encode(JSON.stringify(sortKeys(value)))
       )
-      return [...new Uint8Array(digest)]
-        .map((byte) => byte.toString(16).padStart(2, '0'))
-        .join('')
+      return new Uint8Array(digest).toHex()
     }
 
     async function decodeLedger(value: unknown): Promise<unknown> {
@@ -785,12 +783,7 @@ async function readInstalledProfile(worker: Worker): Promise<InstalledProfileRea
         value.encoding !== 'gzip-base64-json-v1' ||
         typeof value.data !== 'string'
       ) return value
-      const binary = atob(value.data)
-      const bytes = new Uint8Array(binary.length)
-      for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index)
-      }
-      const stream = new Blob([bytes]).stream().pipeThrough(
+      const stream = new Blob([Uint8Array.fromBase64(value.data)]).stream().pipeThrough(
         new DecompressionStream('gzip')
       )
       return JSON.parse(await new Response(stream).text())
@@ -866,9 +859,7 @@ async function installedStorageFootprint(worker: Worker): Promise<{
         'SHA-256',
         new TextEncoder().encode(JSON.stringify(sortKeys(value)))
       )
-      return [...new Uint8Array(digest)]
-        .map((byte) => byte.toString(16).padStart(2, '0'))
-        .join('')
+      return new Uint8Array(digest).toHex()
     }
 
     const representativeLocal = await chrome.storage.local.get(
@@ -1807,12 +1798,7 @@ async function closeInstalledBurst(
         value.encoding !== 'gzip-base64-json-v1' ||
         typeof value.data !== 'string'
       ) return value
-      const binary = atob(value.data)
-      const bytes = new Uint8Array(binary.length)
-      for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index)
-      }
-      const stream = new Blob([bytes]).stream().pipeThrough(
+      const stream = new Blob([Uint8Array.fromBase64(value.data)]).stream().pipeThrough(
         new DecompressionStream('gzip')
       )
       return JSON.parse(await new Response(stream).text())
@@ -1823,9 +1809,7 @@ async function closeInstalledBurst(
         'SHA-256',
         new TextEncoder().encode(value)
       )
-      return [...new Uint8Array(digest)]
-        .map((byte) => byte.toString(16).padStart(2, '0'))
-        .join('')
+      return new Uint8Array(digest).toHex()
     }
 
     type StorageGet = (
@@ -1852,17 +1836,17 @@ async function closeInstalledBurst(
     const originalAlarmCreate = chrome.alarms.create.bind(chrome.alarms)
     const originalLockRequest = navigator.locks.request.bind(navigator.locks)
     const originalResponseText = Response.prototype.text
-    const originalResponseArrayBuffer = Response.prototype.arrayBuffer
+    const originalResponseBytes = Response.prototype.bytes
     const rawTrace: RawTrace[] = []
     let collectTrace = true
     const ledgerSetCompletionTimes: number[] = []
     const ledgerSetStartedTimes: number[] = []
     let firstLedgerSetAt: number | null = null
     let ledgerSetCalls = 0
-    let settleFirstLedgerSet: (() => void) | null = null
-    const firstLedgerSet = new Promise<void>((resolve) => {
-      settleFirstLedgerSet = resolve
-    })
+    const {
+      promise: firstLedgerSet,
+      resolve: settleFirstLedgerSet
+    } = Promise.withResolvers<void>()
     const startupRefreshLockFlights: Array<{
       readonly completion: Promise<void>
       readonly startedAt: number
@@ -1903,7 +1887,7 @@ async function closeInstalledBurst(
             ledgerSetCompletionTimes.push(finishedAt)
             if (firstLedgerSetAt === null) {
               firstLedgerSetAt = finishedAt
-              settleFirstLedgerSet?.()
+              settleFirstLedgerSet()
             }
           }
           if (shouldInstrumentPhases && collectTrace) rawTrace.push({
@@ -1968,15 +1952,15 @@ async function closeInstalledBurst(
           })
         }
       }
-      Response.prototype.arrayBuffer = async function() {
+      Response.prototype.bytes = async function() {
         const startedAt = performance.now()
         try {
-          return await originalResponseArrayBuffer.call(this)
+          return await originalResponseBytes.call(this)
         } finally {
           if (collectTrace) rawTrace.push({
             area: 'compression',
             finishedAt: performance.now(),
-            operation: 'compress-array-buffer',
+            operation: 'compress-bytes',
             startedAt
           })
         }
@@ -2005,17 +1989,17 @@ async function closeInstalledBurst(
     let firstRemovalAt: number | null = null
     let lastRemovalAt: number | null = null
     let removedEvents = 0
-    let settleAllRemovals: (() => void) | null = null
-    const allRemovals = new Promise<void>((resolve) => {
-      settleAllRemovals = resolve
-    })
+    const {
+      promise: allRemovals,
+      resolve: settleAllRemovals
+    } = Promise.withResolvers<void>()
     const onTabRemoved = (tabId: number) => {
       if (!closeTabIdSet.has(tabId)) return
       const removedAt = performance.now()
       firstRemovalAt ??= removedAt
       lastRemovalAt = removedAt
       removedEvents += 1
-      if (removedEvents === closeTabIds.length) settleAllRemovals?.()
+      if (removedEvents === closeTabIds.length) settleAllRemovals()
     }
     async function withTimeout<Value>(
       promise: PromiseLike<Value>,
@@ -2231,7 +2215,7 @@ async function closeInstalledBurst(
         chrome.alarms.get = originalAlarmGet
         chrome.alarms.create = originalAlarmCreate
         Response.prototype.text = originalResponseText
-        Response.prototype.arrayBuffer = originalResponseArrayBuffer
+        Response.prototype.bytes = originalResponseBytes
       }
     }
   }, {
@@ -2448,12 +2432,7 @@ async function measureColdSingleCloseState(
           value.encoding !== 'gzip-base64-json-v1' ||
           typeof value.data !== 'string'
         ) return value
-        const binary = atob(value.data)
-        const bytes = new Uint8Array(binary.length)
-        for (let index = 0; index < binary.length; index += 1) {
-          bytes[index] = binary.charCodeAt(index)
-        }
-        const stream = new Blob([bytes]).stream().pipeThrough(
+        const stream = new Blob([Uint8Array.fromBase64(value.data)]).stream().pipeThrough(
           new DecompressionStream('gzip')
         )
         return JSON.parse(await new Response(stream).text())

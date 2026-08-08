@@ -13,10 +13,9 @@ import {
   OPEN_SURFACE_TITLE_MAX_CODE_POINTS
 } from './open-surface-inventory.js'
 import {
-  createRetainedPageIdentity,
+  createCachedRetainedPageIdentityResolver,
   isRetainedPageCaptureEligible,
-  type RetainedPageIdentity,
-  type RetainedPageIdentityCandidate,
+  type ResolveRetainedPageIdentities,
   type RetainedPageIdentityOptions
 } from './retained-page-identity.js'
 import { canonicalDedupeKey } from './url-canonical.js'
@@ -181,35 +180,6 @@ function normalizeExpandedRetainedPageLedgerValue(stored: unknown): unknown {
       }))
     : stored.removalBoundaries
   return { ...stored, pages, removalBoundaries }
-}
-
-type ResolveRetainedPageIdentities = (
-  candidates: readonly RetainedPageIdentityCandidate[]
-) => Promise<readonly (RetainedPageIdentity | null)[]>
-
-function createCachedIdentityBatchResolver(
-  options: RetainedPageIdentityOptions
-): ResolveRetainedPageIdentities {
-  let previous = new Map<string, Promise<RetainedPageIdentity | null>>()
-  let current = new Map<string, Promise<RetainedPageIdentity | null>>()
-  return (candidates) => {
-    const priorCurrent = current
-    const next = new Map<string, Promise<RetainedPageIdentity | null>>()
-    const identities = candidates.map((candidate) => {
-      const cacheKey = JSON.stringify([candidate.surfaceKind, candidate.url])
-      const identity = next.get(cacheKey) ?? priorCurrent.get(cacheKey) ??
-        previous.get(cacheKey) ?? createRetainedPageIdentity(candidate, options)
-      next.set(cacheKey, identity)
-      void identity.catch(() => {
-        if (current.get(cacheKey) === identity) current.delete(cacheKey)
-        if (previous.get(cacheKey) === identity) previous.delete(cacheKey)
-      })
-      return identity
-    })
-    previous = priorCurrent
-    current = next
-    return Promise.all(identities)
-  }
 }
 
 function compareReindexedPageOrder(
@@ -513,7 +483,7 @@ export class RetainedPageLedgerStorage extends Context.Service<RetainedPageLedge
       readonly source: unknown
       readonly result: Extract<RetainedPageLedgerParseResult, { status: 'valid' }>
     } | null = null
-    const resolveIdentities = createCachedIdentityBatchResolver(options)
+    const resolveIdentities = createCachedRetainedPageIdentityResolver(options)
     const read = Effect.fn('RetainedPageLedgerStorage.read')(function*() {
       const stored = yield* Effect.tryPromise({
         try: backend.read,

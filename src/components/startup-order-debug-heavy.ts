@@ -254,29 +254,25 @@ export function initializeStartupOrderDebug(capture: StartupOrderDebugCapture): 
     window.setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
-  if (typeof PerformanceObserver !== 'undefined') {
-    try {
-      new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          const layoutShift = entry as PerformanceEntry & {
-            hadRecentInput?: boolean
-            sources?: Array<{ node?: Element; previousRect?: DOMRectReadOnly; currentRect?: DOMRectReadOnly }>
-            value?: number
-          }
-          if (layoutShift.hadRecentInput) continue
-          capture.shifts.push({
-            t: Math.round(entry.startTime),
-            value: layoutShift.value,
-            sources: (layoutShift.sources || []).map((source) => ({
-              node: source.node ? textFromElement(source.node).slice(0, 180) : '',
-              previous: rectSnapshot(source.previousRect),
-              current: rectSnapshot(source.currentRect)
-            }))
-          })
-        }
-      }).observe({ type: 'layout-shift', buffered: true })
-    } catch {}
-  }
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      const layoutShift = entry as PerformanceEntry & {
+        hadRecentInput?: boolean
+        sources?: Array<{ node?: Element; previousRect?: DOMRectReadOnly; currentRect?: DOMRectReadOnly }>
+        value?: number
+      }
+      if (layoutShift.hadRecentInput) continue
+      capture.shifts.push({
+        t: Math.round(entry.startTime),
+        value: layoutShift.value,
+        sources: (layoutShift.sources || []).map((source) => ({
+          node: source.node ? textFromElement(source.node).slice(0, 180) : '',
+          previous: rectSnapshot(source.previousRect),
+          current: rectSnapshot(source.currentRect)
+        }))
+      })
+    }
+  }).observe({ type: 'layout-shift', buffered: true })
 
   window.setTimeout(() => {
     debugWindow.__tabOutSaveStartupOrderDebug?.()

@@ -28,6 +28,10 @@ export interface RetainedPageIdentityOptions {
   sha256?: Sha256Digest
 }
 
+export type ResolveRetainedPageIdentities = (
+  candidates: readonly RetainedPageIdentityCandidate[]
+) => Promise<readonly (RetainedPageIdentity | null)[]>
+
 export type RandomByteFiller = (bytes: Uint8Array<ArrayBuffer>) => void
 
 const EPHEMERAL_NON_PAGE_PROTOCOLS = new Set([
@@ -112,12 +116,6 @@ function webCryptoSha256(input: BufferSource): Promise<ArrayBuffer> {
   return globalThis.crypto.subtle.digest('SHA-256', input)
 }
 
-function hexFromBytes(bytes: Uint8Array): string {
-  let hex = ''
-  for (const byte of bytes) hex += byte.toString(16).padStart(2, '0')
-  return hex
-}
-
 export async function createRetainedPageIdentity(
   candidate: RetainedPageIdentityCandidate,
   options: RetainedPageIdentityOptions = {}
@@ -131,10 +129,37 @@ export async function createRetainedPageIdentity(
 
   return {
     identityVersion: RETAINED_PAGE_IDENTITY_VERSION,
-    identityDigest: hexFromBytes(new Uint8Array(digest)),
+    identityDigest: new Uint8Array(digest).toHex(),
     surfaceKind: candidate.surfaceKind,
     canonicalKey,
     url
+  }
+}
+
+export function createCachedRetainedPageIdentityResolver(
+  options: RetainedPageIdentityOptions
+): ResolveRetainedPageIdentities {
+  // Keep the current and previous batches so concurrent storage reads share
+  // in-flight hashes without turning this short-lived migration cache global.
+  let previous = new Map<string, Promise<RetainedPageIdentity | null>>()
+  let current = new Map<string, Promise<RetainedPageIdentity | null>>()
+  return (candidates) => {
+    const priorCurrent = current
+    const next = new Map<string, Promise<RetainedPageIdentity | null>>()
+    const identities = candidates.map((candidate) => {
+      const cacheKey = JSON.stringify([candidate.surfaceKind, candidate.url])
+      const identity = next.get(cacheKey) ?? priorCurrent.get(cacheKey) ??
+        previous.get(cacheKey) ?? createRetainedPageIdentity(candidate, options)
+      next.set(cacheKey, identity)
+      void identity.catch(() => {
+        if (current.get(cacheKey) === identity) current.delete(cacheKey)
+        if (previous.get(cacheKey) === identity) previous.delete(cacheKey)
+      })
+      return identity
+    })
+    previous = priorCurrent
+    current = next
+    return Promise.all(identities)
   }
 }
 
@@ -146,5 +171,5 @@ function fillWithWebCrypto(bytes: Uint8Array<ArrayBuffer>): void {
 export function createClosureToken(fillRandomBytes: RandomByteFiller = fillWithWebCrypto): string {
   const bytes = new Uint8Array(16)
   fillRandomBytes(bytes)
-  return hexFromBytes(bytes)
+  return bytes.toHex()
 }
