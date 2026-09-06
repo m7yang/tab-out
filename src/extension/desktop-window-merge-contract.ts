@@ -177,6 +177,7 @@ const desktopWindowMergeAcknowledgeResponseSchema = Schema.Struct({
 
 const desktopWindowMergeStatusGetMessageSchema = Schema.Struct({
   type: Schema.Literals([DESKTOP_WINDOW_MERGE_STATUS_GET_MESSAGE]),
+  refreshNativeAvailability: Schema.optionalKey(Schema.Boolean),
 })
 const desktopWindowMergePreviewMessageSchema = Schema.Struct({
   type: Schema.Literals([DESKTOP_WINDOW_MERGE_PREVIEW_MESSAGE]),
@@ -268,7 +269,9 @@ const isConfirmResponse = Schema.is(desktopWindowMergeConfirmResponseSchema)
 const isAcknowledgeResponse = Schema.is(desktopWindowMergeAcknowledgeResponseSchema)
 const isJournal = Schema.is(desktopWindowMergeJournalSchema)
 
-export function isDesktopWindowMergeStatusGetMessage(value: unknown): boolean {
+export function isDesktopWindowMergeStatusGetMessage(
+  value: unknown,
+): value is typeof desktopWindowMergeStatusGetMessageSchema.Type {
   return isStatusGetMessage(value)
 }
 

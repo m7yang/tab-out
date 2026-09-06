@@ -605,6 +605,68 @@ test('popup waits for the native check before offering setup or profile ownershi
   await expect(page.locator(MERGE_ITEM)).toContainText('Checking macOS integration…')
 })
 
+test('popup refreshes native availability only on opening and keeps status notifications passive', async ({ page }) => {
+  await page.goto(POPUP_FIXTURE)
+  await expect(page.locator(MERGE_ITEM)).toContainText('Window merge coordination is unavailable')
+  await enableMergeAvailability(page)
+  const statusRequests = () => page.evaluate(() => (
+    Reflect.get(window, '__tabOutPopupSentMessages')
+      .filter((message: { type?: string }) => message.type === 'tab-out:get-desktop-window-merge-status')
+  ))
+  expect(await statusRequests()).toEqual([
+    { type: 'tab-out:get-desktop-window-merge-status', refreshNativeAvailability: true },
+    { type: 'tab-out:get-desktop-window-merge-status' },
+  ])
+  await page.reload()
+  await expect(page.locator(MERGE_ITEM)).toContainText('Window merge coordination is unavailable')
+  expect(await statusRequests()).toEqual([
+    { type: 'tab-out:get-desktop-window-merge-status', refreshNativeAvailability: true },
+  ])
+})
+
+test('popup ignores older availability replies after a newer status permits profile transfer', async ({ page }) => {
+  await page.goto(POPUP_FIXTURE)
+  await expect(page.locator(MERGE_ITEM)).toContainText('Window merge coordination is unavailable')
+  await page.evaluate(() => {
+    const pendingReplies: Array<(response: unknown) => void> = []
+    Reflect.set(window, '__tabOutPendingStatusReplies', pendingReplies)
+    Reflect.set(window, '__tabOutPopupMessageHandler', (message: { type?: string }) => {
+      if (message.type !== 'tab-out:get-desktop-window-merge-status') return undefined
+      return new Promise((resolve) => pendingReplies.push(resolve))
+    })
+    const onMessage = Reflect.get(window.chrome.runtime, 'onMessage')
+    const dispatch = Reflect.get(onMessage, 'dispatch')
+    dispatch({ type: 'tab-out:desktop-window-merge-status-changed' })
+    dispatch({ type: 'tab-out:desktop-window-merge-status-changed' })
+  })
+  await page.evaluate(() => {
+    Reflect.get(window, '__tabOutPendingStatusReplies')[1]({
+      ok: true,
+      availability: {
+        available: false,
+        reason: 'another-profile-selected',
+        ownerRevision: 'owner-revision-example',
+      },
+      session: null,
+    })
+  })
+  await expect(page.locator(TRANSFER_NATIVE_PROFILE_ITEM)).toBeEnabled()
+  await page.locator(TRANSFER_NATIVE_PROFILE_ITEM).click()
+  const confirmView = page.locator('[data-tabout-part="profile-transfer-confirm"]')
+  await expect(confirmView).toBeVisible()
+  await page.evaluate(() => {
+    Reflect.get(window, '__tabOutPendingStatusReplies')[0]({
+      ok: true,
+      availability: { available: false, reason: 'profile-transfer-update-required' },
+      session: null,
+    })
+  })
+  await expect(confirmView).toBeVisible()
+  await confirmView.locator('[data-tabout-part="cancel-button"]').click()
+  await expect(page.locator(TRANSFER_NATIVE_PROFILE_ITEM)).toBeEnabled()
+  await expect(page.locator(SETUP_NATIVE_INTEGRATION_ITEM)).toHaveCount(0)
+})
+
 test('popup combines suspended close and dedupe into one Undo', async ({ page }) => {
   await page.goto(POPUP_FIXTURE)
 

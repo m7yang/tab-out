@@ -25,11 +25,14 @@ async function sendMessage(message: unknown): Promise<unknown> {
   }
 }
 
-export async function getDesktopWindowMergeStatus(): Promise<
+export async function getDesktopWindowMergeStatus(
+  refreshNativeAvailability = false,
+): Promise<
   DesktopWindowMergeStatusResponse | null
 > {
   return parseDesktopWindowMergeStatusResponse(await sendMessage({
     type: DESKTOP_WINDOW_MERGE_STATUS_GET_MESSAGE,
+    ...(refreshNativeAvailability ? { refreshNativeAvailability: true } : {}),
   }))
 }
 

@@ -35,6 +35,13 @@ running or queued Hammerspoon shortcut.
 - The popup offers Switch only when a read-only probe proves that the current
   owner is offline or that its live native host, extension worker, and
   Hammerspoon controller all support transfer. The probe does not begin a drain.
+- A non-owner refreshes that read-only observation when the Tab Actions Menu
+  opens. Otherwise, a negative startup probe could outlive Hammerspoon
+  becoming ready and prevent Switch from being offered. The check is
+  bounded and shared by concurrent menu opens; passive status updates do
+  not trigger another probe, and failed checks return to dormancy. This
+  keeps freshness tied to the menu without sustaining an unused worker
+  or beginning a transfer.
 - Persisted selection schema 2 includes an opaque owner revision. A challenger
   may commit only the exact revision captured when the user opened the
   confirmation; a status change dismisses that confirmation. The first valid

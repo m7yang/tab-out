@@ -489,12 +489,18 @@ chromeApi.runtime.onMessage.addListener((message, sender, sendResponse) => {
           windowId: DESKTOP_WINDOW_MERGE_MENU_REQUESTER_TAB_ID,
           active: false,
         }
+    const refreshNativeAvailability = message.refreshNativeAvailability === true &&
+      senderTabId === undefined &&
+      sender.url === chromeApi.runtime.getURL('popup.html')
     void backgroundRuntime.runPromise(settleBackgroundEffect(sendEffectResponse(
-      desktopWindowMergeService.getStatus(
+      (refreshNativeAvailability
+        ? nativePlacementBridgeService.refreshStatus()
+        : Effect.void
+      ).pipe(Effect.andThen(desktopWindowMergeService.getStatus(
         requester.tabId,
         requester.windowId,
         requester.active,
-      ),
+      ))),
       sendResponse,
       (status) => status,
       () => ({ ok: false }),

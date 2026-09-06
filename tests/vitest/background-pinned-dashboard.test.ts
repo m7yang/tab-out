@@ -8,7 +8,10 @@ import { NATIVE_PROFILE_SELECTION_VERSION } from '../../src/extension/background
 import { WORKING_SET_ACTIVITY_AUTHORITY_KEY } from '../../src/extension/background/working-set-activity-authority.js'
 import { RETAINED_PAGES_EXPIRY_ALARM } from '../../src/extension/background/retained-pages-expiry-alarm.js'
 import { CLOSED_TAB_RESTORE_STATE_MESSAGE } from '../../src/extension/closed-tabs.js'
-import { DESKTOP_WINDOW_MERGE_PREVIEW_MESSAGE } from '../../src/extension/desktop-window-merge-contract.js'
+import {
+  DESKTOP_WINDOW_MERGE_PREVIEW_MESSAGE,
+  DESKTOP_WINDOW_MERGE_STATUS_GET_MESSAGE,
+} from '../../src/extension/desktop-window-merge-contract.js'
 import {
   decodeDashboardRetainedPagesWire,
   type DashboardRetainedPagesWire,
@@ -208,6 +211,10 @@ function createEventSlot() {
       addListener(fn: any) {
         listeners.push(fn)
       },
+      removeListener(fn: unknown) {
+        const index = listeners.indexOf(fn)
+        if (index >= 0) listeners.splice(index, 1)
+      },
     },
   }
 }
@@ -351,12 +358,14 @@ function createChromeMock(initialTabs: any[], options: any = {}) {
   const chrome: any = {
     runtime: {
       id: 'tab-out',
+      getURL: (path: string) => `chrome-extension://tab-out/${path}`,
       onMessage: runtimeOnMessage.api,
       onInstalled: runtimeOnInstalled.api,
       onStartup: runtimeOnStartup.api,
       connectNative(hostName: string) {
         calls.nativeHostNames.push(hostName)
         return {
+          disconnect() {},
           onMessage: nativePortOnMessage.api,
           onDisconnect: nativePortOnDisconnect.api,
           postMessage(message: unknown) {
@@ -868,6 +877,81 @@ test('menu window-merge preview fails when its owner page cannot be created', as
     ok: false,
     reason: 'coordination-unavailable',
   })
+})
+
+test('only an explicit Tab Actions Menu status request refreshes native availability', async () => {
+  const mock = await loadBackground([{
+    id: 91,
+    windowId: 1,
+    url: 'https://example.test/',
+    title: 'Example',
+    active: true,
+    pinned: false,
+    groupId: -1,
+    index: 0,
+  }])
+  const ownerRevision = '22222222-2222-4222-8222-222222222222'
+  const sendProfileStatus = (capabilities: string[]) => {
+    const listener = mock.listeners.nativePortOnMessage[0]
+    assert.ok(listener)
+    listener({
+      version: NATIVE_PROFILE_SELECTION_VERSION,
+      type: 'profile-selection-status',
+      selection: 'another-profile',
+      capabilities,
+      ownerRevision,
+    })
+  }
+  sendProfileStatus([])
+  await waitForBackgroundState(
+    () => mock.listeners.nativePortOnMessage.length === 0,
+    'nonowner native dormancy',
+  )
+
+  const requestStatus = (sender: Record<string, unknown>, refreshNativeAvailability = false) => {
+    const onMessage: RuntimeMessageListener | undefined = mock.listeners.runtimeOnMessage[0]
+    assert.ok(onMessage)
+    return new Promise<unknown>((resolve) => {
+      assert.equal(onMessage({
+        type: DESKTOP_WINDOW_MERGE_STATUS_GET_MESSAGE,
+        refreshNativeAvailability,
+      }, sender, resolve), true)
+    })
+  }
+  const unavailable = {
+    ok: true,
+    availability: { available: false, reason: 'profile-transfer-update-required' },
+    session: null,
+  }
+  assert.deepEqual(await requestStatus({}), unavailable)
+  assert.deepEqual(await requestStatus({ url: extensionUrl }, true), unavailable)
+  assert.deepEqual(await requestStatus({
+    url: 'chrome-extension://tab-out/popup.html',
+    tab: { id: 91, windowId: 1, active: true },
+  }, true), unavailable)
+  assert.equal(mock.calls.nativeHostNames.length, 1)
+
+  const popupSender = { url: 'chrome-extension://tab-out/popup.html' }
+  const refreshed = requestStatus(popupSender, true)
+  await waitForBackgroundState(
+    () => mock.calls.nativeHostNames.length === 2 &&
+      mock.listeners.nativePortOnMessage.length === 1,
+    'menu native availability refresh',
+  )
+  sendProfileStatus(['profile-transfer'])
+  const ready = {
+    ok: true,
+    availability: { available: false, reason: 'another-profile-selected', ownerRevision },
+    session: null,
+  }
+  assert.deepEqual(await refreshed, ready)
+  assert.deepEqual(await requestStatus(popupSender), ready)
+  assert.equal(mock.calls.nativeHostNames.length, 2)
+  assert.ok(mock.calls.nativeMessages.every((message) =>
+    typeof message === 'object' && message !== null &&
+    Reflect.get(message, 'type') === 'profile-hello'))
+  assert.deepEqual(mock.calls.create, [])
+  assert.deepEqual(mock.calls.windowCreate, [])
 })
 
 test('retention storage is restricted to trusted extension contexts before use', async () => {

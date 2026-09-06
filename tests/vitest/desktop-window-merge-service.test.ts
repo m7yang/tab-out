@@ -221,6 +221,7 @@ function createMergeHarness(nativeStatus: NativeDesktopControllerStatus = {
       finishMergeCount += 1
     }),
     getStatus: () => Effect.succeed(nativeStatus),
+    refreshStatus: () => Effect.succeed(nativeStatus),
     selectCurrentProfile: () => Effect.void,
     transferCurrentProfile: () => Effect.succeed({ ok: true }),
     resolveDesktopWindows: () => Effect.sync(() => {

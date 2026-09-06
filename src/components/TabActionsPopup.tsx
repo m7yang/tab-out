@@ -121,6 +121,7 @@ export function TabActionsPopup() {
   // react-doctor-disable-next-line react-doctor/effect-needs-cleanup -- the returned cleanup clears refreshTimer; the id is reassigned per debounce, which the rule cannot track.
   useEffect(() => {
     let disposed = false
+    let latestStatusRequest = 0
     let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
     const refreshDedupePlan = () => {
@@ -143,9 +144,11 @@ export function TabActionsPopup() {
       }, DEDUPE_PLAN_REFRESH_DELAY_MS)
     }
 
-    const applyMergeStatus = async () => {
-      const response = await getDesktopWindowMergeStatus()
-      if (disposed) return
+    const applyMergeStatus = async (refreshNativeAvailability = false) => {
+      latestStatusRequest += 1
+      const statusRequest = latestStatusRequest
+      const response = await getDesktopWindowMergeStatus(refreshNativeAvailability)
+      if (disposed || statusRequest !== latestStatusRequest) return
       if (!response) {
         setAvailability({ available: false, reason: 'coordination-unavailable' })
         return
@@ -166,7 +169,7 @@ export function TabActionsPopup() {
     }
 
     refreshDedupePlan()
-    void applyMergeStatus()
+    void applyMergeStatus(true)
     const onRuntimeMessage = (message: unknown) => {
       if (isDesktopWindowMergeStatusChangedMessage(message)) void applyMergeStatus()
     }
