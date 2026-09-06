@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { recoverRetainedPageSnapshot } from '../src/extension/background/retained-page-recovery.js'
+import type { RetainedPageActivationDisposition } from '../src/extension/background/retained-pages-service.js'
 import type { RetainedPageRecord } from '../src/extension/retained-pages-ledger.js'
 
 function page(overrides: Partial<RetainedPageRecord> = {}): RetainedPageRecord {
@@ -67,6 +68,186 @@ function chromeApi(overrides: Record<string, unknown> = {}) {
   } as unknown as typeof chrome
 }
 
+type RecoveryTestTab = Pick<chrome.tabs.Tab, 'id' | 'windowId' | 'url' | 'pendingUrl'>
+
+function liveRecoveryHarness(overrides: Partial<RecoveryTestTab> = {}) {
+  const tab: RecoveryTestTab = { id: 7, windowId: 4, url: page().url, ...overrides }
+  const liveTabs = new Map<number, RecoveryTestTab>([[7, tab]])
+  const tabCreates: chrome.tabs.CreateProperties[] = []
+  const windowCreates: chrome.windows.CreateData[] = []
+  const moves: number[] = []
+  const updates: Array<{ tabId: number, properties: chrome.tabs.UpdateProperties }> = []
+  const focusedWindows: number[] = []
+  const state = {
+    beforeRead: (_tab: RecoveryTestTab): void => {},
+    afterMutation: (_tab: RecoveryTestTab): void => {},
+  }
+  const api = chromeApi({
+    tabs: {
+      query: async (query: chrome.tabs.QueryInfo) => Array.from(liveTabs.values())
+        .filter((live) => query.windowId === undefined || live.windowId === query.windowId)
+        .map((live) => ({ ...live })),
+      get: async (tabId: number) => {
+        const live = liveTabs.get(tabId)
+        assert.ok(live)
+        state.beforeRead(live)
+        return { ...live }
+      },
+      create: async (properties: chrome.tabs.CreateProperties) => {
+        tabCreates.push(properties)
+        const created = { id: 9, windowId: properties.windowId ?? 1, url: properties.url }
+        liveTabs.set(9, created)
+        state.afterMutation(created)
+        return { ...created }
+      },
+      move: async (tabId: number, properties: chrome.tabs.MoveProperties) => {
+        moves.push(tabId)
+        tab.windowId = properties.windowId ?? tab.windowId
+        state.afterMutation(tab)
+        return { ...tab }
+      },
+      update: async (tabId: number, properties: chrome.tabs.UpdateProperties) => {
+        updates.push({ tabId, properties })
+        if (properties.url !== undefined) tab.url = properties.url
+        state.afterMutation(tab)
+        return { ...tab }
+      },
+    },
+    windows: {
+      getAll: async () => [
+        { id: 1, type: 'normal', focused: true },
+        { id: 4, type: 'normal' },
+      ],
+      create: async (properties: chrome.windows.CreateData) => {
+        windowCreates.push(properties)
+        const target = properties.tabId === 7
+          ? tab
+          : { id: 9, windowId: 2, url: page().url }
+        target.windowId = 2
+        liveTabs.set(target.id ?? 9, target)
+        state.afterMutation(target)
+        return { id: 2, type: 'normal', tabs: [{ ...target }] }
+      },
+      update: async (windowId: number) => {
+        focusedWindows.push(windowId)
+        return { id: windowId, focused: true }
+      },
+    },
+  })
+  return { api, tab, state, tabCreates, windowCreates, moves, updates, focusedWindows }
+}
+
+const activationDispositions: RetainedPageActivationDisposition[] = [
+  'focus-tab',
+  'background-tab',
+  'foreground-tab',
+  'new-window',
+]
+
+for (const disposition of activationDispositions) {
+  test(`${disposition} recovers a separate exact page when the old tab is already departing`, async () => {
+    const harness = liveRecoveryHarness({ pendingUrl: 'https://example.test/next-page' })
+
+    assert.equal(await recoverRetainedPageSnapshot(harness.api, page(), disposition, {
+      currentWindowId: 1,
+    }), true)
+    assert.deepEqual(harness.moves, [])
+    assert.deepEqual(harness.updates, [])
+    assert.equal(harness.tab.windowId, 4)
+    assert.equal(harness.tab.pendingUrl, 'https://example.test/next-page')
+    assert.deepEqual(harness.tabCreates, disposition === 'new-window' ? [] : [{
+      windowId: 1,
+      url: page().url,
+      active: disposition !== 'background-tab',
+    }])
+    assert.deepEqual(harness.windowCreates, disposition === 'new-window' ? [{
+      url: page().url,
+      focused: true,
+      type: 'normal',
+    }] : [])
+  })
+
+  for (const committedUrl of ['', 'https://example.test/previous-page']) {
+    test(`${disposition} neither duplicates nor confirms a pending exact destination from ${committedUrl || 'a blank URL'}`, async () => {
+      const harness = liveRecoveryHarness({ url: committedUrl, pendingUrl: page().url })
+
+      assert.equal(await recoverRetainedPageSnapshot(harness.api, page(), disposition), false)
+      assert.deepEqual(harness.tabCreates, [])
+      assert.deepEqual(harness.windowCreates, [])
+      assert.deepEqual(harness.moves, [])
+      assert.deepEqual(harness.updates, [])
+    })
+  }
+
+  for (const surfaceKind of ['normal-tab', 'app'] satisfies RetainedPageRecord['surfaceKind'][]) {
+    test(`${disposition} leaves the ${surfaceKind} recovery target untouched when it starts departing before mutation`, async () => {
+      const harness = liveRecoveryHarness()
+      harness.state.beforeRead = (tab) => {
+        tab.pendingUrl = 'https://example.test/next-page'
+      }
+
+      assert.equal(await recoverRetainedPageSnapshot(harness.api, page({ surfaceKind }), disposition), false)
+      assert.deepEqual(harness.tabCreates, [])
+      assert.deepEqual(harness.windowCreates, [])
+      assert.deepEqual(harness.moves, [])
+      assert.deepEqual(harness.updates, [])
+      assert.deepEqual(harness.focusedWindows, [])
+    })
+  }
+
+  test(`${disposition} still recovers an exact live tab during a same-page reload`, async () => {
+    const harness = liveRecoveryHarness({ pendingUrl: page().url })
+
+    assert.equal(await recoverRetainedPageSnapshot(harness.api, page(), disposition, {
+      currentWindowId: 1,
+    }), true)
+    assert.deepEqual(harness.tabCreates, [])
+    assert.equal(harness.tab.windowId, disposition === 'focus-tab' ? 4 : disposition === 'new-window' ? 2 : 1)
+  })
+
+  test(`${disposition} does not confirm a live target that starts departing during mutation`, async () => {
+    const harness = liveRecoveryHarness()
+    harness.state.afterMutation = (tab) => {
+      tab.pendingUrl = 'https://example.test/next-page'
+    }
+
+    assert.equal(await recoverRetainedPageSnapshot(harness.api, page(), disposition, {
+      currentWindowId: 1,
+    }), false)
+    assert.deepEqual(harness.focusedWindows, [])
+    assert.deepEqual(harness.tabCreates, [])
+  })
+
+  test(`${disposition} does not confirm a created target that is already departing`, async () => {
+    const harness = liveRecoveryHarness({ url: 'https://example.test/another-page' })
+    harness.state.afterMutation = (tab) => {
+      tab.pendingUrl = 'https://example.test/next-page'
+    }
+
+    assert.equal(await recoverRetainedPageSnapshot(harness.api, page(), disposition, {
+      currentWindowId: 1,
+      confirmationAttempts: 1,
+    }), false)
+    assert.deepEqual(harness.moves, [])
+    assert.deepEqual(harness.updates, [])
+    assert.equal(harness.tabCreates.length + harness.windowCreates.length, 1)
+  })
+}
+
+test('suspended recovery never navigates over a departure that began after inventory', async () => {
+  const wrapperUrl = `chrome-extension://example-suspender/suspended.html#uri=${encodeURIComponent(page().url)}`
+  const harness = liveRecoveryHarness({ url: wrapperUrl })
+  harness.state.beforeRead = (tab) => {
+    tab.pendingUrl = 'https://example.test/next-page'
+  }
+
+  assert.equal(await recoverRetainedPageSnapshot(harness.api, page(), 'focus-tab'), false)
+  assert.deepEqual(harness.updates, [])
+  assert.deepEqual(harness.tabCreates, [])
+  assert.equal(harness.tab.url, wrapperUrl)
+  assert.equal(harness.tab.pendingUrl, 'https://example.test/next-page')
+})
+
 test('plain retained recovery opens the exact stored URL in an active normal tab', async () => {
   const creates: chrome.tabs.CreateProperties[] = []
   const api = chromeApi({
@@ -99,6 +280,7 @@ test('plain retained recovery focuses a reappeared exact live target in place', 
         windowId: 4,
         url: 'https://example.test/article?view=exact#comment',
       }],
+      get: async () => ({ id: 7, windowId: 4, url: page().url }),
       update: async (tabId: number, properties: chrome.tabs.UpdateProperties) => {
         updates.push({ tabId, properties })
         return { id: tabId, windowId: 4, url: page().url }
@@ -324,6 +506,7 @@ test('app snapshot recovery creates a normal fallback when its normal candidate 
 test('primary-modifier recovery moves an exact live target into the initiating window', async () => {
   const moves: Array<{ tabId: number, properties: chrome.tabs.MoveProperties }> = []
   const updates: Array<{ tabId: number, properties: chrome.tabs.UpdateProperties }> = []
+  let liveWindowId = 4
   const api = chromeApi({
     tabs: {
       query: async () => [{
@@ -333,13 +516,14 @@ test('primary-modifier recovery moves an exact live target into the initiating w
       }],
       move: async (tabId: number, properties: chrome.tabs.MoveProperties) => {
         moves.push({ tabId, properties })
+        liveWindowId = properties.windowId ?? liveWindowId
         return { id: tabId, windowId: properties.windowId, url: page().url }
       },
       update: async (tabId: number, properties: chrome.tabs.UpdateProperties) => {
         updates.push({ tabId, properties })
         return { id: tabId, windowId: 1, url: page().url }
       },
-      get: async (tabId: number) => ({ id: tabId, windowId: 1, url: page().url }),
+      get: async (tabId: number) => ({ id: tabId, windowId: liveWindowId, url: page().url }),
     },
     windows: {
       getAll: async () => [
@@ -399,18 +583,20 @@ test('primary-modifier plus Shift moves and activates an exact live target here'
   const moves: chrome.tabs.MoveProperties[] = []
   const updates: chrome.tabs.UpdateProperties[] = []
   const focusedWindows: number[] = []
+  let liveWindowId = 4
   const api = chromeApi({
     tabs: {
       query: async () => [{ id: 7, windowId: 4, url: page().url }],
       move: async (_tabId: number, properties: chrome.tabs.MoveProperties) => {
         moves.push(properties)
+        liveWindowId = properties.windowId ?? liveWindowId
         return { id: 7, windowId: 1, url: page().url }
       },
       update: async (_tabId: number, properties: chrome.tabs.UpdateProperties) => {
         updates.push(properties)
         return { id: 7, windowId: 1, url: page().url }
       },
-      get: async () => ({ id: 7, windowId: 1, url: page().url }),
+      get: async () => ({ id: 7, windowId: liveWindowId, url: page().url }),
     },
     windows: {
       getAll: async () => [
@@ -439,6 +625,7 @@ test('primary-modifier plus Shift moves and activates an exact live target here'
 test('Shift recovery moves an exact live target to one focused normal window', async () => {
   const windows: chrome.windows.CreateData[] = []
   let tabCreateCount = 0
+  let liveWindowId = 4
   const api = chromeApi({
     tabs: {
       query: async () => [{ id: 7, windowId: 4, url: page().url }],
@@ -446,13 +633,14 @@ test('Shift recovery moves an exact live target to one focused normal window', a
         tabCreateCount += 1
         return { id: 9, windowId: 1 }
       },
-      get: async () => ({ id: 7, windowId: 2, url: page().url }),
+      get: async () => ({ id: 7, windowId: liveWindowId, url: page().url }),
     },
     windows: {
       getAll: async () => [{ id: 4, type: 'normal', focused: true }],
       update: async () => ({ id: 2, focused: true }),
       create: async (properties: chrome.windows.CreateData) => {
         windows.push(properties)
+        liveWindowId = 2
         return {
           id: 2,
           type: 'normal',

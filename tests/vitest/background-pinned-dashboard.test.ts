@@ -1581,6 +1581,132 @@ for (const action of ['explicit removal', 'activation consumption'] as const) {
   })
 }
 
+test('background preserves a retained snapshot when its exact tab starts leaving before recovery', async () => {
+  const retainedUrl = 'https://example.test/retained-page'
+  const livePage = {
+    id: 264,
+    windowId: 1,
+    url: retainedUrl,
+    title: 'Example retained page',
+    active: false,
+    pinned: false,
+    groupId: -1,
+    index: 1,
+  }
+  const mock = await loadBackground([{
+    id: 263,
+    windowId: 1,
+    url: extensionUrl,
+    title: 'Tab Out',
+    active: true,
+    pinned: true,
+    groupId: -1,
+    index: 0,
+  }, livePage])
+  mock.closeTabForWindow(livePage.id)
+  await flushBackgroundWork()
+  const retained = await parseStoredRetainedPageLedger(
+    mock.storageValues.local[RETAINED_PAGES_STORAGE_KEY],
+  )
+  assert.equal(retained.status, 'valid')
+  const snapshot = Object.values(retained.ledger.pages)[0]
+  assert.ok(snapshot)
+  mock.state.tabsById[265] = { ...livePage, id: 265 }
+  const originalGet = mock.chrome.tabs.get.bind(mock.chrome.tabs)
+  mock.chrome.tabs.get = async (tabId: number) => {
+    if (tabId === 265) {
+      mock.state.tabsById[tabId].pendingUrl = 'https://example.test/next-page'
+    }
+    return originalGet(tabId)
+  }
+  const createCount = mock.calls.create.length
+  const updateCount = mock.calls.update.length
+
+  const response = await sendRuntimeMessage(mock, {
+    type: RETAINED_PAGE_ACTIVATE_MESSAGE,
+    identityDigest: snapshot.identityDigest,
+    closureToken: snapshot.closureToken,
+    disposition: 'focus-tab',
+  })
+  await flushBackgroundWork()
+
+  assert.deepEqual(response, { ok: true, outcome: 'failed' })
+  assert.equal(mock.calls.create.length, createCount)
+  assert.equal(mock.calls.update.length, updateCount)
+  const preserved = await parseStoredRetainedPageLedger(
+    mock.storageValues.local[RETAINED_PAGES_STORAGE_KEY],
+  )
+  assert.equal(preserved.status, 'valid')
+  assert.deepEqual(preserved.ledger.pages[snapshot.identityDigest], snapshot)
+  assert.equal(preserved.ledger.removalBoundaries[snapshot.closureToken], undefined)
+})
+
+for (const navigation of ['departing', 'arriving']) {
+  test(`background preserves Saved Page intent while its matching tab is ${navigation}`, async () => {
+    const savedUrl = 'https://example.test/saved-page'
+    const anotherUrl = 'https://example.test/another-page'
+    const savedStore = {
+      version: 2,
+      pages: {
+        [savedUrl]: {
+          key: savedUrl,
+          surfaceKind: 'normal-tab',
+          url: savedUrl,
+          title: 'Example saved page',
+          savedAt: 100,
+          updatedAt: 100,
+        },
+      },
+    }
+    const mock = await loadBackground([{
+      id: 263,
+      windowId: 1,
+      url: extensionUrl,
+      title: 'Tab Out',
+      active: true,
+      pinned: true,
+      groupId: -1,
+      index: 0,
+    }, {
+      id: 264,
+      windowId: 1,
+      url: navigation === 'departing' ? savedUrl : anotherUrl,
+      pendingUrl: navigation === 'departing' ? anotherUrl : savedUrl,
+      title: 'Example page',
+      active: false,
+      pinned: false,
+      groupId: -1,
+      index: 1,
+    }], {
+      storageValues: {
+        local: { [SAVED_PAGES_STORAGE_KEY]: savedStore },
+      },
+    })
+    const createCount = mock.calls.create.length
+    const updateCount = mock.calls.update.length
+
+    const response = await sendRuntimeMessage(mock, {
+      type: SAVED_PAGE_ACTIVATE_MESSAGE,
+      url: savedUrl,
+      surfaceKind: 'normal-tab',
+      disposition: 'foreground-tab',
+    })
+
+    assert.deepEqual(response, {
+      ok: true,
+      outcome: navigation === 'departing' ? 'activated' : 'failed',
+    })
+    assert.equal(mock.calls.update.length, updateCount)
+    assert.deepEqual(mock.calls.create.slice(createCount), navigation === 'departing' ? [{
+      windowId: 1,
+      url: savedUrl,
+      active: true,
+    }] : [])
+    assert.deepEqual(mock.storageValues.local[SAVED_PAGES_STORAGE_KEY], savedStore)
+    assert.equal(mock.state.tabsById[264].pendingUrl, navigation === 'departing' ? anotherUrl : savedUrl)
+  })
+}
+
 test('background opens an exact closed Saved Page without mutating saved state', async () => {
   const savedUrl = 'chrome://settings/privacy'
   const savedStore = {

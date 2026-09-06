@@ -1,5 +1,6 @@
 import { retainedPageEffectiveUrl } from '../retained-page-identity.js'
 import { isRetainedPageActivationEligible } from '../retained-page-activation-policy.js'
+import { liveTabUrlForIdentity } from '../live-tab-matching.js'
 import type { RetainedPageRecord } from '../retained-pages-ledger.js'
 import type { RetainedPageActivationDisposition } from './retained-pages-service.js'
 import type { ChromeApi } from './chrome-api.js'
@@ -67,9 +68,10 @@ async function readExactLiveTarget(
           : 'normal-tab'
       const committedUrl = tab.url || ''
       const exactUrl = retainedPageEffectiveUrl({ url: committedUrl })
+      const intendedUrl = retainedPageEffectiveUrl({ url: liveTabUrlForIdentity(tab) })
+      if (intendedUrl !== page.url) continue
       if (
         exactUrl !== page.url &&
-        retainedPageEffectiveUrl({ url: tab.pendingUrl || '' }) === page.url &&
         surfaceKind !== 'app'
       ) {
         pendingExactTarget = true
@@ -104,21 +106,21 @@ async function readExactLiveTarget(
   }
 }
 
-async function confirmExactNormalTarget(
+async function validateExactNormalTarget(
   chromeApi: ChromeApi,
   target: LiveRetainedPageTarget,
   targetUrl: string,
-): Promise<boolean> {
+): Promise<'confirmed' | 'app-window' | 'unconfirmed'> {
   try {
     const tab = await chromeApi.tabs.get(target.tabId)
-    if (
-      tab.windowId !== target.windowId ||
-      !committedTabRepresentsTarget(tab, targetUrl)
-    ) return false
+    if (!committedTabRepresentsTarget(tab, targetUrl)) return 'unconfirmed'
     const window = await chromeApi.windows.get(tab.windowId)
-    return window.type === 'normal'
+    if (window.type === 'app' || window.type === 'popup') return 'app-window'
+    return tab.windowId === target.windowId && window.type === 'normal'
+      ? 'confirmed'
+      : 'unconfirmed'
   } catch {
-    return false
+    return 'unconfirmed'
   }
 }
 
@@ -140,7 +142,9 @@ function committedTabRepresentsTarget(
   tab: chrome.tabs.Tab,
   targetUrl: string,
 ): boolean {
-  return retainedPageEffectiveUrl({ url: tab.url || '' }) === targetUrl
+  // A pending departure makes the old committed URL insufficient for recovery.
+  return retainedPageEffectiveUrl({ url: tab.url || '' }) === targetUrl &&
+    retainedPageEffectiveUrl({ url: liveTabUrlForIdentity(tab) }) === targetUrl
 }
 
 function waitForConfirmationPoll(): Promise<void> {
@@ -439,11 +443,11 @@ export async function recoverRetainedPageSnapshot(
     options.currentWindowId,
   )
   if (!liveTargetRead.ok) return false
-  if (
-    page.surfaceKind === 'app' &&
-    liveTargetRead.target &&
-    !await confirmExactNormalTarget(chromeApi, liveTargetRead.target, page.url)
-  ) {
+  const targetValidation = liveTargetRead.target
+    ? await validateExactNormalTarget(chromeApi, liveTargetRead.target, page.url)
+    : 'confirmed'
+  if (targetValidation !== 'confirmed') {
+    if (page.surfaceKind !== 'app' || targetValidation !== 'app-window') return false
     // The normal fallback can move into an app window after inventory was
     // read. Refresh once before mutation so that app target is ignored and a
     // fresh normal fallback can be created without touching it.
@@ -455,7 +459,7 @@ export async function recoverRetainedPageSnapshot(
     if (!liveTargetRead.ok) return false
     if (
       liveTargetRead.target &&
-      !await confirmExactNormalTarget(chromeApi, liveTargetRead.target, page.url)
+      await validateExactNormalTarget(chromeApi, liveTargetRead.target, page.url) !== 'confirmed'
     ) return false
   }
   if (liveTargetRead.target) {
