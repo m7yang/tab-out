@@ -31,7 +31,7 @@ function createChromeMock(initialTabs: any[], currentWindowId = 1) {
     windowsUpdate: [],
   }
 
-  ;(globalThis as any).chrome = {
+  const api = {
     runtime: {
       id: 'tab-out',
       async sendMessage(extensionId: string, message: Record<string, unknown>) {
@@ -133,7 +133,8 @@ function createChromeMock(initialTabs: any[], currentWindowId = 1) {
     },
   }
 
-  return { calls, tabs }
+  ;(globalThis as any).chrome = api
+  return { api, calls, tabs }
 }
 
 test('focusTab does not pin an existing Tab Out tab when focusing a chip target', async () => {
@@ -628,6 +629,68 @@ test('bulk close returns undo snapshots only for tabs Chrome actually removed', 
   assert.deepEqual(tabs.map((tab) => tab.id), [1, 2])
 })
 
+test('bulk close keeps original Undo snapshots around a concurrent unrelated closure', async () => {
+  const firstUrl = 'https://example.test/first'
+  const missingUrl = 'https://example.test/missing'
+  const lastUrl = 'https://example.test/last'
+  const suspendedUrl = `chrome-extension://suspender/suspended.html#uri=${encodeURIComponent(firstUrl)}`
+  const { api, tabs } = createChromeMock([
+    { id: 1, windowId: 1, index: 0, url: 'chrome-extension://tab-out/index.html', title: 'Tab Out', active: true, pinned: false, groupId: -1 },
+    { id: 2, windowId: 1, index: 1, url: suspendedUrl, title: 'First page', active: false, pinned: true, groupId: -1 },
+    { id: 3, windowId: 1, index: 2, url: missingUrl, title: 'Missing page', active: false, pinned: false, groupId: -1 },
+    { id: 4, windowId: 2, index: 3, url: lastUrl, title: 'Last page', active: false, pinned: false, groupId: 7 },
+  ])
+  const removedIds: number[] = []
+  api.tabs.remove = async (tabIds: number | number[]) => {
+    for (const tabId of Array.isArray(tabIds) ? tabIds : [tabIds]) {
+      const index = tabs.findIndex((tab) => tab.id === tabId)
+      if (index < 0) throw new Error('Tab already gone')
+      tabs.splice(index, 1)
+      removedIds.push(tabId)
+      if (tabId === 2) tabs.splice(tabs.findIndex((tab) => tab.id === 3), 1)
+    }
+  }
+
+  const result = await closeTabsExactResult([firstUrl, missingUrl, lastUrl])
+
+  assert.deepEqual(removedIds, [2, 4])
+  assert.equal(result.status, 'partial')
+  assert.equal(result.attemptedCount, 3)
+  assert.equal(result.removedCount, 2)
+  assert.equal(result.failedCount, 1)
+  assert.deepEqual(result.value, [
+    { url: firstUrl, rawUrl: suspendedUrl, title: 'First page', pinned: true, groupId: -1, windowId: 1, index: 1 },
+    { url: lastUrl, rawUrl: lastUrl, title: 'Last page', pinned: false, groupId: 7, windowId: 2, index: 3 },
+  ])
+  assert.deepEqual(tabs.map((tab) => tab.id), [1])
+})
+
+test('URL-scoped close preserves targets that become grouped or pinned after an earlier close', async () => {
+  const firstUrl = 'https://example.test/first'
+  const groupedUrl = 'https://example.test/grouped'
+  const tabOutUrl = 'chrome-extension://tab-out/index.html'
+  const { api, tabs, calls } = createChromeMock([
+    { id: 1, windowId: 1, url: firstUrl, title: 'First page', active: false, pinned: false, groupId: -1 },
+    { id: 2, windowId: 1, url: groupedUrl, title: 'Grouped page', active: false, pinned: false, groupId: -1 },
+    { id: 3, windowId: 1, url: tabOutUrl, title: 'Tab Out', active: false, pinned: false, groupId: -1 },
+  ])
+  const removeTab = api.tabs.remove.bind(api.tabs)
+  api.tabs.remove = async (tabIds: number | number[]) => {
+    await removeTab(tabIds)
+    const groupedTab = tabs.find((tab) => tab.id === 2)
+    const pinnedTab = tabs.find((tab) => tab.id === 3)
+    if (groupedTab) groupedTab.groupId = 7
+    if (pinnedTab) pinnedTab.pinned = true
+  }
+
+  const result = await closeTabsExactResult([firstUrl, groupedUrl, tabOutUrl], { preserveGroups: true })
+
+  assert.deepEqual(calls.remove, [1])
+  assert.deepEqual(tabs.map((tab) => tab.id), [2, 3])
+  assert.equal(result.status, 'partial')
+  assert.deepEqual(result.value.map((tab) => tab.url), [firstUrl])
+})
+
 test('closeTabsExactResult reports a rejected removal as a failed mutation', async () => {
   const url = 'https://example.test/docs'
   const { tabs } = createChromeMock([
@@ -680,7 +743,7 @@ test('closeTabsByTargetsResult preserves confirmed snapshots and reports a parti
   assert.deepEqual(tabs.map((tab) => tab.id), [1, 2])
 })
 
-test('batch-close fallback revalidates remaining tab identities before retrying', async () => {
+test('sequential close revalidates remaining tab identities after an earlier failure', async () => {
   const keptUrl = 'https://example.test/kept'
   const staleTargetUrl = 'https://example.test/stale-target'
   const unrelatedUrl = 'https://example.test/unrelated'

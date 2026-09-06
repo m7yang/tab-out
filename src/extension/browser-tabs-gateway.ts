@@ -114,9 +114,9 @@ export async function getCurrentTab(): Promise<chrome.tabs.Tab | null> {
 }
 
 /**
- * removeTabs — bulk close with a per-id fallback: Chrome rejects the whole
- * batch when any id is already gone, so a failed batch retries one id at a
- * time. Returns the exact ids Chrome accepted for removal.
+ * removeTabs — close each tab with its own acknowledgement. Chrome may remove
+ * a prefix of an array before rejecting it, so an array rejection cannot prove
+ * which removals belong to this command. Returns only individually accepted ids.
  */
 export type RemoveTabsOptions = {
   beforeSingleRemove?: (tabId: number) => boolean | Promise<boolean>
@@ -128,22 +128,17 @@ export async function removeTabs(
 ): Promise<number[]> {
   const api = chromeTabsApi()
   if (!api?.tabs?.remove || tabIds.length === 0) return []
-  try {
-    await api.tabs.remove(tabIds)
-    return tabIds.slice()
-  } catch {
-    const removed: number[] = []
-    for (const tabId of tabIds) {
+  const removed: number[] = []
+  for (const tabId of new Set(tabIds)) {
+    try {
       if (beforeSingleRemove && !(await beforeSingleRemove(tabId))) continue
-      try {
-        await api.tabs.remove(tabId)
-        removed.push(tabId)
-      } catch {
-        /* already gone — skip */
-      }
+      await api.tabs.remove(tabId)
+      removed.push(tabId)
+    } catch {
+      /* Ineligible, unreadable, or rejected — preserve earlier acknowledgements. */
     }
-    return removed
   }
+  return removed
 }
 
 export async function updateTab(tabId: number, updateProperties: chrome.tabs.UpdateProperties): Promise<chrome.tabs.Tab | null> {

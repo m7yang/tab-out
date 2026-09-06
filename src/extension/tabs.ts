@@ -16,7 +16,7 @@ import { getTab } from './browser-tabs-gateway.js'
 import { BrowserTabs } from './browser-tabs-service.js'
 import { normalizeChromeTabToDashboardItem } from './dashboard-tab-normalization.js'
 import { isSuspended, rememberSuspendTargetFromTabsEffect, unwrapSuspenderUrl } from './suspension.js'
-import { isGroupedTab, fetchTabGroupColorsEffect } from './groups.js'
+import { compareForKeep, isGroupedTab, fetchTabGroupColorsEffect } from './groups.js'
 import { pickDuplicateTabsToClose } from './tab-dedupe-policy.js'
 import { canonicalDedupeKey } from './url-canonical.js'
 import { isTabOutPageUrl } from './tab-out-url.js'
@@ -215,9 +215,9 @@ export const closeResolvedTabsEffect = Effect.fn('tabs.closeResolved')(function*
   )
   const browserTabs = yield* BrowserTabs
   const removedIds = new Set(yield* browserTabs.removeTabs(tabIds(attemptedTabs), {
-    // A rejected batch introduces one await per retry. Revalidate the original
-    // physical page immediately before each of those delayed single-ID writes
-    // so a navigation or reused ID cannot turn a stale close into data loss.
+    // Every close has its own acknowledgement. Revalidate the original physical
+    // page before each write, including the first, so delayed removals cannot
+    // close a tab that has navigated or gained a protection in the meantime.
     beforeSingleRemove: async (tabId) => {
       const expectedTab = attemptedTabsById.get(tabId)
       const liveTab = await getTab(tabId)
@@ -274,13 +274,17 @@ export const closeTabsExactEffect = Effect.fn('tabs.closeExact')(function* (
   const allTabsResult = yield* browserTabs.queryAllTabsResult()
   if (!allTabsResult.ok) return emptyTabCloseResult('unknown')
   const allTabs = allTabsResult.value
-  const toCloseTabs = allTabs.filter((tab) => {
+  const targetRemainsEligible = (tab: chrome.tabs.Tab) => {
     const effectiveUrl = unwrapSuspenderUrl(liveTabUrlForIdentity(tab))
     if (!urlSet.has(effectiveUrl)) return false
     if (preserveGroups && isGroupedTab(tab)) return false
     return !(preservePinnedTabOut && tab.pinned && isTabOutPageUrl(effectiveUrl))
+  }
+  const toCloseTabs = allTabs.filter(targetRemainsEligible)
+  return yield* closeResolvedTabsEffect(toCloseTabs, {
+    includeTabOutUrls: true,
+    isSingleRemoveStillEligible: targetRemainsEligible,
   })
-  return yield* closeResolvedTabsEffect(toCloseTabs, { includeTabOutUrls: true })
 })
 
 export function closeTabsExactResult(
@@ -471,21 +475,64 @@ export const closeDuplicateTabsEffect = Effect.fn('tabs.closeDuplicates')(functi
     tabsByDedupeKey.getOrInsertComputed(key, () => []).push(tab)
   }
   const toCloseTabs: chrome.tabs.Tab[] = []
+  const closeGuardByTabId = new Map<number, {
+    key: string
+    survivorId: number | undefined
+    stopped: boolean
+  }>()
 
   for (const url of requestedUrls) {
     const matching = tabsByDedupeKey.get(url) ?? []
-    toCloseTabs.push(
-      ...pickDuplicateTabsToClose(matching, {
-        keepOne,
-        currentWindowId,
-        preservePinned,
-        preservePinnedTabOut,
-        isTabOutUrl: isTabOutPageUrl,
-      }),
-    )
+    const closeTargets = pickDuplicateTabsToClose(matching, {
+      keepOne,
+      currentWindowId,
+      preservePinned,
+      preservePinnedTabOut,
+      isTabOutUrl: isTabOutPageUrl,
+    })
+    if (closeTargets.length === 0) continue
+    const closeIds = new Set(tabIds(closeTargets))
+    const groupedTarget = closeTargets.find(isGroupedTab)
+    const survivor = matching
+      .filter((tab) => typeof tab.id === 'number' && !closeIds.has(tab.id) &&
+        (!groupedTarget || tab.groupId === groupedTarget.groupId))
+      .toSorted((a, b) => compareForKeep(a, b, currentWindowId))[0]
+    const guard = { key: url, survivorId: survivor?.id, stopped: false }
+    for (const tabId of closeIds) closeGuardByTabId.set(tabId, guard)
+    toCloseTabs.push(...closeTargets)
   }
 
-  return yield* closeResolvedTabsEffect(toCloseTabs, { includeTabOutUrls: true })
+  return yield* closeResolvedTabsEffect(toCloseTabs, {
+    includeTabOutUrls: true,
+    isSingleRemoveStillEligible: async (tab) => {
+      if (typeof tab.id !== 'number') return false
+      const guard = closeGuardByTabId.get(tab.id)
+      if (!guard || guard.stopped) return false
+      const survivor = typeof guard.survivorId === 'number'
+        ? await getTab(guard.survivorId)
+        : null
+      if ((keepOne || typeof guard.survivorId === 'number') && (
+        !survivor || canonicalDedupeKey(unwrapSuspenderUrl(liveTabUrlForIdentity(survivor))) !== guard.key
+      )) {
+        guard.stopped = true
+        return false
+      }
+      // The survivor read awaited Chrome. Read the target again before applying
+      // its current protections and closing it; never select a replacement keep.
+      const liveTab = await getTab(tab.id)
+      const validatedTab = liveTab && liveTabByValidatedId([liveTab], {
+        tabId: tab.id,
+        url: liveTabUrlForIdentity(tab),
+      })
+      if (!validatedTab) return false
+      const isTabOut = isTabOutPageUrl(unwrapSuspenderUrl(liveTabUrlForIdentity(validatedTab)))
+      if (validatedTab.pinned && (preservePinned || (preservePinnedTabOut && isTabOut))) return false
+      if (preservePinnedTabOut && isTabOut && validatedTab.active && validatedTab.windowId === currentWindowId) return false
+      return !isGroupedTab(validatedTab) || (!keepOne && !survivor) || (
+        !!survivor && isGroupedTab(survivor) && survivor.groupId === validatedTab.groupId
+      )
+    },
+  })
 })
 
 export function closeDuplicateTabsResult(

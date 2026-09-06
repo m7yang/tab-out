@@ -234,27 +234,60 @@ test('reloadTab and duplicateTab normalize Chrome tab commands', async (t) => {
   assert.equal(await duplicateTab(4), null)
 })
 
-test('removeTabs falls back to per-id removal when the batch rejects, and reports the exact ids', async (t) => {
+test('removeTabs preserves every acknowledged close when Chrome rejects a missing middle id', async (t) => {
   t.after(() => setChromeTabsApi(null))
 
+  const liveIds = new Set([1, 3])
+  const calls: Array<number | number[]> = []
   const removed: number[] = []
-  const api = {
+  const api: ChromeTabsApi = {
     tabs: {
       query: async () => [],
       remove: async (tabIds: number | number[]) => {
-        if (Array.isArray(tabIds)) throw new Error('batch contains a missing tab')
-        if (tabIds === 2) throw new Error('already gone')
-        removed.push(tabIds)
+        calls.push(tabIds)
+        for (const tabId of Array.isArray(tabIds) ? tabIds : [tabIds]) {
+          if (!liveIds.delete(tabId)) throw new Error('already gone')
+          removed.push(tabId)
+        }
       },
     },
-  } as unknown as ChromeTabsApi
+  }
   setChromeTabsApi(api)
 
   assert.deepEqual(await removeTabs([1, 2, 3]), [1, 3])
+  assert.deepEqual(calls, [1, 2, 3])
   assert.deepEqual(removed, [1, 3])
+  assert.deepEqual([...liveIds], [])
 })
 
-test('removeTabs mutates fake state in place and returns the batch ids', async (t) => {
+test('removeTabs validates every write and retains earlier acknowledgements when validation rejects', async (t) => {
+  t.after(() => setChromeTabsApi(null))
+  const removed: number[] = []
+  const checked: number[] = []
+  setChromeTabsApi({
+    tabs: {
+      query: async () => [],
+      remove: async (tabId) => {
+        assert.equal(typeof tabId, 'number')
+        if (typeof tabId === 'number') removed.push(tabId)
+      },
+    },
+  })
+
+  const result = await removeTabs([1, 2, 3, 4, 4], {
+    beforeSingleRemove: async (tabId) => {
+      checked.push(tabId)
+      if (tabId === 3) throw new Error('Validation unavailable')
+      return tabId !== 2
+    },
+  })
+
+  assert.deepEqual(checked, [1, 2, 3, 4])
+  assert.deepEqual(removed, [1, 4])
+  assert.deepEqual(result, removed)
+})
+
+test('removeTabs mutates fake state in place and returns the acknowledged ids', async (t) => {
   t.after(() => setChromeTabsApi(null))
 
   const tabs = [fakeTab(1, 'https://a.test/'), fakeTab(2, 'https://b.test/'), fakeTab(3, 'https://c.test/')]
