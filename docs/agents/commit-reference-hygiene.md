@@ -5,6 +5,14 @@ shorthand can create timeline backlinks, while mention-shaped source tokens can
 link to or notify GitHub accounts. Commit messages are immutable after
 publication without rewriting their commit and every descendant.
 
+## Commit Preparation
+
+When a commit is requested, stage only one independently verified logical change; keep unrelated fixes separate. Use a Conventional Commit subject with a domain-specific scope such as `page-chip`, `domain-card`, `activation-history`, `working-set`, `suspend`, or `build` rather than a broad bucket like `ui`.
+
+For Codex-authored or Codex-assisted commits, make `Co-authored-by: Codex <noreply@openai.com>` the final non-empty line with no extra blank line afterward. An extra blank line can prevent GitHub from rendering the co-author even when `git interpret-trailers` accepts it.
+
+For an explicitly requested metadata-only commit-message rewrite, preserve author and committer timestamps. Before rewriting published history, create a backup branch. Push rewritten published history only when explicitly requested and only with `git push --force-with-lease`.
+
 ## Message policy
 
 Keep GitHub reference and mention syntax out of commit messages, including

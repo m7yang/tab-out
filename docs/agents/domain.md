@@ -1,11 +1,11 @@
 # Domain Docs
 
-How the engineering skills should consume this repo's domain documentation when exploring the codebase.
+Use this guide when changing domain terminology, product behavior, or architecture.
 
-## Before exploring, read these
+## Read the relevant domain context
 
-- `CONTEXT.md` at the repo root for project vocabulary.
-- `docs/adr/` for architectural decisions that touch the area you're about to work in.
+- Read the relevant sections of root `CONTEXT.md` when naming domain concepts or changing their behavior.
+- Read ADRs in `docs/adr/` when the task touches the decisions they document.
 
 If either does not exist, proceed silently. Do not flag its absence or suggest creating it upfront.
 
