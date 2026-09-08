@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { FocusEvent, KeyboardEvent, MouseEvent, PointerEvent, RefObject } from 'react'
 import { X } from 'lucide-react'
 import { isClosedSavedDashboardTab, isReadOnlyDashboardSourceType } from '../extension/dashboard-source.js'
@@ -38,16 +38,14 @@ import { createBionicTitleTextRenderer, isUrlLikeTitle } from './bionic-title-te
 import { highlightTermsForFilter, highlightedTextNodes } from './filter-highlight-text'
 import { titleSuppressionChipHighlightClass, titleSuppressionMarkerClass, titleSuppressionToneForText } from './title-suppression'
 import type { TitleSuppressionTone } from './title-suppression'
-import { clampedTitleLineNodes, createTitleExpansionLane, expansionLineNodesFromHtml, syncClampedTitleFadeEnd, useTitleExpansionController } from './title-expansion'
+import { createTitleExpansionLane, useTitleExpansionController } from './title-expansion'
 import { chipTrim, CHIP_TRIM_TOKENS } from './chip-trim'
 import { FAVICON_DIM_CLASS_NAME, VARIANT_LABEL_DIM_CLASS_NAME } from './liveness-dim'
 import type { DashboardChipData } from './types'
 import type { DashboardChipEnv, DashboardSegment, SameTitlePageChipPlan, SameTitlePageChipRowView } from '../extension/types'
 import { foldedTabCloseTargets, historyDeleteFullyRemoved } from './chip-close-targets.js'
 import { chipCanShowSuspend, chipSuspendableTargetCount } from './chip-suspend-targets.js'
-import { registerPageChipTextLayoutValidation, type PageChipTextLayoutMeasurementJob } from './page-chip-layout-validation.js'
-import { applyChipTextLayout, chipExpansionGeometryEqual, chipExpansionLineMarkup, chipSlotSizeEqual, chipTextHasExpandableContent, chipTextLayoutEqual, chipTextMeasuredSizes, chipTextMetricsEqual, chipTextTruncationCallbacks, clampForKey, decidePackedRevalidation, getChipTextMasonryCardWidth, getChipTextMetrics, getChipTextResizeObserver, getChipTextWidth, getPageChipExpansionGeometry, measureChipTextLayout, packedWidthWithinTolerance, readChipTextLayout, roundedElementSize, waitsForInitialMasonryWidth, DEFAULT_CHIP_EXPANSION_GEOMETRY, DEFAULT_CHIP_SLOT_SIZE, DEFAULT_CHIP_TEXT_LAYOUT_STATE, PAGE_CHIP_TOOLTIP_STRUCTURAL_MARKER_CLASS_NAME, PAGE_CHIP_TOOLTIP_SUPPRESSION_MARKER_CLASS_NAME, type ChipTextMeasurement } from './page-chip-text-layout'
-import { subscribeFontMetricsInvalidation } from './font-metrics-invalidation.js'
+import { chipTextHasExpandableContent, useChipTextLayout, PAGE_CHIP_TOOLTIP_STRUCTURAL_MARKER_CLASS_NAME, PAGE_CHIP_TOOLTIP_SUPPRESSION_MARKER_CLASS_NAME } from './page-chip-text-layout'
 
 const PAGE_CHIP_TARGET_INTERACTION_BG = 'color-mix(in oklab, var(--color-neutral-600) 14%, transparent)'
 const DESTRUCTIVE_ICON_ACTION_CLASS_NAME = 'hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive'
@@ -281,8 +279,6 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   const chipExpansionId = useId()
   const chipSlotRef = useRef<HTMLDivElement | null>(null)
   const chipTextRef = useRef<HTMLSpanElement | null>(null)
-  const updateChipTextMeasurementsRef = useRef<(textEl: HTMLElement | null) => void>(() => {})
-  const chipTextMeasurementRef = useRef<ChipTextMeasurement | null>(null)
   const contextMenuOpenRef = useRef(false)
   const chipMenuHoldRef = useRef<(() => void) | null>(null)
   const envMenuHoldRef = useRef<(() => void) | null>(null)
@@ -292,21 +288,25 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   const chipExpandedRef = useRef(false)
   const [chipTooltipOpen, setChipTooltipOpen] = useState(false)
   const [chipExpanded, setChipExpandedState] = useState(false)
-  const [chipSlotSize, setChipSlotSize] = useState(DEFAULT_CHIP_SLOT_SIZE)
-  const [chipExpansionGeometry, setChipExpansionGeometry] = useState(DEFAULT_CHIP_EXPANSION_GEOMETRY)
-  const [chipTextLayout, setChipTextLayout] = useState(DEFAULT_CHIP_TEXT_LAYOUT_STATE)
-  const chipTextMetrics = chipTextLayout.metrics
-  const chipTextClamp = clampForKey(chipTextLayout, chipTextClampKey)
-  const { hasExpandableContent } = chipTextMetrics
+  const chipTextLayout = useChipTextLayout({
+    clampEligible: chipTextClampEligible,
+    contentKey: chipTextClampKey,
+    expanded: chipExpanded,
+    slotRef: chipSlotRef,
+    textRef: chipTextRef,
+  })
+  const { hasExpandableContent } = chipTextLayout
 
   useEffect(() => () => {
     contextMenuFocusRecoveryRef.current?.cancel()
   }, [])
 
+  const { setExpanded: setLayoutExpanded } = chipTextLayout
   const setChipExpanded = useCallback((nextExpanded: boolean) => {
     chipExpandedRef.current = nextExpanded
+    setLayoutExpanded(nextExpanded)
     setChipExpandedState(nextExpanded)
-  }, [])
+  }, [setLayoutExpanded])
 
   // Page Chips close synchronously on pointer exit; the controller's
   // ownership holds keep the expansion open past that. Each of the chip's
@@ -327,172 +327,6 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     holdRef.current?.()
     holdRef.current = open ? chipExpansionController.hold('context-menu') : null
   }
-
-  const updateChipTextMeasurements = useCallback((textEl: HTMLElement | null) => {
-    const nextMetrics = getChipTextMetrics(textEl)
-    setChipTextLayout((current) => (
-      chipTextMetricsEqual(current.metrics, nextMetrics)
-        ? current
-        : { ...current, metrics: nextMetrics }
-    ))
-  }, [])
-
-  const updateChipSlotMeasurements = useCallback((chipElArg?: HTMLElement | null) => {
-    const chipEl = chipElArg !== undefined ? chipElArg : chipSlotRef.current?.querySelector<HTMLElement>('.page-chip') || null
-    const nextSize = roundedElementSize(chipEl)
-    const textEl = chipTextRef.current?.querySelector<HTMLElement>('.chip-title-row') || chipTextRef.current
-    const nextGeometry = getPageChipExpansionGeometry(chipEl, textEl)
-    setChipSlotSize((current) => chipSlotSizeEqual(current, nextSize) ? current : nextSize)
-    setChipExpansionGeometry((current) => chipExpansionGeometryEqual(current, nextGeometry) ? current : nextGeometry)
-    // react-doctor-disable-next-line react-doctor/exhaustive-deps -- callback reads only stable refs; eslint-plugin-react-hooks (the enforced gate) exempts refs.
-  }, [])
-
-  useEffect(() => {
-    updateChipTextMeasurementsRef.current = updateChipTextMeasurements
-  }, [updateChipTextMeasurements])
-
-  // Truncated chips swap to captured-line rows so the tail fills to the box
-  // edge under the fade (see the matching history-title clamp effect for the
-  // invalidate-then-recapture contract). The capture keeps marker elements
-  // raw and the row renderer revives suppression pills as live React nodes,
-  // so their glyph and hover tone survive the swap. Folded and variant-group
-  // chips never clamp (their layouts are unclamped by design), and their
-  // render branches ignore any clamp a prior eligible shape left behind.
-  useLayoutEffect(() => {
-    const textEl = chipTextRef.current
-    if (!textEl || chipExpandedRef.current) return
-
-    if (chipTextClamp) {
-      textEl.classList.add('chip-text-truncated')
-      syncClampedTitleFadeEnd(textEl, chipTextClamp.width)
-      return
-    }
-
-    const previousMeasurement = chipTextMeasurementRef.current
-    if (
-      previousMeasurement?.element === textEl &&
-      previousMeasurement.key === chipTextClampKey &&
-      previousMeasurement.clampEligible === chipTextClampEligible &&
-      chipTextMetricsEqual(previousMeasurement.metrics, chipTextMetrics)
-    ) {
-      return
-    }
-
-    // The parent masonry layout assigns the card's final inline width later in
-    // this same layout-effect phase. Measuring its unconstrained grid width here
-    // would be discarded immediately by the post-pack validation below.
-    if (waitsForInitialMasonryWidth(textEl)) return
-
-    const nextLayout = measureChipTextLayout(textEl, chipTextClampEligible, chipTextClampKey)
-    chipTextMeasurementRef.current = {
-      clampEligible: chipTextClampEligible,
-      element: textEl,
-      key: chipTextClampKey,
-      masonryCardWidth: getChipTextMasonryCardWidth(textEl),
-      metrics: nextLayout.metrics,
-    }
-    setChipTextLayout((current) => chipTextLayoutEqual(current, nextLayout) ? current : nextLayout)
-    // Resize-observer metrics carry width changes back through chipTextMetrics,
-    // which invalidates the captured rows without re-reading unchanged titles.
-  }, [chipExpanded, chipTextClamp, chipTextClampEligible, chipTextClampKey, chipTextMetrics])
-
-  // The parent masonry pass owns the card's final width. Its pre-paint callback
-  // measures initially deferred titles once, while later packs remeasure only
-  // titles whose live width actually changed.
-  useLayoutEffect(() => {
-    const textEl = chipTextRef.current
-    if (!textEl) return
-
-    const createPackedLayoutMeasurement = (): PageChipTextLayoutMeasurementJob => ({
-      read() {
-        const masonryCardWidth = getChipTextMasonryCardWidth(textEl)
-        const reading = readChipTextLayout(textEl, chipTextClampEligible, chipTextClampKey)
-        return () => {
-          if (chipTextRef.current !== textEl || chipExpandedRef.current) return
-          const nextLayout = applyChipTextLayout(textEl, reading)
-          chipTextMeasurementRef.current = {
-            clampEligible: chipTextClampEligible,
-            element: textEl,
-            key: chipTextClampKey,
-            masonryCardWidth,
-            metrics: nextLayout.metrics,
-          }
-          setChipTextLayout((current) => chipTextLayoutEqual(current, nextLayout) ? current : nextLayout)
-        }
-      },
-    })
-    const validatePackedWidth = (): PageChipTextLayoutMeasurementJob | null => {
-      if (chipTextRef.current !== textEl || chipExpandedRef.current) return null
-      const previousMeasurement = chipTextMeasurementRef.current
-      const decision = decidePackedRevalidation({
-        clampEligible: chipTextClampEligible,
-        key: chipTextClampKey,
-        masonryCardWidth: getChipTextMasonryCardWidth(textEl),
-        previous: previousMeasurement?.element === textEl ? previousMeasurement : null,
-      })
-      if (decision === 'skip') return null
-      if (decision === 'remeasure') return createPackedLayoutMeasurement()
-      const width = getChipTextWidth(textEl)
-      if (previousMeasurement && packedWidthWithinTolerance(previousMeasurement.metrics.width, width)) {
-        return null
-      }
-      return createPackedLayoutMeasurement()
-    }
-    return registerPageChipTextLayoutValidation(textEl, validatePackedWidth)
-  }, [chipTextClampEligible, chipTextClampKey])
-
-  // Folded and title-variant text can still remount when shouldExpandChip flips,
-  // so a mount-once registration would keep observing the dead element and
-  // resize-driven metric updates would stop. Re-register against the current
-  // element on every render instead.
-  const observedChipTextElRef = useRef<HTMLElement | null>(null)
-  // react-doctor-disable-next-line react-doctor/effect-needs-cleanup -- the observer stays attached across renders by design; the unmount-only effect below unobserves the current element.
-  useEffect(() => {
-    const textEl = chipTextRef.current
-    const previous = observedChipTextElRef.current
-    if (previous === textEl) return
-
-    const observer = getChipTextResizeObserver()
-    if (previous) {
-      observer.unobserve(previous)
-      chipTextTruncationCallbacks.delete(previous)
-    }
-    observedChipTextElRef.current = textEl
-    if (!textEl) return
-
-    chipTextTruncationCallbacks.set(textEl, ({ hasExpandableContent, isTruncated, titleVariantLabelTruncationKey, width }) => {
-      setChipTextLayout((current) => {
-        const nextMetrics = { hasExpandableContent, isTruncated, titleVariantLabelTruncationKey, width }
-        return chipTextMetricsEqual(current.metrics, nextMetrics)
-          ? current
-          : { ...current, metrics: nextMetrics }
-      })
-    })
-    observer.observe(textEl, chipTextMeasuredSizes.get(textEl))
-  })
-
-  // react-doctor-disable-next-line react-doctor/exhaustive-deps -- the cleanup reads observedChipTextElRef at unmount time deliberately: it must unobserve whichever element is registered THEN, not the mount-time one.
-  useEffect(() => {
-    let disposed = false
-    const onFontsDone = () => {
-      if (disposed) return
-      chipTextMeasurementRef.current = null
-      setChipTextLayout((current) => current.clamp ? { ...current, clamp: null } : current)
-      updateChipTextMeasurementsRef.current(chipTextRef.current)
-    }
-    const unsubscribeFontMetrics = subscribeFontMetricsInvalidation(onFontsDone)
-
-    return () => {
-      disposed = true
-      unsubscribeFontMetrics()
-      const observed = observedChipTextElRef.current
-      if (observed) {
-        getChipTextResizeObserver().unobserve(observed)
-        chipTextTruncationCallbacks.delete(observed)
-        observedChipTextElRef.current = null
-      }
-    }
-  }, [])
 
   function isKeyboardActivation(e: KeyboardEvent<HTMLElement>) {
     return e.key === 'Enter' || e.key === ' '
@@ -751,10 +585,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     // expanded feeds the hydrated expanded markers (whose suppressed text is now
     // a real text node) back into getExpandedPageChipLineHtml, which re-captures
     // the marker on two adjacent line ranges and duplicates it.
-    if (!chipExpandedRef.current) {
-      updateChipTextMeasurements(textEl)
-      updateChipSlotMeasurements()
-    }
+    if (!chipExpandedRef.current) chipTextLayout.measureExpansion()
     chipExpansionController.open()
   }
 
@@ -797,8 +628,8 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     }
   }, [chipExpanded, chipExpansionController])
 
-  function onChipTextPointerEnter(e: PointerEvent<HTMLSpanElement>) {
-    updateChipTextMeasurements(e.currentTarget)
+  function onChipTextPointerEnter(_e: PointerEvent<HTMLSpanElement>) {
+    chipTextLayout.refreshMetrics()
   }
 
   function onChipTooltipOpenChange(open: boolean) {
@@ -1226,7 +1057,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     titleVariantGroup: isTitleVariantGroup,
     iconOnly: !!chip.iconOnly,
     isApp: !!chip.isApp,
-    expanded: chipExpanded ? { grewTaller: chipExpansionGeometry.grewTaller, y: chipExpansionGeometry.y } : null,
+    expanded: chipExpanded ? { grewTaller: chipTextLayout.expansion.grewTaller, y: chipTextLayout.expansion.y } : null,
   })
   const dupeCount = chip.sourceType === 'retained-page' ? 1 : (chip.dupeCount || 1)
   const duplicateLabel = dupeCount > 1 ? `${dupeCount} open copies` : ''
@@ -1291,12 +1122,12 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   const hasTitleSuppressionMarkers = suppressedTitleParts.length > 0 || chip.displaySegments.some(isTitleSuppressionSegment)
   const hasStructuralPlaceholders = chip.displaySegments.some((segment) => isStructuralPlaceholderSegment(segment) && !!(segment.label || chip.pathGroupLabel))
   const shouldExpandChip = !chip.iconOnly && (hasExpandableContent || hasTitleSuppressionMarkers || hasStructuralPlaceholders)
-  const chipSlotStyle: CSSVariableProperties | undefined = chipExpanded && chipSlotSize.width > 0 && chipSlotSize.height > 0 ? {
-    height: `${chipSlotSize.height}px`,
-    width: `${chipSlotSize.width}px`,
+  const chipSlotStyle: CSSVariableProperties | undefined = chipExpanded && chipTextLayout.slotSize.width > 0 && chipTextLayout.slotSize.height > 0 ? {
+    height: `${chipTextLayout.slotSize.height}px`,
+    width: `${chipTextLayout.slotSize.width}px`,
   } : undefined
-  const chipExpandedMaxWidth = chipExpansionGeometry.maxWidth > 0 ? `${chipExpansionGeometry.maxWidth}px` : 'calc(100vw - 16px)'
-  const chipExpandedWidth = chipExpansionGeometry.width > 0 ? `${chipExpansionGeometry.width}px` : chipExpandedMaxWidth
+  const chipExpandedMaxWidth = chipTextLayout.expansion.maxWidth > 0 ? `${chipTextLayout.expansion.maxWidth}px` : 'calc(100vw - 16px)'
+  const chipExpandedWidth = chipTextLayout.expansion.width > 0 ? `${chipTextLayout.expansion.width}px` : chipExpandedMaxWidth
   const chipStyle: CSSVariableProperties = {
     ...style,
     ...(chipExpanded ? {
@@ -1600,7 +1431,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       !!row.copyTitle ||
       !!row.copyUrl
     )
-    const variantLabelTruncated = mode === 'chip' && chipTextMetrics.titleVariantLabelTruncationKey[index] === '1'
+    const variantLabelTruncated = mode === 'chip' && chipTextLayout.variantLabelTruncationKey[index] === '1'
     // Variant rows carry no favicon, so the label text carries the liveness
     // signal the favicon would: dim when this variant has no awake tab.
     const labelContent = (
@@ -1766,11 +1597,8 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   }
 
   function expandedTitleContentNode(keyPrefix: string) {
-    if (!chipExpanded || chipExpansionGeometry.lineHtml.length === 0) return null
-    return expansionLineNodesFromHtml(
-      chipExpansionLineMarkup(chipExpansionGeometry.lineHtml, chipExpansionGeometry.viewportConstrained),
-      keyPrefix,
-    )
+    if (!chipExpanded) return null
+    return chipTextLayout.expandedLines(keyPrefix)
   }
 
   function titleRowContentNode(mode: ChipTextRenderMode, keyPrefix: string) {
@@ -1819,12 +1647,9 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       )
     }
 
-    if (mode === 'chip' && !chipExpanded && chipTextClamp && chipTextClamp.key === chipTextClampKey && chipTextClamp.lineHtml.length > 1) {
-      return clampedTitleLineNodes(
-        chipTextClamp.lineHtml,
-        'chip-text',
-        hasTitleSuppressionMarkers ? rebuildClampedChipMarker : undefined,
-      )
+    if (mode === 'chip' && !chipExpanded) {
+      const clampedLines = chipTextLayout.clampedLines(hasTitleSuppressionMarkers ? rebuildClampedChipMarker : undefined)
+      if (clampedLines) return clampedLines
     }
 
     return (
@@ -1906,8 +1731,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   const chipTextClampAvailable =
     !isFolded &&
     !isTitleVariantGroup &&
-    chipTextClamp?.key === chipTextClampKey &&
-    chipTextClamp.lineHtml.length > 1
+    chipTextLayout.hasClampedLines
   const chipTextContentKey = chipTextClampAvailable ? 'captured' : 'natural'
   // Fallback emoji and tall symbols can paint slightly outside the tight line
   // box. Extend the clip edge without shifting the title or changing clamp
@@ -1992,7 +1816,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
         chipTooltipOpen && CHIP_TRIM_TOKENS.tooltipOpen,
         chipExpanded && 'page-chip-expanded absolute z-30 min-w-0 max-w-(--page-chip-expanded-max-width) overflow-visible! transition-none! w-(--page-chip-expanded-width) [&.page-chip-expanded]:shadow-[0_3px_10px_rgba(10,10,10,0.055)]',
         chipExpanded && 'left-0',
-        chipExpanded && (chipExpansionGeometry.y === 'up' ? 'bottom-0' : 'top-0'),
+        chipExpanded && (chipTextLayout.expansion.y === 'up' ? 'bottom-0' : 'top-0'),
         trim.chipClasses,
         isTitleVariantGroup && 'cursor-default',
         isFolded && `${CHIP_TRIM_TOKENS.folded} cursor-default after:hidden`,

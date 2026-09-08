@@ -1510,7 +1510,8 @@ test('PageChip expands same-title URL variant groups in place', () => {
   assert.match(pageChipSource, /chip-slot relative min-w-0/)
   const layoutExpansionWidthSource = readFileSync(new URL('../src/components/page-chip-text-layout/expansion-width.ts', import.meta.url), 'utf8')
   assert.match(layoutExpansionWidthSource, /getExpandedPageChipLineHtml\(textEl\)/)
-  assert.match(pageChipSource, /expansionLineNodesFromHtml/)
+  const layoutFacadeSource = readFileSync(new URL('../src/components/page-chip-text-layout/use-chip-text-layout.ts', import.meta.url), 'utf8')
+  assert.match(layoutFacadeSource, /expansionLineNodesFromHtml/)
   assert.match(pageChipSource, /isTitleVariantGroup \? titleVariantChipTextContent/)
   assert.doesNotMatch(pageChipSource, /function titleVariantChipTooltipContentNode/)
   assert.doesNotMatch(pageChipSource, /function titleVariantTooltipContentNode/)
@@ -2137,7 +2138,9 @@ test('TabHistoryPanel uses PageChip-style fade truncation and in-place title exp
     chipLayoutDomSource,
     /getClampedPageChipLineHtml\(textEl, \{\s*lineHeight: getChipTextLineHeight\(textEl\),\s*textRect,?\s*\}\)/,
   )
-  assert.match(pageChipClampSource, /clampedTitleLineNodes\([\s\S]*chipTextClamp\.lineHtml,[\s\S]*'chip-text',[\s\S]*hasTitleSuppressionMarkers \? rebuildClampedChipMarker : undefined/)
+  const chipLayoutFacadeSource = readFileSync(new URL('../src/components/page-chip-text-layout/use-chip-text-layout.ts', import.meta.url), 'utf8')
+  assert.match(chipLayoutFacadeSource, /clampedTitleLineNodes\(clamp\.lineHtml, 'chip-text', rebuildElement\)/)
+  assert.match(pageChipClampSource, /clampedLines\(hasTitleSuppressionMarkers \? rebuildClampedChipMarker : undefined\)/)
   assert.match(tabHistoryPanelSource, /HISTORY_ENTRY_EXPANDED_VIEWPORT_MARGIN_PX = 12/)
   assert.doesNotMatch(tabHistoryPanelSource, /HISTORY_ENTRY_EXPANDED_CLOSE_DELAY_MS/)
   assert.match(tabHistoryPanelSource, /closeDelayMs: 0/)
