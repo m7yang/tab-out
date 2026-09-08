@@ -8,10 +8,12 @@ export function Toast() {
     <BaseToast.Provider toastManager={toastManager}>
       <BaseToast.Portal>
         {/* Inside the 288px toolbar popup the toast trades the dashboard's
-           page insets for a compact 6px margin matching the menu's density;
-           the bottom gets +2px (the drop shadow's downward offset) so all
-           three gaps read optically equal. */}
-        <BaseToast.Viewport className="fixed bottom-4 left-4 right-auto top-auto z-1 w-62.5 min-[500px]:bottom-8 min-[500px]:left-8 min-[500px]:w-75 [html[data-tabout-popup]_&]:bottom-2 [html[data-tabout-popup]_&]:left-1.5 [html[data-tabout-popup]_&]:w-69">
+           page insets for a uniform 6px margin matching the menu's density.
+           Uniform beats a shadow-compensated bottom here: the 10%-opacity
+           shadow is at the perception threshold in light mode and invisible
+           against the dark popover, where a larger bottom would read as
+           plain asymmetry. */}
+        <BaseToast.Viewport className="fixed bottom-4 left-4 right-auto top-auto z-1 w-62.5 min-[500px]:bottom-8 min-[500px]:left-8 min-[500px]:w-75 [html[data-tabout-popup]_&]:bottom-1.5 [html[data-tabout-popup]_&]:left-1.5 [html[data-tabout-popup]_&]:w-69">
           <ToastList />
         </BaseToast.Viewport>
       </BaseToast.Portal>
