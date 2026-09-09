@@ -28,26 +28,18 @@ export function isUrlLikeTitle(text: string) {
 }
 
 function findJiraTicketReferenceRanges(text: string): TextRange[] {
-  const normalizedChars: string[] = []
-  const originalIndexes: number[] = []
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text.charAt(index)
-    if (char === '\u200B') continue
-    normalizedChars.push(char)
-    originalIndexes.push(index)
-  }
-
-  const ranges: TextRange[] = []
-  const normalizedText = normalizedChars.join('')
-  for (const match of normalizedText.matchAll(JIRA_TICKET_REFERENCE_PATTERN)) {
+  const units = text.split('')
+    .map((char, index) => ({ char, index }))
+    .filter(({ char }) => char !== '\u200B')
+  const normalizedText = units.map(({ char }) => char).join('')
+  return [...normalizedText.matchAll(JIRA_TICKET_REFERENCE_PATTERN)].map((match) => {
     const start = match.index ?? 0
     const end = start + match[0].length
-    ranges.push({
-      start: originalIndexes[start] ?? 0,
-      end: originalIndexes[end] ?? text.length,
-    })
-  }
-  return ranges
+    return {
+      start: units[start]?.index ?? 0,
+      end: units[end]?.index ?? text.length,
+    }
+  })
 }
 
 function overlapsTextRange(start: number, end: number, ranges: readonly TextRange[]) {
@@ -61,11 +53,9 @@ function bionicTitleFixationEnd(word: string): number {
   }
   if (NUMERIC_TITLE_WORD_PATTERN.test(word.replaceAll('\u200B', ''))) return 0
 
-  const visibleSegmentEnds: number[] = []
-  for (const { segment, index } of BIONIC_TITLE_GRAPHEME_SEGMENTER.segment(word)) {
-    if (segment === '\u200B') continue
-    visibleSegmentEnds.push(index + segment.length)
-  }
+  const visibleSegmentEnds = [...BIONIC_TITLE_GRAPHEME_SEGMENTER.segment(word)]
+    .filter(({ segment }) => segment !== '\u200B')
+    .map(({ segment, index }) => index + segment.length)
   const fixationLength = visibleSegmentEnds.length <= 3
     ? 1
     : Math.ceil(visibleSegmentEnds.length / 2)
@@ -76,18 +66,14 @@ function computeBionicTitleFixationRanges(text: string): readonly TextRange[] {
   if (!text || isUrlLikeTitle(text)) return []
 
   const protectedRanges = findJiraTicketReferenceRanges(text)
-  const fixationRanges: TextRange[] = []
-  for (const match of text.matchAll(BIONIC_TITLE_WORD_PATTERN)) {
+  return [...text.matchAll(BIONIC_TITLE_WORD_PATTERN)].flatMap((match) => {
     const word = match[0]
     const start = match.index ?? 0
-    const end = start + word.length
-    if (overlapsTextRange(start, end, protectedRanges)) continue
+    if (overlapsTextRange(start, start + word.length, protectedRanges)) return []
 
     const fixationEnd = bionicTitleFixationEnd(word)
-    if (fixationEnd <= 0) continue
-    fixationRanges.push({ start, end: start + fixationEnd })
-  }
-  return fixationRanges
+    return fixationEnd <= 0 ? [] : [{ start, end: start + fixationEnd }]
+  })
 }
 
 function findBionicTitleFixationRanges(text: string): readonly TextRange[] {
@@ -111,26 +97,30 @@ function bionicTitleTextNodes(
 ): ReactNode {
   if (!text) return text
 
-  const nodes: ReactNode[] = []
+  // Clamp each fixation range to this fragment; ranges arrive ascending and
+  // non-overlapping, so the previous kept range ends where the next gap starts.
   const fragmentEnd = textOffset + text.length
-  let cursor = 0
-  for (const range of fixationRanges) {
-    const rangeStart = Math.max(range.start, textOffset)
-    const rangeEnd = Math.min(range.end, fragmentEnd)
-    if (rangeStart >= rangeEnd) continue
+  const localRanges = fixationRanges
+    .map((range) => ({
+      start: Math.max(range.start, textOffset),
+      localStart: Math.max(range.start, textOffset) - textOffset,
+      localEnd: Math.min(range.end, fragmentEnd) - textOffset,
+    }))
+    .filter(({ localStart, localEnd }) => localStart < localEnd)
 
-    const localStart = rangeStart - textOffset
-    const localEnd = rangeEnd - textOffset
-    if (localStart > cursor) nodes.push(text.slice(cursor, localStart))
-    nodes.push(
-      <span key={`${keyPrefix}:${rangeStart}:fixation`} className="chip-title-fixation font-semibold">
+  const fixationNodes = localRanges.flatMap(({ start, localStart, localEnd }, rangeIndex) => {
+    const gapStart = localRanges[rangeIndex - 1]?.localEnd ?? 0
+    const gap = localStart > gapStart ? [text.slice(gapStart, localStart)] : []
+    return [
+      ...gap,
+      <span key={`${keyPrefix}:${start}:fixation`} className="chip-title-fixation font-semibold">
         {text.slice(localStart, localEnd)}
       </span>,
-    )
-    cursor = localEnd
-  }
+    ]
+  })
 
-  if (cursor < text.length) nodes.push(text.slice(cursor))
+  const tailStart = localRanges.at(-1)?.localEnd ?? 0
+  const nodes = tailStart < text.length ? [...fixationNodes, text.slice(tailStart)] : fixationNodes
   return nodes.length > 0 ? nodes : text
 }
 
