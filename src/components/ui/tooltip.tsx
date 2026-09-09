@@ -25,20 +25,25 @@ import { useRetimer } from 'foxact/use-retimer'
 
 import { cn } from '@/lib/utils'
 import { isContextMenuOpen } from './context-menu-registry'
+import {
+  blockTooltipReopenAfterWheelClose,
+  clearTooltipWheelForwarding,
+  isTooltipReopenBlockedAfterWheelClose,
+  markTooltipAnchorActive,
+  releaseActiveTooltipAnchor,
+  shouldUseAdjacentTooltipDelay,
+  startTooltipWheelForwarding,
+  tooltipScrollElementByWheel,
+} from './tooltip-coordination'
 
 const TOOLTIP_CLOSE_ANCHOR_CLEAR_DELAY_MS = 200
 const TOOLTIP_INITIAL_REST_DELAY_MS = 500
 const TOOLTIP_ADJACENT_REST_DELAY_MS = 180
-const TOOLTIP_ADJACENT_REST_WINDOW_MS = 700
 const TOOLTIP_HOVERABLE_CLOSE_DELAY_MS = 160
 const TOOLTIP_HOVER_WATCH_INTERVAL_MS = 80
 const TOOLTIP_GLOBAL_CLOSE_REOPEN_BLOCK_MS = 320
 const TOOLTIP_EDGE_BORDER_ALIGN_OFFSET_PX = 1
-const TOOLTIP_WHEEL_CLOSE_REOPEN_BLOCK_MS = 900
 const TOOLTIP_WHEEL_TARGET_RELEASE_DELAY_MS = 320
-const TOOLTIP_WHEEL_DELTA_LINE = 1
-const TOOLTIP_WHEEL_DELTA_PAGE = 2
-const TOOLTIP_WHEEL_LINE_HEIGHT_PX = 16
 const TOOLTIP_COLLISION_AVOIDANCE: NonNullable<
   TooltipPrimitive.Positioner.Props['collisionAvoidance']
 > = {
@@ -51,28 +56,8 @@ type TooltipProviderProps = {
   children?: ReactNode
 }
 
-let activeTooltipAnchorId: string | null = null
-let latestTooltipActivityAt = 0
-let wheelClosedTooltipBlockedUntil = 0
-let tooltipWheelForwardContainer: HTMLElement | null = null
-let tooltipWheelForwardUntil = 0
-let tooltipWheelForwardClearTimer: number | null = null
-let tooltipWheelForwardListenerInstalled = false
-let tooltipWheelForwardRefresh: (() => void) | null = null
-let tooltipWheelForwardOwnerId: string | null = null
-
 function now() {
   return performance.now()
-}
-
-function shouldUseAdjacentTooltipDelay(anchorId: string) {
-  const hasActiveOtherTooltip =
-    activeTooltipAnchorId !== null && activeTooltipAnchorId !== anchorId
-  const recentlyClosed =
-    activeTooltipAnchorId === null &&
-    latestTooltipActivityAt > 0 &&
-    now() - latestTooltipActivityAt <= TOOLTIP_ADJACENT_REST_WINDOW_MS
-  return hasActiveOtherTooltip || recentlyClosed
 }
 
 function tooltipOverflowAllowsScroll(value: string) {
@@ -153,113 +138,6 @@ function tooltipScrollableAncestorsUnderPoint(
   }
 }
 
-function tooltipWheelDeltaToPixels(
-  delta: number,
-  deltaMode: number,
-  pageSize: number,
-) {
-  if (deltaMode === TOOLTIP_WHEEL_DELTA_LINE) {
-    return delta * TOOLTIP_WHEEL_LINE_HEIGHT_PX
-  }
-  if (deltaMode === TOOLTIP_WHEEL_DELTA_PAGE) {
-    return delta * pageSize
-  }
-  return delta
-}
-
-type TooltipWheelLike = Pick<WheelEvent, 'deltaMode' | 'deltaX' | 'deltaY'>
-
-function tooltipScrollElementByWheel(
-  element: HTMLElement,
-  event: TooltipWheelLike,
-) {
-  const deltaX = tooltipWheelDeltaToPixels(
-    event.deltaX,
-    event.deltaMode,
-    element.clientWidth,
-  )
-  const deltaY = tooltipWheelDeltaToPixels(
-    event.deltaY,
-    event.deltaMode,
-    element.clientHeight,
-  )
-  const previousLeft = element.scrollLeft
-  const previousTop = element.scrollTop
-
-  if (deltaX !== 0) {
-    element.scrollLeft += deltaX
-  }
-  if (deltaY !== 0) {
-    element.scrollTop += deltaY
-  }
-
-  return element.scrollLeft !== previousLeft || element.scrollTop !== previousTop
-}
-
-function clearTooltipWheelForwarding(ownerId?: string) {
-  if (ownerId && tooltipWheelForwardOwnerId !== ownerId) return
-  tooltipWheelForwardContainer = null
-  tooltipWheelForwardUntil = 0
-  tooltipWheelForwardRefresh = null
-  tooltipWheelForwardOwnerId = null
-  if (tooltipWheelForwardClearTimer !== null) {
-    window.clearTimeout(tooltipWheelForwardClearTimer)
-    tooltipWheelForwardClearTimer = null
-  }
-  if (tooltipWheelForwardListenerInstalled) {
-    window.removeEventListener('wheel', handleTooltipWheelForward, true)
-    tooltipWheelForwardListenerInstalled = false
-  }
-}
-
-function handleTooltipWheelForward(event: WheelEvent) {
-  const scrollContainer = tooltipWheelForwardContainer
-  if (
-    !scrollContainer ||
-    now() > tooltipWheelForwardUntil ||
-    !document.contains(scrollContainer)
-  ) {
-    clearTooltipWheelForwarding()
-    return
-  }
-
-  if (!tooltipScrollElementByWheel(scrollContainer, event)) {
-    clearTooltipWheelForwarding()
-    return
-  }
-
-  tooltipWheelForwardUntil = now() + TOOLTIP_WHEEL_CLOSE_REOPEN_BLOCK_MS
-  tooltipWheelForwardRefresh?.()
-  event.preventDefault()
-  event.stopPropagation()
-}
-
-function startTooltipWheelForwarding(
-  scrollContainer: HTMLElement,
-  ownerId: string,
-  refreshWheelTarget: () => void,
-) {
-  tooltipWheelForwardContainer = scrollContainer
-  tooltipWheelForwardOwnerId = ownerId
-  tooltipWheelForwardRefresh = refreshWheelTarget
-  tooltipWheelForwardUntil = now() + TOOLTIP_WHEEL_CLOSE_REOPEN_BLOCK_MS
-  if (!tooltipWheelForwardListenerInstalled) {
-    // react-doctor-disable-next-line react-doctor/client-passive-event-listeners -- wheel forwarding consumes the event after manual scroll.
-    window.addEventListener('wheel', handleTooltipWheelForward, {
-      capture: true,
-      passive: false,
-    })
-    tooltipWheelForwardListenerInstalled = true
-  }
-  if (tooltipWheelForwardClearTimer !== null) {
-    window.clearTimeout(tooltipWheelForwardClearTimer)
-  }
-  tooltipWheelForwardClearTimer = window.setTimeout(
-    clearTooltipWheelForwarding,
-    TOOLTIP_WHEEL_CLOSE_REOPEN_BLOCK_MS,
-  )
-}
-
 function setTooltipWheelPassthrough(
   element: HTMLElement | null,
   enabled: boolean,
@@ -270,12 +148,6 @@ function setTooltipWheelPassthrough(
     if (enabled) target.style.setProperty('pointer-events', 'none')
     else target.style.removeProperty('pointer-events')
   }
-}
-
-function releaseActiveTooltipAnchor(anchorId: string) {
-  if (activeTooltipAnchorId !== anchorId) return
-  activeTooltipAnchorId = null
-  latestTooltipActivityAt = now()
 }
 
 function TooltipProvider({ children }: TooltipProviderProps) {
@@ -508,15 +380,14 @@ function useTooltipAnchorController({
     retimeHoverOpen()
     retimeWheelClose()
     clearHoverCloseTimer()
-    if (point !== null && now() < wheelClosedTooltipBlockedUntil) return
+    if (point !== null && isTooltipReopenBlockedAfterWheelClose()) return
     if (point !== null && now() < hoverOpenBlockedUntilRef.current) return
     if (!pointerInsideRef.current && point !== null) return
 
     clearTooltipWheelForwarding(anchorId)
     setTooltipWheelClosingState(false)
     setTooltipWheelPassthrough(popupElementRef.current, false)
-    activeTooltipAnchorId = anchorId
-    latestTooltipActivityAt = now()
+    markTooltipAnchorActive(anchorId)
     setFrozenPointerPoint(point)
     setTooltipOpen(true)
     onOpenChange?.(true)
@@ -564,8 +435,7 @@ function useTooltipAnchorController({
       setTooltipWheelPassthrough(popupElementRef.current, true)
       pointerInsideRef.current = false
       popupPointerInsideRef.current = false
-      wheelClosedTooltipBlockedUntil =
-        now() + TOOLTIP_WHEEL_CLOSE_REOPEN_BLOCK_MS
+      blockTooltipReopenAfterWheelClose()
       hoverOpenBlockedUntilRef.current =
         now() + TOOLTIP_GLOBAL_CLOSE_REOPEN_BLOCK_MS
       retimeHoverOpen()
