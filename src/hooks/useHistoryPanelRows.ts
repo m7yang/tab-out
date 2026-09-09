@@ -18,6 +18,13 @@ export interface UseHistoryPanelRowsArgs {
   dismissedClosedGhosts?: ClosedGhostDismissals | null
 }
 
+type HistoryPanelRowCandidate = {
+  row: HistoryPanelRow
+  /** Falsy identities skip dedupe but still consume a row slot. */
+  identity: string
+  allowDuplicate?: boolean
+}
+
 const DEFAULT_HISTORY_PANEL_ROW_LIMIT = 48
 
 function historyPanelRowLimit(snapshot: TabHistorySnapshot | null): number {
@@ -39,85 +46,77 @@ export function buildHistoryPanelRows({ snapshot, workingSet, closedTabs, filter
   // Collect each stack entry with its cursor distance and a "base" timestamp:
   // the real activity-log value when present, else a synthesized fallback
   // derived from cursor distance.
-  const rawStackCandidates: Array<{ entry: TabHistoryEntry, cursorDistance: number, base: number }> = []
-  for (const entry of stackEntries) {
-    if (filterActive && !tabMatchesFilter({ title: entry.title, url: entry.url, isTabOut: false }, filter)) continue
-    const cursorDistance = Math.abs(entry.index - stackCursorIndex)
-    const synthesizedTouchedAt = stackBaseTimestamp > 0
-      ? stackBaseTimestamp - cursorDistance
-      : -cursorDistance
-    rawStackCandidates.push({
-      entry,
-      cursorDistance,
-      base: entry.lastActivatedAt ?? entry.createdAt ?? synthesizedTouchedAt,
+  const rawStackCandidates = stackEntries
+    .filter((entry) => !filterActive || tabMatchesFilter({ title: entry.title, url: entry.url, isTabOut: false }, filter))
+    .map((entry) => {
+      const cursorDistance = Math.abs(entry.index - stackCursorIndex)
+      const synthesizedTouchedAt = stackBaseTimestamp > 0
+        ? stackBaseTimestamp - cursorDistance
+        : -cursorDistance
+      return {
+        entry,
+        cursorDistance,
+        base: entry.lastActivatedAt ?? entry.createdAt ?? synthesizedTouchedAt,
+      }
     })
-  }
-  rawStackCandidates.sort((a, b) => a.cursorDistance - b.cursorDistance)
+    .toSorted((a, b) => a.cursorDistance - b.cursorDistance)
 
   // These indexed entries form the current tab's linear navigation chain:
   // activated back/forward history first, followed by pending background tabs.
   // A back entry whose URL was recently touched in ANOTHER tab carries a fresh
   // activity-log timestamp that would otherwise float it above closer entries
-  // (the Image #11 bug). Walking outward from the cursor and clamping each
+  // (the Image 11 bug). Walking outward from the cursor and clamping each
   // effective timestamp strictly below the previous one pins the indexed rows
   // into navigation order, while leaving gaps where ghost rows still interleave
-  // by their own real timestamps.
-  const stackCandidates: Array<{ row: HistoryPanelRow, cursorDistance: number }> = []
+  // by their own real timestamps. Each clamp depends on the previous one, so
+  // this stays a sequential walk.
+  const stackCandidates: HistoryPanelRowCandidate[] = []
   let previousStackEffective = Number.POSITIVE_INFINITY
-  for (const { entry, cursorDistance, base } of rawStackCandidates) {
+  for (const { entry, base } of rawStackCandidates) {
     const lastTouchedAt = Math.min(base, previousStackEffective - 1)
     previousStackEffective = lastTouchedAt
-    stackCandidates.push({ row: { kind: 'stack', entry, lastTouchedAt }, cursorDistance })
+    stackCandidates.push({
+      row: { kind: 'stack', entry, lastTouchedAt },
+      identity: pageIdentityForWorkingSet(entry.url) || entry.url,
+      allowDuplicate: !!entry.pending,
+    })
   }
 
-  const openGhostCandidates: HistoryPanelRow[] = []
-  for (const item of workingSet?.items ?? []) {
-    if (filterActive && !tabMatchesFilter({ title: item.title, url: item.tabUrl, isTabOut: false }, filter)) continue
-    openGhostCandidates.push({ kind: 'open-ghost', item, lastTouchedAt: item.lastActivatedAt })
-  }
+  const openGhostCandidates: HistoryPanelRowCandidate[] = (workingSet?.items ?? [])
+    .filter((item) => !filterActive || tabMatchesFilter({ title: item.title, url: item.tabUrl, isTabOut: false }, filter))
+    .map((item) => ({
+      row: { kind: 'open-ghost', item, lastTouchedAt: item.lastActivatedAt },
+      identity: item.key || item.tabUrl,
+    }))
 
-  const closedGhostCandidates: HistoryPanelRow[] = []
-  for (const closed of closedTabs) {
-    if (filterActive && !tabMatchesFilter({ title: closed.title, url: closed.url, isTabOut: false }, filter)) continue
-    // `null` is an explicit unknown state used by the mounted panel while its
-    // durable dismissal read is unresolved or failed. Showing Chrome's
-    // recently-closed rows then could briefly revive pages the user forgot.
-    // An omitted value remains the pure builder's backwards-compatible
-    // "no dismissal filtering requested" behavior.
-    if (dismissedClosedGhosts === null) continue
-    if (isClosedGhostDismissed(dismissedClosedGhosts, closed)) continue
-    closedGhostCandidates.push({ kind: 'closed-ghost', closed, lastTouchedAt: closed.lastClosedAt })
-  }
+  // `null` is an explicit unknown state used by the mounted panel while its
+  // durable dismissal read is unresolved or failed. Showing Chrome's
+  // recently-closed rows then could briefly revive pages the user forgot.
+  // An omitted value remains the pure builder's backwards-compatible
+  // "no dismissal filtering requested" behavior.
+  const closedGhostCandidates: HistoryPanelRowCandidate[] = dismissedClosedGhosts === null
+    ? []
+    : closedTabs
+        .filter((closed) => !filterActive || tabMatchesFilter({ title: closed.title, url: closed.url, isTabOut: false }, filter))
+        .filter((closed) => !isClosedGhostDismissed(dismissedClosedGhosts, closed))
+        .map((closed) => ({
+          row: { kind: 'closed-ghost', closed, lastTouchedAt: closed.lastClosedAt },
+          identity: pageIdentityForWorkingSet(closed.url) || closed.url,
+        }))
 
+  // The row budget is shared in priority order — navigation chain first, then
+  // Working Set ghosts, then recently-closed ghosts — while display order
+  // comes from the timestamp sort afterwards.
   const seen = new Set<string>()
   const rows: HistoryPanelRow[] = []
-
-  function consume(candidate: HistoryPanelRow, identity: string | undefined, allowDuplicate = false) {
-    if (!allowDuplicate && identity && seen.has(identity)) return
-    if (rows.length >= rowLimit) return
+  for (const { row, identity, allowDuplicate } of [...stackCandidates, ...openGhostCandidates, ...closedGhostCandidates]) {
+    if (rows.length >= rowLimit) break
+    if (!allowDuplicate && identity && seen.has(identity)) continue
     if (identity) seen.add(identity)
-    rows.push(candidate)
+    rows.push(row)
   }
 
-  for (const { row } of stackCandidates) {
-    if (row.kind !== 'stack') continue
-    consume(
-      row,
-      pageIdentityForWorkingSet(row.entry.url) || row.entry.url,
-      !!row.entry.pending,
-    )
-  }
-  for (const row of openGhostCandidates) {
-    if (row.kind !== 'open-ghost') continue
-    consume(row, row.item.key || row.item.tabUrl)
-  }
-  for (const row of closedGhostCandidates) {
-    if (row.kind !== 'closed-ghost') continue
-    consume(row, pageIdentityForWorkingSet(row.closed.url) || row.closed.url)
-  }
-
-  rows.sort((a, b) => b.lastTouchedAt - a.lastTouchedAt)
-  return rows
+  return rows.toSorted((a, b) => b.lastTouchedAt - a.lastTouchedAt)
 }
 
 export function useHistoryPanelRows({ snapshot, workingSet, closedTabs, filter, dismissedClosedGhosts }: UseHistoryPanelRowsArgs): HistoryPanelRow[] {
