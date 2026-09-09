@@ -17,10 +17,11 @@ import { compileSameTitlePageChip } from './same-title-page-chip-plan.js'
 import { allOpenTargetsSuspended, dashboardItemNameForTabs, isClosedSavedDashboardTab } from './dashboard-source.js'
 import { pathgroupPinId, subdomainPinId, websitePathPinId } from './section-pins.js'
 import { pageChipFoldRepresentativeUrl, pageChipPinId, pageChipPinKeyForFoldUrls, pageChipPinKeyForUrl, pageChipPinScopeId, pinnedPageChipOrder } from './page-chip-pins.js'
-import { aggregateSuppressedTitleParts, computeTitlePresentations, isBoundaryWrappedTitleSuppression, summarizeTitleSuppression, titleSuppressionKey, titleSuppressionPartPosition } from './domain-card-view-model/title-suppression.js'
+import { aggregateSuppressedTitleParts, computeTitlePresentations, summarizeTitleSuppression, titleSuppressionKey, titleSuppressionPartPosition } from './domain-card-view-model/title-suppression.js'
+import { injectBreakPoints, inlineSingletonSuppressionsInSegments, insertTitleSuppressionSegmentsBeforeStructuralPlaceholder, stripPgLabel, titleTextFromSegments } from './domain-card-view-model/segments.js'
 import type { PinnedPageChipIndex } from './page-chip-pins.js'
 import type { CompiledFilterQuery } from './filter-query.js'
-import type { DashboardCardVM, DashboardChipData, DashboardChipPriorityMap, DashboardClusterVM, DashboardSectionVM, DashboardSegment, DashboardSource, DashboardTab, DashboardTitleSuppression, DashboardWebsitePathSectionVM, DomainGroup, PathGroupResult, RetainedPageActionTarget, WebsitePathSectionResult } from './types'
+import type { DashboardCardVM, DashboardChipData, DashboardChipPriorityMap, DashboardClusterVM, DashboardSectionVM, DashboardSource, DashboardTab, DashboardTitleSuppression, DashboardWebsitePathSectionVM, DomainGroup, PathGroupResult, RetainedPageActionTarget, WebsitePathSectionResult } from './types'
 import type { TitlePresentation, TitlePresentationSeedRow } from './domain-card-view-model/title-suppression.js'
 
 type ComputeCardOptions = {
@@ -117,8 +118,6 @@ type TabOutDisplayMeta = {
   pagePinDisabled: boolean
 }
 
-const TITLE_STRUCTURAL_PLACEHOLDER_SEPARATORS = [' — ', ' – ', ' - ', ' · ', ' | ', ': ', ' ']
-
 function dashboardChipOrderKey(sourceType: DashboardTab['sourceType'] | undefined, kind: 'url' | 'fold', value: string): string {
   const orderSource = sourceType === 'saved-page' || sourceType === 'retained-page'
     ? 'tab'
@@ -152,27 +151,6 @@ export function dashboardChipOrderAltKeyForChip(chip: Pick<DashboardChipData, 's
 function pickDashboardChipFavicon(tab: DashboardTab): string {
   if ((tab.sourceType || 'tab') === 'tab') return pickTabFavicon(tab)
   return pickFavicon(tab)
-}
-
-/**
- * injectBreakPoints(str) — insert U+200B (zero-width space) into
- * long unbreakable tokens so the browser can wrap them without us
- * setting `word-break: break-all`. ZWSP is a Unicode break
- * opportunity that renders as nothing — no hyphen, no visible glyph,
- * just an invisible break point.
- *
- * Threshold: tokens of 15+ letters/digits/underscore get a ZWSP
- * inserted every 5 chars. Below that threshold, words pass through
- * untouched so natural-length English wraps at word boundaries and
- * short words never break mid-character.
- */
-/**
- * @param {string} str
- * @returns {string}
- */
-function injectBreakPoints(str: string): string {
-  if (!str) return str
-  return str.replace(/[A-Za-z0-9_]{15,}/g, (token) => token.replace(/(.{5})(?=.)/g, '$1\u200B'))
 }
 
 function isActiveInOtherWindow(tab: DashboardTab, currentWindowId: number | null): boolean {
@@ -215,106 +193,12 @@ function activeFrameStateForDuplicateSet(
   }
 }
 
-/**
- * stripPgLabel(label, pgLabel) — build the chip title as a segment
- * array where EVERY occurrence of the pill label (as an exact
- * literal, nothing absorbed on either side) is replaced in place
- * by a placeholder object. Whatever characters follow the match
- * — a "@sha" commit hash, a "/tree/main" subpath, plain text —
- * are kept verbatim; only the label itself becomes the placeholder.
- * The char BEFORE the match must be a boundary (start of string or
- * a separator) so "label" inside "prelabel" isn't falsely matched.
- *
- *   prefix:   "owner/repo PR #4706"                   → [PH, " PR #4706"]
- *   suffix:   "Pull Request #4706 · owner/repo"       → ["Pull Request #4706 · ", PH]
- *   middle:   "PR #4706 · owner/repo · GitHub"        → ["PR #4706", " · ", PH, " · GitHub"]
- *   ref tail: "Size preview · owner/repo@296a5f1"     → ["Size preview", " · ", PH, "@296a5f1"]
- *   multi:    "owner/repo · log · owner/repo · PR"    → [PH, " · log", " · ", PH, " · PR"]
- *
- * When no boundary-preceded occurrence is found, or when stripping
- * would leave only separators + placeholders (e.g. the title is just
- * the label, or label-sep-label with nothing else), the original
- * label is returned as a single-segment array.
- */
-function stripPgLabel(label: string, pgLabel: string): DashboardSegment[] {
-  if (!pgLabel || !label || label === pgLabel) {
-    return [label]
-  }
-  const seps = [' — ', ' – ', ' - ', ' · ', ' | ', ': ', ' ']
-  const EL = RegExp.escape(pgLabel)
-  const SEP = `(?:${seps.map((separator) => RegExp.escape(separator)).join('|')})`
-  const re = new RegExp(`(^|${SEP})(${EL})`, 'g')
-
-  const hits: Array<{ index: number, length: number, prefixSep: string }> = []
-  for (const match of label.matchAll(re)) {
-    hits.push({ index: match.index, length: match[0].length, prefixSep: match[1] ?? '' })
-  }
-  if (hits.length === 0) return [label]
-
-  const segments: DashboardSegment[] = []
-  let cursor = 0
-  for (const hit of hits) {
-    const textBefore = label.slice(cursor, hit.index)
-    if (textBefore) segments.push(textBefore)
-    if (hit.prefixSep) segments.push(hit.prefixSep)
-    segments.push({ placeholder: true, label: pgLabel })
-    cursor = hit.index + hit.length
-  }
-  const textAfter = label.slice(cursor)
-  if (textAfter) segments.push(textAfter)
-
-  const hasText = segments.some((s) => typeof s === 'string' && s.trim())
-  if (!hasText) return [label]
-
-  return segments
-}
-
-function isStructuralPlaceholderSegment(segment: DashboardSegment): segment is { placeholder: true } {
-  return typeof segment !== 'string' && 'placeholder' in segment
-}
-
 function retainedPageRemovalLabelForCount(count: number): string {
   return count === 0
     ? ''
     : count === 1
       ? 'Remove from Tabs'
       : `Remove ${count} from Tabs`
-}
-
-function insertTitleSuppressionSegmentsBeforeStructuralPlaceholder(
-  segments: DashboardSegment[],
-  suppressedTitleParts: string[],
-): DashboardSegment[] {
-  if (suppressedTitleParts.length === 0) return segments
-
-  const placeholderIndex = segments.findLastIndex(isStructuralPlaceholderSegment)
-  if (placeholderIndex <= 0) return segments
-
-  const separator = segments[placeholderIndex - 1]
-  if (typeof separator !== 'string' || !TITLE_STRUCTURAL_PLACEHOLDER_SEPARATORS.includes(separator)) {
-    return segments
-  }
-
-  const inserted: DashboardSegment[] = []
-  const suppressionsIncludeBoundary = suppressedTitleParts.some(isBoundaryWrappedTitleSuppression)
-  for (const part of suppressedTitleParts) {
-    inserted.push({ titleSuppression: part }, suppressionsIncludeBoundary ? ' ' : separator)
-  }
-
-  if (suppressionsIncludeBoundary) {
-    return [
-      ...segments.slice(0, placeholderIndex - 1),
-      ' ',
-      ...inserted,
-      ...segments.slice(placeholderIndex),
-    ]
-  }
-
-  return [
-    ...segments.slice(0, placeholderIndex),
-    ...inserted,
-    ...segments.slice(placeholderIndex),
-  ]
 }
 
 /* ---- Domain card view-model ----
@@ -1424,58 +1308,6 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
       }
     }
     return countsByKey
-  }
-
-  function mergeAdjacentTextSegments(segments: DashboardSegment[]): DashboardSegment[] {
-    return segments.reduce<DashboardSegment[]>((merged, segment) => {
-      const previous = merged.at(-1)
-      if (typeof previous === 'string' && typeof segment === 'string') {
-        merged[merged.length - 1] = previous + segment
-        return merged
-      }
-      merged.push(segment)
-      return merged
-    }, [])
-  }
-
-  function inlineSuppressionTextAfterSegments(segments: DashboardSegment[], part: string): DashboardSegment[] {
-    const last = segments.at(-1)
-    const needsSpace = typeof last === 'string' && last.length > 0 && !/\s$/.test(last) && !/^\s/.test(part)
-    return mergeAdjacentTextSegments([...segments, `${needsSpace ? ' ' : ''}${injectBreakPoints(part)}`])
-  }
-
-  function inlineSingletonSuppressionsInSegments(
-    segments: DashboardSegment[],
-    partsToInline: string[],
-  ): DashboardSegment[] {
-    const partKeysToInline = new Set(partsToInline.map(titleSuppressionKey))
-    const inlinedKeys = new Set<string>()
-    const nextSegments = segments.map((segment) => {
-      if (typeof segment === 'string') return segment
-      if ('titleSuppression' in segment && partKeysToInline.has(titleSuppressionKey(segment.titleSuppression))) {
-        inlinedKeys.add(titleSuppressionKey(segment.titleSuppression))
-        return injectBreakPoints(segment.titleSuppression)
-      }
-      return segment
-    })
-
-    return mergeAdjacentTextSegments(partsToInline.reduce(
-      (currentSegments, part) => (
-        inlinedKeys.has(titleSuppressionKey(part))
-          ? currentSegments
-          : inlineSuppressionTextAfterSegments(currentSegments, part)
-      ),
-      nextSegments,
-    ))
-  }
-
-  function titleTextFromSegments(segments: DashboardSegment[]): string {
-    return segments.map((segment) => {
-      if (typeof segment === 'string') return segment
-      if ('titleSuppression' in segment) return segment.titleSuppression
-      if ('placeholder' in segment) return segment.label || ''
-      return ''
-    }).join('').replaceAll('\u200B', '')
   }
 
   function tooltipForChipTitle(chip: DashboardChipData, title: string): string {
