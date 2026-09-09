@@ -6,7 +6,7 @@
 import { hydrateRoot } from 'react-dom/client'
 
 import { TabActionsPopup } from './components/TabActionsPopup'
-import { installPageToastPresenter } from './components/installToastPresenter'
+import { installPageToastPresenter } from './components/toast'
 import { getAppRuntime } from './extension/app-runtime.js'
 
 installPageToastPresenter()

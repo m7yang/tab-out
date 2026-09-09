@@ -1,9 +1,60 @@
 import type { ComponentProps } from 'react'
+import { createRoot } from 'react-dom/client'
 import { Toast as BaseToast } from '@base-ui/react/toast'
 import { cn } from '@/lib/utils'
-import { toastManager } from './toast-runtime'
+import type { ToastAction, ToastOptions } from '../../extension/toast.js'
 
-export function Toast() {
+const baseToastManager = BaseToast.createToastManager()
+const { promise: toastManagerReady, resolve: resolveToastManagerReady } = Promise.withResolvers<void>()
+let markToastManagerReady: (() => void) | null = resolveToastManagerReady
+// The external manager does not retain events sent before its Provider subscribes.
+// Resolve the first lazy toast only after that subscription is installed.
+const toastManager: typeof baseToastManager = {
+  ...baseToastManager,
+  ' subscribe': (listener) => {
+    const unsubscribe = baseToastManager[' subscribe'](listener)
+    markToastManagerReady?.()
+    markToastManagerReady = null
+    return unsubscribe
+  },
+}
+
+let toastMounted = false
+
+function mountToast() {
+  if (toastMounted) return true
+  const el = document.getElementById('toastRoot')
+  if (!el) return false
+  toastMounted = true
+  createRoot(el).render(<Toast />)
+  return true
+}
+
+export async function showMountedToast(
+  title: string,
+  action: ToastAction | null,
+  options?: ToastOptions,
+): Promise<void> {
+  if (!mountToast()) return
+  await toastManagerReady
+  const toastId = toastManager.add({
+    title,
+    description: action?.description,
+    type: 'success',
+    ...(options?.timeout === undefined ? {} : { timeout: options.timeout }),
+    actionProps: action
+      ? {
+          children: action.label,
+          onClick: () => {
+            toastManager.close(toastId)
+            void action.onClick()
+          },
+        }
+      : undefined,
+  })
+}
+
+function Toast() {
   return (
     <BaseToast.Provider toastManager={toastManager}>
       <BaseToast.Portal>

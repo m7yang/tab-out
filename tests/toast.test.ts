@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { setImmediate } from 'node:timers/promises'
 
-import { installPageToastPresenter } from '../src/components/installToastPresenter.js'
+import { installPageToastPresenter } from '../src/components/toast/index.js'
 import { installToastPresenter, showToast } from '../src/extension/toast.js'
 
 test('showToast is a quiet no-op outside a document context', async () => {

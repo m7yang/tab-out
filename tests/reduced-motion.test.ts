@@ -3,7 +3,7 @@ import test from 'node:test'
 import { readFileSync } from 'node:fs'
 
 test('automatic toast and source-switch motion honor reduced-motion preferences', () => {
-  const toast = readFileSync(new URL('../src/components/Toast.tsx', import.meta.url), 'utf8')
+  const toast = readFileSync(new URL('../src/components/toast/mountToast.tsx', import.meta.url), 'utf8')
   const header = readFileSync(new URL('../src/components/HeaderBar.tsx', import.meta.url), 'utf8')
 
   assert.match(toast, /motion-reduce:data-starting-style:transform-none/)
@@ -12,7 +12,7 @@ test('automatic toast and source-switch motion honor reduced-motion preferences'
 })
 
 test('toast keeps its standard stacked rise entry effect', () => {
-  const toast = readFileSync(new URL('../src/components/Toast.tsx', import.meta.url), 'utf8')
+  const toast = readFileSync(new URL('../src/components/toast/mountToast.tsx', import.meta.url), 'utf8')
 
   assert.match(toast, /data-starting-style:transform-\[translateY\(150%\)\]/)
   assert.doesNotMatch(toast, /data-starting-style:opacity-0/)

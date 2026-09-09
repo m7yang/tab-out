@@ -1,5 +1,5 @@
-import { installToastPresenter } from '../extension/toast.js'
-import type { ToastPresenter } from '../lib/toast-contract.js'
+import { installToastPresenter } from '../../extension/toast.js'
+import type { ToastPresenter } from '../../extension/toast.js'
 
 type ToastRuntime = typeof import('./mountToast')
 
