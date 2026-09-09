@@ -13,12 +13,13 @@ import { tabMatchesCompiledFilter } from './filter-match.js'
 import { compileFilterQuery } from './filter-query.js'
 import { countClosableDuplicateExtras } from './tab-dedupe-policy.js'
 import { canonicalDedupeKey } from './url-canonical.js'
-import { compileSameTitlePageChip } from './same-title-page-chip-plan.js'
 import { allOpenTargetsSuspended, dashboardItemNameForTabs, isClosedSavedDashboardTab } from './dashboard-source.js'
 import { pathgroupPinId, subdomainPinId, websitePathPinId } from './section-pins.js'
 import { pageChipFoldRepresentativeUrl, pageChipPinId, pageChipPinKeyForFoldUrls, pageChipPinKeyForUrl, pageChipPinScopeId, pinnedPageChipOrder } from './page-chip-pins.js'
 import { aggregateSuppressedTitleParts, computeTitlePresentations, summarizeTitleSuppression, titleSuppressionKey, titleSuppressionPartPosition } from './domain-card-view-model/title-suppression.js'
 import { injectBreakPoints, inlineSingletonSuppressionsInSegments, insertTitleSuppressionSegmentsBeforeStructuralPlaceholder, stripPgLabel, titleTextFromSegments } from './domain-card-view-model/segments.js'
+import { SAME_TITLE_PAGE_CHIP_DRAFT, compileDashboardChipDrafts, sameTitlePageChipDraftTargets } from './domain-card-view-model/chip-drafts.js'
+import type { DashboardChipDraft } from './domain-card-view-model/chip-drafts.js'
 import type { PinnedPageChipIndex } from './page-chip-pins.js'
 import type { CompiledFilterQuery } from './filter-query.js'
 import type { DashboardCardVM, DashboardChipData, DashboardChipPriorityMap, DashboardClusterVM, DashboardSectionVM, DashboardSource, DashboardTab, DashboardTitleSuppression, DashboardWebsitePathSectionVM, DomainGroup, PathGroupResult, RetainedPageActionTarget, WebsitePathSectionResult } from './types'
@@ -62,52 +63,6 @@ type ChipBuildEntry = {
   tab: DashboardTab
   chip: DashboardChipData
   titleKey: string
-}
-const SAME_TITLE_PAGE_CHIP_DRAFT = Symbol('same-title-page-chip-draft')
-type DashboardChipDraft = DashboardChipData & {
-  [SAME_TITLE_PAGE_CHIP_DRAFT]: DashboardChipData[]
-}
-
-function isDashboardChipDraft(chip: DashboardChipData): chip is DashboardChipDraft {
-  return SAME_TITLE_PAGE_CHIP_DRAFT in chip
-}
-
-function sameTitlePageChipDraftTargets(chip: DashboardChipData): DashboardChipData[] | null {
-  return isDashboardChipDraft(chip) ? chip[SAME_TITLE_PAGE_CHIP_DRAFT] : null
-}
-
-function compileDashboardChipDraft(chip: DashboardChipData): DashboardChipData[] {
-  if (!isDashboardChipDraft(chip)) return [chip]
-  const { [SAME_TITLE_PAGE_CHIP_DRAFT]: targets, ...publicChip } = chip
-  const compiled = compileSameTitlePageChip(targets)
-  if (!compiled.ok) return targets
-  return [{
-    ...publicChip,
-    sameTitlePageChipPlan: compiled.plan,
-  }]
-}
-
-function compileDashboardChipDrafts(sections: readonly DashboardSectionVM[]): DashboardSectionVM[] {
-  return sections.map((section) => ({
-    ...section,
-    flatVisibleChips: section.flatVisibleChips.flatMap(compileDashboardChipDraft),
-    flatHiddenChips: section.flatHiddenChips.flatMap(compileDashboardChipDraft),
-    clusters: section.clusters.map((cluster) => ({
-      ...cluster,
-      visibleChips: cluster.visibleChips.flatMap(compileDashboardChipDraft),
-      hiddenChips: cluster.hiddenChips.flatMap(compileDashboardChipDraft),
-    })),
-    websitePathSections: (section.websitePathSections ?? []).map((websitePathSection) => ({
-      ...websitePathSection,
-      flatVisibleChips: websitePathSection.flatVisibleChips.flatMap(compileDashboardChipDraft),
-      flatHiddenChips: websitePathSection.flatHiddenChips.flatMap(compileDashboardChipDraft),
-      clusters: websitePathSection.clusters.map((cluster) => ({
-        ...cluster,
-        visibleChips: cluster.visibleChips.flatMap(compileDashboardChipDraft),
-        hiddenChips: cluster.hiddenChips.flatMap(compileDashboardChipDraft),
-      })),
-    })),
-  }))
 }
 type TabOutDisplayBucketKind = 'current' | 'chrome-pinned' | 'chrome-grouped' | 'ordinary'
 type TabOutDisplayMeta = {
