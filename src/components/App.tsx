@@ -36,7 +36,7 @@ import { UrlPreview } from './UrlPreview'
 import { AppErrorBoundary } from './AppErrorBoundary'
 import { DesktopWindowMergeHost } from './DesktopWindowMergeHost'
 import { DashboardActionsProvider, HoverStateProvider } from './DashboardInteractionContext'
-import { STARTUP_ORDER_DEBUG_CAPTURE, recordStartupOrderDebugVmSample, recordStartupTiming, startStartupOrderDebugDomSampling } from './startup-order-debug'
+import { useStartupOrderDebug } from './use-startup-order-debug'
 import { cn } from '@/lib/utils'
 import type {
   DashboardCardEntry,
@@ -506,8 +506,6 @@ export function App() {
   const setTabHistory = useCallback(function setTabHistory(nextTabHistory: TabHistorySnapshot | null) {
     dispatchAppDashboard({ type: 'tabHistory', tabHistory: nextTabHistory })
   }, [])
-  const firstDashboardLayoutRecordedRef = useRef(false)
-
   const layoutMoveRectsRef = useRef<CardPositionMap | null>(null)
   const pendingSourceSwitchRectsRef = useRef<{
     rects: CardPositionMap | null
@@ -725,36 +723,15 @@ export function App() {
     animateIntraCardMoves(prepared)
   }, [pinnedSections, pinnedPageChips])
 
-  useLayoutEffect(() => {
-    if (firstDashboardLayoutRecordedRef.current || !visibleDashboard) return
-    firstDashboardLayoutRecordedRef.current = true
-    recordStartupTiming(STARTUP_ORDER_DEBUG_CAPTURE, 'first-dashboard-layout', {
-      detail: {
-        startupFrame: startupReady,
-        domainGroups: visibleDashboard.domainGroups.length,
-        filterActive: filter.trim() !== '',
-        matchedCards: matchedCards.length,
-        realTabs: visibleDashboard.realTabs.length,
-        source,
-        workingSet: visibleWorkingSet?.items.length ?? 0,
-      },
-    })
-  }, [visibleDashboard, filter, matchedCards.length, source, startupReady, visibleWorkingSet])
-
-  useLayoutEffect(() => {
-    recordStartupOrderDebugVmSample(STARTUP_ORDER_DEBUG_CAPTURE, {
-      dashboard: visibleDashboard,
-      source,
-      filter,
-      isReady,
-      matchedCards,
-      workingSet: visibleWorkingSet,
-    })
-  }, [visibleDashboard, filter, isReady, matchedCards, source, visibleWorkingSet])
-
-  useLayoutEffect(() => {
-    return startStartupOrderDebugDomSampling(STARTUP_ORDER_DEBUG_CAPTURE)
-  }, [])
+  useStartupOrderDebug({
+    dashboard: visibleDashboard,
+    source,
+    filter,
+    isReady,
+    matchedCards,
+    workingSet: visibleWorkingSet,
+    startupReady,
+  })
 
   const onCloseFiltered = useCallback(async function onCloseFiltered() {
     const targets = dashboardVm.filteredCloseTargets
