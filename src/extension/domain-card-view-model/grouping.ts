@@ -16,7 +16,7 @@ import { isCurrentTabOutPage } from './tab-state.js'
 import type { DashboardTab } from '../types'
 
 type TabOutDisplayBucketKind = 'current' | 'chrome-pinned' | 'chrome-grouped' | 'ordinary'
-type TabOutDisplayMeta = {
+export type TabOutDisplayMeta = {
   tabs: DashboardTab[]
   renderKey: string
   isCurrentTabOut: boolean
