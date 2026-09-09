@@ -20,6 +20,7 @@ import { aggregateSuppressedTitleParts, computeTitlePresentations, summarizeTitl
 import { injectBreakPoints, inlineSingletonSuppressionsInSegments, insertTitleSuppressionSegmentsBeforeStructuralPlaceholder, stripPgLabel, titleTextFromSegments } from './domain-card-view-model/segments.js'
 import { SAME_TITLE_PAGE_CHIP_DRAFT, compileDashboardChipDrafts, sameTitlePageChipDraftTargets } from './domain-card-view-model/chip-drafts.js'
 import { createChipOrdering, createPagePinIndex, dashboardChipOrderAltKeyForTab, dashboardChipOrderKeyForTab, dashboardFoldChipOrderKey, sortPinnedFirst } from './domain-card-view-model/ordering.js'
+import { activeFrameStateForDuplicateSet, isActiveInOtherWindow, isCurrentTabOutPage, isOpenTabLoading } from './domain-card-view-model/tab-state.js'
 import type { DashboardChipDraft } from './domain-card-view-model/chip-drafts.js'
 import type { PinnedPageChipIndex } from './page-chip-pins.js'
 import type { CompiledFilterQuery } from './filter-query.js'
@@ -73,46 +74,6 @@ type TabOutDisplayMeta = {
 function pickDashboardChipFavicon(tab: DashboardTab): string {
   if ((tab.sourceType || 'tab') === 'tab') return pickTabFavicon(tab)
   return pickFavicon(tab)
-}
-
-function isActiveInOtherWindow(tab: DashboardTab, currentWindowId: number | null): boolean {
-  if (!tab.active) return false
-  if (tab.isApp) return false
-  if (typeof currentWindowId !== 'number') return true
-  return tab.windowId !== currentWindowId
-}
-
-function isOpenTabLoading(tab: DashboardTab): boolean {
-  return (tab.sourceType ?? 'tab') === 'tab' &&
-    !isClosedSavedDashboardTab(tab) &&
-    !tab.suspended &&
-    tab.status === 'loading'
-}
-
-function isCurrentTabOutPage(tab: DashboardTab, currentWindowId: number | null): boolean {
-  if (!tab.active || !tab.isTabOut || tab.isApp) return false
-  if (typeof currentWindowId !== 'number') return false
-  return tab.windowId === currentWindowId
-}
-
-function isActiveInCurrentWindow(tab: DashboardTab, currentWindowId: number | null): boolean {
-  if (!tab.active || tab.isApp) return false
-  if (typeof currentWindowId !== 'number') return false
-  return tab.windowId === currentWindowId
-}
-
-function activeFrameStateForDuplicateSet(
-  tabs: readonly DashboardTab[],
-  currentWindowId: number | null,
-): { activeInOtherWindow: boolean, activeChipFrame: boolean } {
-  const activeInOtherWindow = tabs.some((tab) => isActiveInOtherWindow(tab, currentWindowId))
-  const activeCurrentWindowDuplicate = tabs.length > 1 && tabs.some((tab) => isActiveInCurrentWindow(tab, currentWindowId))
-  const activeCurrentTabOutPage = tabs.some((tab) => isCurrentTabOutPage(tab, currentWindowId))
-
-  return {
-    activeInOtherWindow,
-    activeChipFrame: activeInOtherWindow || activeCurrentWindowDuplicate || activeCurrentTabOutPage,
-  }
 }
 
 function retainedPageRemovalLabelForCount(count: number): string {
