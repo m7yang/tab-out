@@ -344,3 +344,11 @@ export function findPageChipHoverPoint(params: { label: string }): Promise<{ x: 
     poll()
   })
 }
+
+// Open tooltips by layout state rather than painted size: hidden attribute,
+// client rects, and computed visibility.
+export function readOpenTooltipTexts(): string[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-slot="tooltip-content"]'))
+    .filter((tooltip) => !tooltip.hidden && tooltip.getClientRects().length > 0 && window.getComputedStyle(tooltip).visibility !== 'hidden')
+    .map((tooltip) => tooltip.textContent || '')
+}

@@ -60,12 +60,6 @@ export default tseslint.config(
   },
   stylisticConfig,
   {
-    files: ['tests/browser/dashboard-smoke.spec.ts'],
-    rules: {
-      '@stylistic/no-tabs': 'off',
-    },
-  },
-  {
     files: ['**/*.{cjs,js,mjs}'],
     ...js.configs.recommended,
     languageOptions: {

@@ -385,3 +385,28 @@ export function countExpandedPageChips(): number {
 export function readExpandedPageChipTexts(): string[] {
   return Array.from(document.querySelectorAll('.page-chip-expanded')).map((chip) => chip.textContent || '')
 }
+
+export function scrollAllToTop(): void {
+  document.querySelector('.history-entry-list')?.scrollTo(0, 0)
+  document.querySelector('.scroll-region')?.scrollTo(0, 0)
+  document.scrollingElement?.scrollTo(0, 0)
+}
+
+export function readDashboardScrollTop(): number {
+  return document.querySelector('.scroll-region')?.scrollTop ?? 0
+}
+
+export function readScrollTops() {
+  return {
+    dashboardScrollTop: document.querySelector('.scroll-region')?.scrollTop ?? 0,
+    historyScrollTop: document.querySelector('.history-entry-list')?.scrollTop ?? 0,
+  }
+}
+
+export function readWheelScrollState() {
+  return {
+    scrollTop: document.querySelector('.scroll-region')?.scrollTop ?? 0,
+    expandedCount: document.querySelectorAll('.page-chip-expanded').length,
+    tooltipCount: document.querySelectorAll('[data-slot="tooltip-content"]').length,
+  }
+}

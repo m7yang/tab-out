@@ -1958,10 +1958,7 @@ async function measureTooltipPopupWheelScroll(harness: DashboardHarness) {
   })
   await wait(80)
 
-  const beforeScrollTop = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `document.querySelector('.scroll-region')?.scrollTop ?? 0`,
-  }).then((result: any) => result.result.value)
+  const beforeScrollTop = await evaluateInPage(harness, dashboardPage.readDashboardScrollTop)
 
   const wheelSteps = []
   for (let index = 0; index < 4; index += 1) {
@@ -1973,31 +1970,11 @@ async function measureTooltipPopupWheelScroll(harness: DashboardHarness) {
       y: popupPoint.y,
     })
     await wait(60)
-    wheelSteps.push(await evaluateExpression(harness, {
-      returnByValue: true,
-      expression: `(() => {
-        const scrollRegion = document.querySelector('.scroll-region')
-        return {
-          scrollTop: scrollRegion?.scrollTop ?? 0,
-          expandedCount: document.querySelectorAll('.page-chip-expanded').length,
-          tooltipCount: document.querySelectorAll('[data-slot="tooltip-content"]').length
-        }
-      })()`,
-    }).then((result: any) => result.result.value))
+    wheelSteps.push(await evaluateInPage(harness, dashboardPage.readWheelScrollState))
   }
   await waitForNoPageChipExpansion(harness)
 
-  const after = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const scrollRegion = document.querySelector('.scroll-region')
-      return {
-        scrollTop: scrollRegion?.scrollTop ?? 0,
-        expandedCount: document.querySelectorAll('.page-chip-expanded').length,
-        tooltipCount: document.querySelectorAll('[data-slot="tooltip-content"]').length
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const after = await evaluateInPage(harness, dashboardPage.readWheelScrollState)
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -2006,13 +1983,12 @@ async function measureTooltipPopupWheelScroll(harness: DashboardHarness) {
   })
   await waitForNoTitleExpansion(harness)
 
-  const afterLeaveExpandedCount = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `document.querySelectorAll('.page-chip-expanded').length`,
-  }).then((result: any) => result.result.value)
+  const afterLeaveExpandedCount = await evaluateInPage(harness, dashboardPage.countExpandedPageChips)
 
   return { target, first, popupPoint, beforeScrollTop, wheelSteps, after, afterLeaveExpandedCount }
 }
+
+const HISTORY_SMOKE_ENTRY_LABEL = 'Low score history item with enough tooltip text'
 
 async function measureHistoryEntryExpansionSurfaceHitArea(harness: DashboardHarness) {
   await harness.session.send('Emulation.setDeviceMetricsOverride', {
@@ -2021,9 +1997,7 @@ async function measureHistoryEntryExpansionSurfaceHitArea(harness: DashboardHarn
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.history-entry-list')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, historyEntryPage.scrollHistoryListToTop)
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
@@ -2035,57 +2009,13 @@ async function measureHistoryEntryExpansionSurfaceHitArea(harness: DashboardHarn
     waitForNoTitleExpansion(harness),
   ])
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const row = Array.from(document.querySelectorAll('.history-entry-row'))
-          .find((candidate) => candidate.textContent?.includes('Low score history item with enough tooltip text'))
-        row?.scrollIntoView({ block: 'center', inline: 'nearest' })
-        const frame = row?.querySelector('.history-entry-favicon-frame')
-        const main = row?.querySelector('.history-entry-main')
-        const frameRect = frame?.getBoundingClientRect()
-        const mainRect = main?.getBoundingClientRect()
-        if (
-          row &&
-          frameRect &&
-          mainRect &&
-          frameRect.width > 4 &&
-          frameRect.height > 4 &&
-          mainRect.top < frameRect.top - 1 &&
-          mainRect.bottom > frameRect.bottom + 1
-        ) {
-          resolve({
-            x: Math.round(frameRect.left + frameRect.width / 2),
-            aboveY: Math.round(mainRect.top + Math.max(1, (frameRect.top - mainRect.top) / 2)),
-            belowY: Math.round(frameRect.bottom + Math.max(1, (mainRect.bottom - frameRect.bottom) / 2)),
-            frameTop: Math.round(frameRect.top),
-            frameBottom: Math.round(frameRect.bottom),
-            mainTop: Math.round(mainRect.top),
-            mainBottom: Math.round(mainRect.bottom)
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, historyEntryPage.findHistoryEntryFaviconFrameTarget, { label: HISTORY_SMOKE_ENTRY_LABEL })
 
   assert.ok(target, 'expected a history entry favicon frame with vertical padding for expansion hit-area smoke test')
   await wait(180)
 
   async function visibleTooltipTexts() {
-    return evaluateExpression(harness, {
-      returnByValue: true,
-      expression: `Array.from(document.querySelectorAll('[data-slot="tooltip-content"]'))
-        .filter((tooltip) => !tooltip.hidden && tooltip.getClientRects().length > 0 && window.getComputedStyle(tooltip).visibility !== 'hidden')
-        .map((tooltip) => tooltip.textContent || '')`,
-    }).then((result: any) => result.result.value)
+    return evaluateInPage(harness, tooltipPage.readOpenTooltipTexts)
   }
 
   await harness.session.send('Input.dispatchMouseEvent', {
@@ -2128,131 +2058,19 @@ async function measureHistoryEntryExpansionWheelScroll(harness: DashboardHarness
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.history-entry-list')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, historyEntryPage.scrollHistoryListToTop)
   await Promise.all([
     waitForDashboardSettled(harness),
     waitForScrollTop(harness, '.history-entry-list'),
   ])
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const title = Array.from(document.querySelectorAll('.history-entry-title-truncated'))
-          .find((candidate) =>
-            candidate.closest('.history-entry-row')?.textContent?.includes('Low score history item with enough tooltip text')
-          )
-        const row = title?.closest('.history-entry-row')
-        row?.scrollIntoView({ block: 'center', inline: 'nearest' })
-        const rect = title?.getBoundingClientRect()
-        const entry = title?.closest('.history-entry')
-        const slot = entry?.closest('.history-entry-slot') || entry
-        const slotRect = slot?.getBoundingClientRect()
-        const titleStyles = title ? window.getComputedStyle(title) : null
-        const lineHeight = Number.parseFloat(titleStyles?.lineHeight || '') || 0
-        const titleMaskImage = titleStyles?.maskImage || titleStyles?.webkitMaskImage || ''
-        const list = document.querySelector('.history-entry-list')
-        if (rect && slotRect && list && rect.width > 120 && rect.height > 8) {
-          const titleLineCount = Math.max(1, Math.round(rect.height / lineHeight))
-          const collectLineTexts = (root, limit) => {
-            const rootRect = root.getBoundingClientRect()
-            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-              acceptNode(node) {
-                return node.textContent ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
-              }
-            })
-            const range = document.createRange()
-            const lines = Array.from({ length: limit }, () => '')
-            while (true) {
-              const node = walker.nextNode()
-              if (!node) break
-              const text = node.textContent || ''
-              for (let offset = 0; offset < text.length; offset += 1) {
-                range.setStart(node, offset)
-                range.setEnd(node, offset + 1)
-                const rects = Array.from(range.getClientRects())
-                const paintedRects = rects.filter((candidate) => candidate.width > 0 || candidate.height > 0)
-                const charRect = paintedRects.at(-1)
-                if (!charRect) continue
-                const lineIndex = Math.max(0, Math.round((charRect.top - rootRect.top) / lineHeight))
-                if (lineIndex >= limit) return lines
-                lines[lineIndex] += text[offset]
-              }
-            }
-            return lines
-          }
-          resolve({
-            x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + rect.height / 2),
-            titleLineCount,
-            titleLineTexts: collectLineTexts(title, titleLineCount),
-            titleLeft: Math.round(rect.left),
-            titleLeftExact: Math.round(rect.left * 100) / 100,
-            titleTop: Math.round(rect.top),
-            titleTopExact: Math.round(rect.top * 100) / 100,
-            titleWidth: Math.round(rect.width),
-            titleWidthExact: Math.round(rect.width * 100) / 100,
-            titleHeight: Math.round(rect.height * 100) / 100,
-            titleLineHeight: lineHeight,
-            titleMaskImage,
-            titleWebkitLineClamp: titleStyles?.webkitLineClamp || null,
-            slotLeft: Math.round(slotRect.left),
-            slotRight: Math.round(slotRect.right),
-            slotTop: Math.round(slotRect.top),
-            slotBottom: Math.round(slotRect.bottom),
-            slotWidth: Math.round(slotRect.width),
-            slotHeight: Math.round(slotRect.height),
-            listScrollHeight: list.scrollHeight,
-            listClientHeight: list.clientHeight,
-            listMaxScrollTop: Math.max(0, list.scrollHeight - list.clientHeight)
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, historyEntryPage.findHistoryEntryWheelTarget, { label: HISTORY_SMOKE_ENTRY_LABEL })
 
   assert.ok(target, 'expected a history-panel entry to hover for expansion wheel smoke test')
   await wait(180)
 
-  const scrollbarGeometry = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const panel = document.querySelector('.tab-history-panel')
-      const list = document.querySelector('.history-entry-list')
-      const scrollbar = document.querySelector('.history-entry-scrollbar')
-      const thumb = document.querySelector('.history-entry-scrollbar-thumb')
-      const panelRect = panel?.getBoundingClientRect()
-      const listRect = list?.getBoundingClientRect()
-      const scrollbarRect = scrollbar?.getBoundingClientRect()
-      const thumbRect = thumb?.getBoundingClientRect()
-      const listStyles = list ? window.getComputedStyle(list) : null
-      if (!panelRect || !listRect || !scrollbarRect || !thumbRect || !list) return null
-      return {
-        listClientHeight: list.clientHeight,
-        listRight: Math.round(listRect.right * 100) / 100,
-        listScrollHeight: list.scrollHeight,
-        nativeScrollbarWidth: listStyles?.scrollbarWidth || '',
-        panelRight: Math.round(panelRect.right * 100) / 100,
-        revealPoint: {
-          x: Math.round(scrollbarRect.left + scrollbarRect.width / 2),
-          y: Math.round(scrollbarRect.bottom - 8)
-        },
-        scrollbarRight: Math.round(scrollbarRect.right * 100) / 100,
-        scrollbarWidth: Math.round(scrollbarRect.width * 100) / 100,
-        thumbHeight: Math.round(thumbRect.height * 100) / 100,
-        viewportWidth: window.innerWidth
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const scrollbarGeometry = await evaluateInPage(harness, historyEntryPage.readHistoryScrollbarGeometry)
+  assert.ok(scrollbarGeometry, 'expected history scrollbar geometry for the expansion wheel smoke test')
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -2270,116 +2088,9 @@ async function measureHistoryEntryExpansionWheelScroll(harness: DashboardHarness
 
   assert.ok(first, `history entry should expand before wheel check: ${JSON.stringify({ target, first })}`)
 
-  const tooltipOpenEntryState = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const entry = Array.from(document.querySelectorAll('.history-entry-expanded'))
-        .find((candidate) => candidate.textContent?.includes('Low score history item with enough tooltip text'))
-      const row = Array.from(document.querySelectorAll('.history-entry-row'))
-        .find((candidate) => candidate.textContent?.includes('Low score history item with enough tooltip text'))
-      const scrollbar = document.querySelector('.history-entry-scrollbar')
-      const styles = entry ? window.getComputedStyle(entry) : null
-      const rowStyles = row ? window.getComputedStyle(row) : null
-      const indexStyles = row?.firstElementChild instanceof HTMLElement ? window.getComputedStyle(row.firstElementChild) : null
-      const scrollbarStyles = scrollbar ? window.getComputedStyle(scrollbar) : null
-      return {
-        backgroundColor: styles?.backgroundColor || '',
-        expandedZIndex: styles?.zIndex || '',
-        expandedInsideHistoryList: !!entry?.closest('.history-entry-list'),
-        expandedInsidePanel: !!entry?.closest('.tab-history-panel'),
-        expandedInsideDashboardShell: !!entry?.closest('[data-tabout="dashboard-shell"]'),
-        expandedInsideOverlay: !!entry?.closest('.history-entry-overlay'),
-        indexColor: indexStyles?.color || '',
-        rowOpacity: rowStyles?.opacity || '',
-        scrollbarZIndex: scrollbarStyles?.zIndex || '',
-        rowExpandedOpen: row?.classList.contains('history-entry-row-expanded-open') || false,
-        expandedOpen: entry?.classList.contains('history-entry-expanded-open') || false
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const tooltipOpenEntryState = await evaluateInPage(harness, historyEntryPage.readExpandedEntryLayering, { label: HISTORY_SMOKE_ENTRY_LABEL })
 
-  const scrollbarOverlapState = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const entry = Array.from(document.querySelectorAll('.history-entry-expanded'))
-        .find((candidate) => candidate.textContent?.includes('Low score history item with enough tooltip text'))
-      const scrollbar = document.querySelector('.history-entry-scrollbar')
-      const thumb = document.querySelector('.history-entry-scrollbar-thumb')
-      if (!(entry instanceof HTMLElement) || !(scrollbar instanceof HTMLElement) || !(thumb instanceof HTMLElement)) return null
-      const entryRect = entry.getBoundingClientRect()
-      const scrollbarRect = scrollbar.getBoundingClientRect()
-      const thumbRect = thumb.getBoundingClientRect()
-      const overlapTop = Math.max(entryRect.top, thumbRect.top)
-      const overlapBottom = Math.min(entryRect.bottom, thumbRect.bottom)
-      if (overlapBottom - overlapTop <= 1) {
-        return {
-          clipPath: window.getComputedStyle(scrollbar).clipPath,
-          entryRect: { left: entryRect.left, right: entryRect.right, top: entryRect.top, bottom: entryRect.bottom },
-          scrollbarRect: { left: scrollbarRect.left, right: scrollbarRect.right, top: scrollbarRect.top, bottom: scrollbarRect.bottom },
-          thumbRect: { left: thumbRect.left, right: thumbRect.right, top: thumbRect.top, bottom: thumbRect.bottom },
-          overlapPoint: null,
-          hitScrollbar: null
-        }
-      }
-      const overlapPoint = {
-        x: Math.round((Math.max(entryRect.left, thumbRect.left) + Math.min(entryRect.right, thumbRect.right)) / 2),
-        y: Math.round((overlapTop + overlapBottom) / 2)
-      }
-      const visibleThumbSegments = [
-        { top: thumbRect.top, bottom: Math.min(thumbRect.bottom, entryRect.top) },
-        { top: Math.max(thumbRect.top, entryRect.bottom), bottom: thumbRect.bottom }
-      ].filter((segment) => segment.bottom - segment.top > 1)
-      const visibleThumbSegment = visibleThumbSegments.sort(
-        (left, right) => (right.bottom - right.top) - (left.bottom - left.top)
-      )[0] || null
-      const visibleThumbPoint = visibleThumbSegment
-        ? {
-            x: overlapPoint.x,
-            y: Math.round((visibleThumbSegment.top + visibleThumbSegment.bottom) / 2)
-          }
-        : null
-      const visibleThumbNode = visibleThumbPoint
-        ? document.elementFromPoint(visibleThumbPoint.x, visibleThumbPoint.y)
-        : null
-      const previousEntryTransform = entry.style.transform
-      const overlapNode = document.elementFromPoint(overlapPoint.x, overlapPoint.y)
-      entry.style.transform = 'translateY(24px)'
-      const shiftedEntryRect = entry.getBoundingClientRect()
-      const shiftedOverlapTop = Math.max(shiftedEntryRect.top, thumbRect.top)
-      const shiftedOverlapBottom = Math.min(shiftedEntryRect.bottom, thumbRect.bottom)
-      const shiftedOverlapPoint = shiftedOverlapBottom - shiftedOverlapTop > 1
-        ? {
-            x: overlapPoint.x,
-            y: Math.round((shiftedOverlapTop + shiftedOverlapBottom) / 2)
-          }
-        : null
-      const shiftedNode = shiftedOverlapPoint
-        ? document.elementFromPoint(shiftedOverlapPoint.x, shiftedOverlapPoint.y)
-        : null
-      entry.style.transform = previousEntryTransform
-      return {
-        clipPath: window.getComputedStyle(scrollbar).clipPath,
-        thumbOpacity: window.getComputedStyle(thumb).opacity,
-        entryRect: { left: entryRect.left, right: entryRect.right, top: entryRect.top, bottom: entryRect.bottom },
-        scrollbarRect: { left: scrollbarRect.left, right: scrollbarRect.right, top: scrollbarRect.top, bottom: scrollbarRect.bottom },
-        thumbRect: { left: thumbRect.left, right: thumbRect.right, top: thumbRect.top, bottom: thumbRect.bottom },
-        overlapPoint,
-        visibleThumbLength: visibleThumbSegment ? visibleThumbSegment.bottom - visibleThumbSegment.top : 0,
-        visibleThumbPoint,
-        visibleThumbHitScrollbar: !!(visibleThumbNode instanceof Element && visibleThumbNode.closest('.history-entry-scrollbar')),
-        hitScrollbar: !!(overlapNode instanceof Element && overlapNode.closest('.history-entry-scrollbar')),
-        hitExpanded: !!(overlapNode instanceof Element && overlapNode.closest('.history-entry-expanded')),
-        hitInputShield: !!(overlapNode instanceof Element && overlapNode.closest('.history-entry-scrollbar-input-shield')),
-        hitInsideHistoryList: !!(overlapNode instanceof Element && overlapNode.closest('.history-entry-list')),
-        shiftedEntryTop: shiftedEntryRect.top,
-        shiftedOverlapPoint,
-        shiftedHitScrollbar: !!(shiftedNode instanceof Element && shiftedNode.closest('.history-entry-scrollbar')),
-        shiftedHitExpanded: !!(shiftedNode instanceof Element && shiftedNode.closest('.history-entry-expanded')),
-        shiftedHitInputShield: !!(shiftedNode instanceof Element && shiftedNode.closest('.history-entry-scrollbar-input-shield')),
-        shiftedHitInsideHistoryList: !!(shiftedNode instanceof Element && shiftedNode.closest('.history-entry-list'))
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const scrollbarOverlapState = await evaluateInPage(harness, historyEntryPage.probeScrollbarOverlap, { label: HISTORY_SMOKE_ENTRY_LABEL })
 
   const expandedPoint = {
     x: Math.round(first.left + first.width / 2),
@@ -2397,40 +2108,9 @@ async function measureHistoryEntryExpansionWheelScroll(harness: DashboardHarness
     expandedOnlyPoint.x > target.slotRight + 1 && expandedOnlyPoint.x < first.right,
     `history original-slot leave point should be outside the original slot and inside the expanded entry: ${JSON.stringify({ target, first, expandedOnlyPoint })}`,
   )
-  const expandedOnlyHitTarget = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-	      const expandedEntry = Array.from(document.querySelectorAll('.history-entry-expanded'))
-	        .find((candidate) => candidate.textContent?.includes('Low score history item with enough tooltip text'))
-	      const node = document.elementFromPoint(${JSON.stringify(expandedOnlyPoint.x)}, ${JSON.stringify(expandedOnlyPoint.y)})
-	      const entry = node instanceof Element ? node.closest('.history-entry-expanded') : null
-	      return {
-	        className: node instanceof Element ? node.className || '' : '',
-	        hitInsideExpanded: !!entry,
-	        text: entry?.textContent || '',
-	        visualText: expandedEntry?.textContent || ''
-	      }
-	    })()`,
-  }).then((result: any) => result.result.value)
+  const expandedOnlyHitTarget = await evaluateInPage(harness, historyEntryPage.hitTestExpandedEntry, { label: HISTORY_SMOKE_ENTRY_LABEL, point: expandedOnlyPoint })
 
-  const expandedOnlyClipCheck = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const expandedEntry = Array.from(document.querySelectorAll('.history-entry-expanded'))
-        .find((candidate) => candidate.textContent?.includes('Low score history item with enough tooltip text'))
-      if (!(expandedEntry instanceof HTMLElement)) return { hitInsideExpanded: false, text: '' }
-      const previousPointerEvents = expandedEntry.style.pointerEvents
-      expandedEntry.style.pointerEvents = 'auto'
-      const node = document.elementFromPoint(${JSON.stringify(expandedOnlyPoint.x)}, ${JSON.stringify(expandedOnlyPoint.y)})
-      const entry = node instanceof Element ? node.closest('.history-entry-expanded') : null
-      expandedEntry.style.pointerEvents = previousPointerEvents
-      return {
-        className: node instanceof Element ? node.className || '' : '',
-        hitInsideExpanded: !!entry,
-        text: entry?.textContent || ''
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const expandedOnlyClipCheck = await evaluateInPage(harness, historyEntryPage.hitTestExpandedEntryWithPointerEvents, { label: HISTORY_SMOKE_ENTRY_LABEL, point: expandedOnlyPoint })
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -2448,15 +2128,7 @@ async function measureHistoryEntryExpansionWheelScroll(harness: DashboardHarness
   const reopened = await waitForHistoryEntryExpansionRect(harness, 'Low score history item with enough tooltip text')
   assert.ok(reopened, `history entry should reopen before wheel check: ${JSON.stringify({ target, first, afterOriginalSlotLeave })}`)
 
-  const beforeScrollTop = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      return {
-        dashboardScrollTop: document.querySelector('.scroll-region')?.scrollTop ?? 0,
-        historyScrollTop: document.querySelector('.history-entry-list')?.scrollTop ?? 0
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const beforeScrollTop = await evaluateInPage(harness, dashboardPage.readScrollTops)
 
   const wheelDeltaY = beforeScrollTop.historyScrollTop >= target.listMaxScrollTop - 1 ? -18 : 18
   for (let index = 0; index < 4; index += 1) {
@@ -2471,19 +2143,7 @@ async function measureHistoryEntryExpansionWheelScroll(harness: DashboardHarness
   }
   await waitForNoHistoryEntryExpansion(harness)
 
-  const after = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const historyList = document.querySelector('.history-entry-list')
-      const dashboardScrollRegion = document.querySelector('.scroll-region')
-      return {
-        dashboardScrollTop: dashboardScrollRegion?.scrollTop ?? 0,
-        historyScrollTop: historyList?.scrollTop ?? 0,
-        expansionCount: document.querySelectorAll('.history-entry-expanded').length,
-        tooltipCount: document.querySelectorAll('[data-slot="tooltip-content"]').length
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const after = await evaluateInPage(harness, historyEntryPage.readHistoryWheelState)
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -2492,84 +2152,79 @@ async function measureHistoryEntryExpansionWheelScroll(harness: DashboardHarness
   })
   await waitForNoTitleExpansion(harness)
 
-  const afterLeaveExpansionState = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => ({
-      expansionCount: document.querySelectorAll('.history-entry-expanded').length,
-      tooltipCount: document.querySelectorAll('[data-slot="tooltip-content"]').length
-    }))()`,
-  }).then((result: any) => result.result.value)
+  const afterLeaveExpansionState = await evaluateInPage(harness, historyEntryPage.readExpansionCounts)
 
   return { target, first, scrollbarGeometry, scrollbarOverlapState, expandedPoint, expandedOnlyPoint, expandedOnlyClipCheck, expandedOnlyHitTarget, afterOriginalSlotLeave, tooltipOpenEntryState, beforeScrollTop, wheelDeltaY, after, afterLeaveExpansionState }
 }
 
 function assertHistoryScrollbarLayering(result: Awaited<ReturnType<typeof measureHistoryEntryExpansionWheelScroll>>) {
+  const overlap = result.scrollbarOverlapState
   assert.ok(
-    result.scrollbarOverlapState?.overlapPoint,
-    `history scrollbar overlap smoke needs the visible thumb and expanded entry to intersect: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    overlap?.overlapPoint,
+    `history scrollbar overlap smoke needs the visible thumb and expanded entry to intersect: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    result.scrollbarOverlapState?.clipPath,
+    overlap.clipPath,
     'none',
-    `history scrollbar should not rely on a fixed geometry cutout: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    `history scrollbar should not rely on a fixed geometry cutout: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    result.scrollbarOverlapState?.thumbOpacity,
+    overlap.thumbOpacity,
     '1',
-    `history scrollbar should remain visible while the expanded entry covers only their overlap: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    `history scrollbar should remain visible while the expanded entry covers only their overlap: ${JSON.stringify(overlap)}`,
   )
   assert.ok(
-    result.scrollbarOverlapState?.visibleThumbLength > 1,
-    `history scrollbar should retain a visible thumb segment outside the expanded entry: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    overlap.visibleThumbLength > 1,
+    `history scrollbar should retain a visible thumb segment outside the expanded entry: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    result.scrollbarOverlapState?.visibleThumbHitScrollbar,
+    overlap.visibleThumbHitScrollbar,
     true,
-    `the uncovered thumb segment should remain pointer-interactive: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    `the uncovered thumb segment should remain pointer-interactive: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    result.scrollbarOverlapState?.hitScrollbar,
+    overlap.hitScrollbar,
     false,
-    `expanded history entry should keep the covered scrollbar band from receiving input: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    `expanded history entry should keep the covered scrollbar band from receiving input: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    result.scrollbarOverlapState?.hitExpanded,
+    overlap.hitExpanded,
     true,
-    `expanded history entry should own its scrollbar overlap under production pointer events: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    `expanded history entry should own its scrollbar overlap under production pointer events: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    result.scrollbarOverlapState?.hitInputShield,
+    overlap.hitInputShield,
     true,
-    `expanded history entry should expose its narrow scrollbar input shield at the overlap: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    `expanded history entry should expose its narrow scrollbar input shield at the overlap: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    result.scrollbarOverlapState?.hitInsideHistoryList,
+    overlap.hitInsideHistoryList,
     true,
-    `wheel input over the covered scrollbar band should stay in the history scroller event path: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    `wheel input over the covered scrollbar band should stay in the history scroller event path: ${JSON.stringify(overlap)}`,
   )
   assert.ok(
-    result.scrollbarOverlapState?.shiftedEntryTop > result.scrollbarOverlapState.entryRect.top + 20,
-    `history stacking probe should move the expanded entry away from its initial scrollbar overlap: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    overlap.shiftedEntryTop > overlap.entryRect.top + 20,
+    `history stacking probe should move the expanded entry away from its initial scrollbar overlap: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    result.scrollbarOverlapState?.shiftedHitScrollbar,
+    overlap.shiftedHitScrollbar,
     false,
-    `the shifted expanded entry should continue painting above the scrollbar: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    `the shifted expanded entry should continue painting above the scrollbar: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    result.scrollbarOverlapState?.shiftedHitExpanded,
+    overlap.shiftedHitExpanded,
     true,
-    `the moving expanded entry should carry the scrollbar redaction with it: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    `the moving expanded entry should carry the scrollbar redaction with it: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    result.scrollbarOverlapState?.shiftedHitInputShield,
+    overlap.shiftedHitInputShield,
     true,
-    `the moving expanded entry should carry its scrollbar input shield with it: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    `the moving expanded entry should carry its scrollbar input shield with it: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    result.scrollbarOverlapState?.shiftedHitInsideHistoryList,
+    overlap.shiftedHitInsideHistoryList,
     true,
-    `the shifted scrollbar input shield should remain in the history scroller event path: ${JSON.stringify(result.scrollbarOverlapState)}`,
+    `the shifted scrollbar input shield should remain in the history scroller event path: ${JSON.stringify(overlap)}`,
   )
 }
 
@@ -2580,62 +2235,17 @@ async function measureHistoryLeftGutterWheelScroll(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `(() => {
-      document.querySelector('.history-entry-list')?.scrollTo(0, 0)
-      document.querySelector('.scroll-region')?.scrollTo(0, 0)
-    })()`,
-  })
+  await evaluateInPage(harness, historyEntryPage.scrollHistoryAndDashboardToTop)
   await Promise.all([
     waitForDashboardSettled(harness),
     waitForScrollTop(harness, '.history-entry-list'),
   ])
 
-  const target = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const shell = document.querySelector('[data-tabout="dashboard-shell"]')
-      const panel = document.querySelector('.tab-history-panel')
-      const list = document.querySelector('.history-entry-list')
-      const content = document.querySelector('.history-entry-list-content')
-      const hitArea = document.querySelector('[data-tabout-part="history-scroll-hit-area"]')
-      const shellRect = shell?.getBoundingClientRect()
-      const panelRect = panel?.getBoundingClientRect()
-      const listRect = list?.getBoundingClientRect()
-      const contentRect = content?.getBoundingClientRect()
-      const hitAreaRect = hitArea?.getBoundingClientRect()
-      if (!shellRect || !panelRect || !listRect || !contentRect || !hitAreaRect) return null
-      const x = Math.max(4, Math.round(shellRect.left / 2))
-      const y = Math.round(Math.min(window.innerHeight - 20, Math.max(20, contentRect.top + 90)))
-      const node = document.elementFromPoint(x, y)
-      const hitPart = node instanceof Element
-        ? node.closest('[data-tabout-part]')?.getAttribute('data-tabout-part') || ''
-        : ''
-      return {
-        x,
-        y,
-        hitPart,
-        shellLeft: Math.round(shellRect.left * 100) / 100,
-        panelLeft: Math.round(panelRect.left * 100) / 100,
-        listLeft: Math.round(listRect.left * 100) / 100,
-        contentLeft: Math.round(contentRect.left * 100) / 100,
-        hitAreaLeft: Math.round(hitAreaRect.left * 100) / 100,
-        hitAreaRight: Math.round(hitAreaRect.right * 100) / 100,
-        hitAreaWidth: Math.round(hitAreaRect.width * 100) / 100,
-        viewportWidth: window.innerWidth
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, historyEntryPage.readHistoryLeftGutterTarget)
 
   assert.ok(target, 'expected history left gutter target to be measurable')
 
-  const beforeScrollTop = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => ({
-      dashboardScrollTop: document.querySelector('.scroll-region')?.scrollTop ?? 0,
-      historyScrollTop: document.querySelector('.history-entry-list')?.scrollTop ?? 0
-    }))()`,
-  }).then((result: any) => result.result.value)
+  const beforeScrollTop = await evaluateInPage(harness, dashboardPage.readScrollTops)
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -2656,13 +2266,7 @@ async function measureHistoryLeftGutterWheelScroll(harness: DashboardHarness) {
   }
   await wait(160)
 
-  const after = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => ({
-      dashboardScrollTop: document.querySelector('.scroll-region')?.scrollTop ?? 0,
-      historyScrollTop: document.querySelector('.history-entry-list')?.scrollTop ?? 0
-    }))()`,
-  }).then((result: any) => result.result.value)
+  const after = await evaluateInPage(harness, dashboardPage.readScrollTops)
 
   return { target, beforeScrollTop, after }
 }
@@ -2674,150 +2278,14 @@ async function measureNarrowViewportScrollbarEdges(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `(() => {
-      document.querySelector('.history-entry-list')?.scrollTo(0, 0)
-      document.querySelector('.scroll-region')?.scrollTo(0, 0)
-      document.scrollingElement?.scrollTo(0, 0)
-    })()`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollAllToTop)
   await Promise.all([
     waitForDashboardSettled(harness),
     waitForScrollTop(harness, '.history-entry-list'),
   ])
 
   async function readSnapshot() {
-    return evaluateExpression(harness, {
-      returnByValue: true,
-      expression: `(() => {
-        const round = (value) => Math.round(value * 100) / 100
-        const shell = document.querySelector('[data-tabout="dashboard-shell"]')
-        const main = document.querySelector('.dashboard-main')
-        const scrollRegion = document.querySelector('.scroll-region')
-        const historyList = document.querySelector('.history-entry-list')
-        const historyContent = document.querySelector('.history-entry-list-content')
-        const historyScrollbar = document.querySelector('.history-entry-scrollbar')
-        const historyTrack = document.querySelector('.history-entry-scrollbar-track')
-        const historyThumb = document.querySelector('.history-entry-scrollbar-thumb')
-        const filter = document.querySelector('[data-tabout="filter-query"]')
-        const sourceSwitch = document.querySelector('[data-tabout="dashboard-view"]')
-        const headerControls = document.querySelector('.header-controls')
-        const missions = document.querySelector('.missions:not(.missions-empty)')
-        const card = document.querySelector('[data-tabout="domain-card"] .mission-card') || document.querySelector('.mission-card')
-        const shellRect = shell?.getBoundingClientRect()
-        const mainRect = main?.getBoundingClientRect()
-        const scrollRegionRect = scrollRegion?.getBoundingClientRect()
-        const historyListRect = historyList?.getBoundingClientRect()
-        const historyContentRect = historyContent?.getBoundingClientRect()
-        const historyScrollbarRect = historyScrollbar?.getBoundingClientRect()
-        const historyTrackRect = historyTrack?.getBoundingClientRect()
-        const historyThumbRect = historyThumb?.getBoundingClientRect()
-        const filterRect = filter?.getBoundingClientRect()
-        const sourceSwitchRect = sourceSwitch?.getBoundingClientRect()
-        const headerControlsRect = headerControls?.getBoundingClientRect()
-        const missionsRect = missions?.getBoundingClientRect()
-        const cardRect = card?.getBoundingClientRect()
-        if (
-          !(scrollRegion instanceof HTMLElement) ||
-          !(historyList instanceof HTMLElement) ||
-          !shellRect ||
-          !mainRect ||
-          !scrollRegionRect ||
-          !historyListRect ||
-          !historyContentRect ||
-          !historyScrollbarRect ||
-          !historyTrackRect ||
-          !historyThumbRect ||
-          !filterRect ||
-          !sourceSwitchRect ||
-          !headerControlsRect ||
-          !missionsRect ||
-          !cardRect
-        ) {
-          return null
-        }
-        const shellStyles = window.getComputedStyle(shell)
-        const historyThumbStyles = window.getComputedStyle(historyThumb)
-        const scrollbarSize = Number.parseFloat(shellStyles.getPropertyValue('--dashboard-scrollbar-size')) || 0
-        const scrollbarPadding = Number.parseFloat(shellStyles.getPropertyValue('--dashboard-scrollbar-padding')) || 0
-        const scrollbarThumbSize = Number.parseFloat(shellStyles.getPropertyValue('--dashboard-scrollbar-thumb-size')) || 0
-        const scrollbarPaddingHover = Number.parseFloat(shellStyles.getPropertyValue('--dashboard-scrollbar-padding-hover')) || 0
-        const scrollbarThumbSizeHover = Number.parseFloat(shellStyles.getPropertyValue('--dashboard-scrollbar-thumb-size-hover')) || 0
-        const historyThumbBorderLeft = Number.parseFloat(historyThumbStyles.borderLeftWidth) || 0
-        const historyThumbBorderRight = Number.parseFloat(historyThumbStyles.borderRightWidth) || 0
-        const pageGutter = Number.parseFloat(shellStyles.getPropertyValue('--dashboard-page-gutter')) || 0
-        const historyTargetX = Math.round(Math.min(historyContentRect.right - 24, Math.max(historyContentRect.left + 24, historyContentRect.left + historyContentRect.width / 3)))
-        const historyTargetY = Math.round(Math.min(window.innerHeight - 24, Math.max(24, historyContentRect.top + 84)))
-        const historyRailTargetX = Math.round(historyTrackRect.left + historyTrackRect.width / 2)
-        const historyRailTargetY = Math.round(Math.min(historyScrollbarRect.bottom - 24, Math.max(historyScrollbarRect.top + 24, historyTrackRect.top + 84)))
-        const historyThumbCenterX = Math.round(historyThumbRect.left + historyThumbRect.width / 2)
-        const historyThumbCenterY = Math.round(historyThumbRect.top + historyThumbRect.height / 2)
-        const dashboardTargetX = Math.round(Math.min(cardRect.right - 24, Math.max(cardRect.left + 24, cardRect.left + cardRect.width / 3)))
-        const dashboardTargetY = Math.round(Math.min(window.innerHeight - 24, Math.max(24, cardRect.top + Math.min(84, cardRect.height / 2))))
-        const historyNode = document.elementFromPoint(historyTargetX, historyTargetY)
-        const dashboardNode = document.elementFromPoint(dashboardTargetX, dashboardTargetY)
-        return {
-          viewportWidth: window.innerWidth,
-          documentClientWidth: document.documentElement.clientWidth,
-          documentScrollWidth: document.documentElement.scrollWidth,
-          bodyScrollWidth: document.body?.scrollWidth || 0,
-          shellRight: round(shellRect.right),
-          mainLeft: round(mainRect.left),
-          mainRight: round(mainRect.right),
-          scrollRegionLeft: round(scrollRegionRect.left),
-          scrollRegionRight: round(scrollRegionRect.right),
-          scrollRegionWidth: round(scrollRegionRect.width),
-          scrollRegionNativeTrackWidth: scrollRegion.offsetWidth - scrollRegion.clientWidth,
-          scrollRegionClientHeight: scrollRegion.clientHeight,
-          scrollRegionScrollHeight: scrollRegion.scrollHeight,
-          scrollRegionScrollTop: round(scrollRegion.scrollTop),
-          historyListRight: round(historyListRect.right),
-          historyScrollbarLeft: round(historyScrollbarRect.left),
-          historyScrollbarRight: round(historyScrollbarRect.right),
-          historyScrollbarWidth: round(historyScrollbarRect.width),
-          historyTrackRight: round(historyTrackRect.right),
-          historyTrackWidth: round(historyTrackRect.width),
-          historyThumbRight: round(historyThumbRect.right),
-          historyThumbWidth: round(historyThumbRect.width),
-          historyThumbVisibleRight: round(historyThumbRect.right - historyThumbBorderRight),
-          historyThumbVisibleWidth: round(historyThumbRect.width - historyThumbBorderLeft - historyThumbBorderRight),
-          historyThumbBorderLeft: round(historyThumbBorderLeft),
-          historyThumbBorderRight: round(historyThumbBorderRight),
-          historyTrackCursor: window.getComputedStyle(historyTrack).cursor,
-          historyThumbCursor: window.getComputedStyle(historyThumb).cursor,
-          historyListClientHeight: historyList.clientHeight,
-          historyListScrollHeight: historyList.scrollHeight,
-          historyListScrollTop: round(historyList.scrollTop),
-          filterLeft: round(filterRect.left),
-          filterRight: round(filterRect.right),
-          sourceSwitchRight: round(sourceSwitchRect.right),
-          headerControlsRight: round(headerControlsRect.right),
-          missionsRight: round(missionsRect.right),
-          cardLeft: round(cardRect.left),
-          cardRight: round(cardRect.right),
-          pageGutter,
-          scrollbarSize,
-          scrollbarPadding,
-          scrollbarThumbSize,
-          scrollbarPaddingHover,
-          scrollbarThumbSizeHover,
-          historyTargetX,
-          historyTargetY,
-          historyRailTargetX,
-          historyRailTargetY,
-          historyThumbCenterX,
-          historyThumbCenterY,
-          dashboardTargetX,
-          dashboardTargetY,
-          historyHitClass: historyNode instanceof Element ? historyNode.className || '' : '',
-          historyHitPart: historyNode instanceof Element ? historyNode.closest('[data-tabout-part]')?.getAttribute('data-tabout-part') || '' : '',
-          dashboardHitClass: dashboardNode instanceof Element ? dashboardNode.className || '' : '',
-          dashboardHitTabout: dashboardNode instanceof Element ? dashboardNode.closest('[data-tabout]')?.getAttribute('data-tabout') || '' : '',
-          windowScrollX: window.scrollX,
-          documentScrollLeft: document.scrollingElement?.scrollLeft || 0
-        }
-      })()`,
-    }).then((result: any) => result.result.value)
+    return evaluateInPage(harness, historyEntryPage.readNarrowViewportSnapshot)
   }
 
   const initial = await readSnapshot()
@@ -2841,6 +2309,7 @@ async function measureNarrowViewportScrollbarEdges(harness: DashboardHarness) {
   })
   await wait(360)
   const afterHistoryThumbHover = await readSnapshot()
+  assert.ok(afterHistoryThumbHover, 'expected narrow viewport geometry after hovering the history thumb')
 
   // Press the thumb, then drag the pointer well OFF the rail: a native bar stays
   // at its wide grabbed size for the whole drag, so the thumb must keep hover
@@ -2854,10 +2323,11 @@ async function measureNarrowViewportScrollbarEdges(harness: DashboardHarness) {
   await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: dragOffRailX, y: dragOffRailY, button: 'left', buttons: 1 })
   await wait(220)
   const duringHistoryThumbDrag = await readSnapshot()
+  assert.ok(duringHistoryThumbDrag, 'expected narrow viewport geometry during the history thumb drag')
   await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: dragOffRailX, y: dragOffRailY, button: 'left' })
   await wait(120)
   // Reset scroll so the drag doesn't perturb the independent-scroll checks below.
-  await evaluateExpression(harness, { expression: `document.querySelector('.history-entry-list')?.scrollTo(0, 0)` })
+  await evaluateInPage(harness, historyEntryPage.scrollHistoryListToTop)
   await waitForScrollTop(harness, '.history-entry-list')
 
   await harness.session.send('Input.dispatchMouseEvent', {
@@ -4542,8 +4012,9 @@ test('dashboard cards repack when the viewport resizes', async ({ page }) => {
       `history expansion should preserve visible line breaks before the tail row: ${JSON.stringify(historyPopupWheelScroll)}`,
     )
   }
+  const historyTailLine = historyTitleLines[historyTitleLines.length - 1]
   assert.ok(
-    historyTooltipLines[historyTitleLines.length - 1]?.startsWith(historyTitleLines[historyTitleLines.length - 1]),
+    historyTailLine !== undefined && historyTooltipLines[historyTitleLines.length - 1]?.startsWith(historyTailLine),
     `history expansion tail row should start with the same visible text before revealing more: ${JSON.stringify(historyPopupWheelScroll)}`,
   )
   assert.ok(
