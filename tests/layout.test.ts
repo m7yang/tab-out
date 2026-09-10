@@ -86,10 +86,14 @@ test('Dashboard View source transitions keep one primed card-move refresh', () =
   const appSource = readFileSync(new URL('../src/components/App.tsx', import.meta.url), 'utf8')
   const intakeSource = readFileSync(new URL('../src/extension/dashboard-intake.ts', import.meta.url), 'utf8')
 
-  assert.match(appSource, /const previousRects = prepareDomainCardMoveAnimation\(currentMissionContainers\(\)\)/)
-  assert.match(appSource, /pendingSourceSwitchRectsRef\.current = \{ rects: previousRects, requestId \}/)
-  assert.match(appSource, /pendingRects\?\.requestId !== event\.requestId/)
-  assert.match(appSource, /layoutMoveRectsRef\.current = pendingRects\.rects/)
+  const choreographySource = readFileSync(new URL('../src/extension/card-move-choreography.ts', import.meta.url), 'utf8')
+
+  assert.match(appSource, /getCardMoves\(\)\.runSourceSwitchMove/)
+  assert.match(appSource, /subscribeBeforeApply\(getCardMoves\(\)\.onBeforeStoreApply\)/)
+  assert.match(choreographySource, /const previousRects = prepareDomainCardMoveAnimation\(containers\(\)\)/)
+  assert.match(choreographySource, /pendingSourceSwitch = \{ rects: previousRects, requestId \}/)
+  assert.match(choreographySource, /pending\?\.requestId !== event\.requestId/)
+  assert.match(choreographySource, /stagedCardRects = pending\.rects/)
   assert.match(intakeSource, /emitBeforeApply\(\{ reason: 'source-switch', requestId \}\)/)
   assert.doesNotMatch(appSource, /\[source,\s*pinnedDomains,\s*pinsLoaded\]/)
 })

@@ -7,13 +7,9 @@ import { useMissionsMasonry } from '../extension/layout.js'
 import { showToast } from '../extension/toast.js'
 import { HISTORY_RANGE_OPTIONS, isHistoryFilterEnabled } from '../extension/history-range.js'
 import { saveHistoryRangePreference } from '../extension/history-range-storage.js'
-import { animateDomainCardMoves, cancelDomainCardMoves, hasActiveDomainCardMoves, prepareDomainCardMoveAnimation } from '../extension/card-move-animation'
-import {
-  animateIntraCardMoves,
-  animateQueuedPageChipRefreshMoves,
-  prepareIntraCardMoveAnimationByKey,
-  type PreparedIntraCardMove,
-} from '../extension/intra-card-move-animation.js'
+import { animateDomainCardMoves, prepareDomainCardMoveAnimation } from '../extension/card-move-animation'
+import { animateQueuedPageChipRefreshMoves } from '../extension/intra-card-move-animation.js'
+import { createDashboardMoveChoreography, type DashboardMoveChoreography } from '../extension/card-move-choreography.js'
 import { closeFilteredTabs, dedupeTabs } from '../extension/tab-actions'
 import { buildFilterResultCandidates, type FilterResultCandidate } from '../extension/filter-result-navigation.js'
 import { dashboardNeedsFilterSearchRefresh } from '../extension/filter-search.js'
@@ -46,7 +42,7 @@ import type {
 } from './types'
 import { dashboardSourceForView, dashboardViewOptionId, type DashboardView } from '../extension/dashboard-view.js'
 import type { HistorySearchSummary, RetainedPageSurfaceMatch, WorkingSetSnapshot } from '../extension/types'
-import type { CardPositionMap, MissionContainer } from '../extension/card-move-animation'
+import type { MissionContainer } from '../extension/card-move-animation'
 
 type MissionContainerRef = {
   current: HTMLDivElement | null
@@ -506,13 +502,6 @@ export function App() {
   const setTabHistory = useCallback(function setTabHistory(nextTabHistory: TabHistorySnapshot | null) {
     dispatchAppDashboard({ type: 'tabHistory', tabHistory: nextTabHistory })
   }, [])
-  const layoutMoveRectsRef = useRef<CardPositionMap | null>(null)
-  const pendingSourceSwitchRectsRef = useRef<{
-    rects: CardPositionMap | null
-    requestId: number
-  } | null>(null)
-  const filterCardMoveRef = useRef(false)
-  const intraCardMoveRef = useRef<PreparedIntraCardMove | null>(null)
   const previousOrderRef = useRef<MissionOrderMap>({
     tabs: new Map(),
     bookmarks: new Map(),
@@ -546,15 +535,20 @@ export function App() {
     return readMissionContainers(primaryMissionsRef, bookmarkMissionsRef, historyMissionsRef)
   }, [])
 
-  const primeCardMoveAnimation = useCallback(function primeCardMoveAnimation() {
-    layoutMoveRectsRef.current = prepareDomainCardMoveAnimation(currentMissionContainers())
+  // Created lazily at first use: every consumer is an event handler or
+  // effect, and deferring creation keeps the mission refs out of render.
+  const cardMovesRef = useRef<DashboardMoveChoreography | null>(null)
+  const getCardMoves = useCallback(function getCardMoves() {
+    if (!cardMovesRef.current) {
+      cardMovesRef.current = createDashboardMoveChoreography({ containers: currentMissionContainers })
+    }
+    return cardMovesRef.current
   }, [currentMissionContainers])
 
   const handleBeforeFilterChange = useCallback(function handleBeforeFilterChange() {
     appDashboardStore.clearStartupPriority()
-    filterCardMoveRef.current = true
-    primeCardMoveAnimation()
-  }, [primeCardMoveAnimation])
+    getCardMoves().primeFilterCardMove()
+  }, [getCardMoves])
   const { filterInput, filter, filterSearch, setFilterInput } = useFilterRouting({ onBeforeFilterChange: handleBeforeFilterChange })
   const handleFilterInputChange = useCallback(function handleFilterInputChange(nextFilterInput: string) {
     if (nextFilterInput.trim()) void loadHistoryRangeSelect().catch(() => {})
@@ -586,13 +580,13 @@ export function App() {
     waitForInitialState: !startupReady,
     onBeforeApplyPinnedDomains: ({ animate }) => {
       resetMissionOrder()
-      if (animate) primeCardMoveAnimation()
+      if (animate) getCardMoves().primeCardMove()
     },
     onBeforeApplyPinnedSections: (sectionId) => {
-      intraCardMoveRef.current = prepareIntraCardMoveAnimationByKey(sectionId)
+      getCardMoves().prepareIntraCardMove(sectionId)
     },
     onBeforeApplyPinnedPageChips: (pageChipPinId) => {
-      intraCardMoveRef.current = prepareIntraCardMoveAnimationByKey(pageChipPinId)
+      getCardMoves().prepareIntraCardMove(pageChipPinId)
     },
     onDomainPinSaveError: () => showToast('Could not save pinned domain'),
     onSectionPinSaveError: () => showToast('Could not save pinned section'),
@@ -620,19 +614,8 @@ export function App() {
     onBeforePinnedRefresh: clearHoverUrlNow,
   })
   useEffect(() => {
-    return appDashboardStore.subscribeBeforeApply((event) => {
-      if (event.reason === 'animated-refresh') {
-        primeCardMoveAnimation()
-        return
-      }
-      if (event.reason === 'source-switch') {
-        const pendingRects = pendingSourceSwitchRectsRef.current
-        if (pendingRects?.requestId !== event.requestId) return
-        pendingSourceSwitchRectsRef.current = null
-        layoutMoveRectsRef.current = pendingRects.rects
-      }
-    })
-  }, [primeCardMoveAnimation])
+    return appDashboardStore.subscribeBeforeApply(getCardMoves().onBeforeStoreApply)
+  }, [getCardMoves])
   const retryHistorySearch = useCallback(function retryHistorySearch() {
     void refreshDashboard().catch(() => showToast('Could not update History'))
   }, [refreshDashboard])
@@ -640,21 +623,8 @@ export function App() {
   useLayoutEffect(() => {
     if (!isReady) return
     clearHoverUrlNow()
-    const containers = readMissionContainers(primaryMissionsRef, bookmarkMissionsRef, historyMissionsRef)
-    const previousRects = layoutMoveRectsRef.current
-    layoutMoveRectsRef.current = null
-    // Bookmark/history matches hydrate after the local tab filter commits. Keep
-    // that data-only refresh from cancelling the filter move halfway through.
-    const preserveActiveFilterMove = !previousRects &&
-      filterCardMoveRef.current &&
-      hasActiveDomainCardMoves(containers)
-    if (!previousRects && !preserveActiveFilterMove) {
-      filterCardMoveRef.current = false
-      cancelDomainCardMoves(containers)
-    }
-    packMissionsMasonryNow({ unpin: true })
-    if (previousRects) animateDomainCardMoves(containers, previousRects)
-  }, [visibleDashboard, visibleDashboardView, filter, source, isReady, historyFilterEnabled, clearHoverUrlNow, packMissionsMasonryNow])
+    getCardMoves().commitDashboardLayout({ pack: () => packMissionsMasonryNow({ unpin: true }) })
+  }, [visibleDashboard, visibleDashboardView, filter, source, isReady, historyFilterEnabled, clearHoverUrlNow, packMissionsMasonryNow, getCardMoves])
 
   useLayoutEffect(() => {
     animateQueuedPageChipRefreshMoves()
@@ -718,10 +688,8 @@ export function App() {
     historySearchSummary?.phase !== 'error'
 
   useLayoutEffect(() => {
-    const prepared = intraCardMoveRef.current
-    intraCardMoveRef.current = null
-    animateIntraCardMoves(prepared)
-  }, [pinnedSections, pinnedPageChips])
+    getCardMoves().commitPreparedIntraCardMove()
+  }, [pinnedSections, pinnedPageChips, getCardMoves])
 
   useStartupOrderDebug({
     dashboard: visibleDashboard,
@@ -774,25 +742,22 @@ export function App() {
       return
     }
     if (nextSource === source) {
-      const previousRects = prepareDomainCardMoveAnimation(currentMissionContainers())
-      pendingSourceSwitchRectsRef.current = null
-      appDashboardStore.clearStartupPriority()
-      clearHoverUrlNow()
-      appDashboardStore.switchSource(nextSource)
-      layoutMoveRectsRef.current = previousRects
+      getCardMoves().runViewMoveNow(() => {
+        appDashboardStore.clearStartupPriority()
+        clearHoverUrlNow()
+        appDashboardStore.switchSource(nextSource)
+      })
       return
     }
     if (nextSource === sourceSelection) {
       return
     }
-    const previousRects = prepareDomainCardMoveAnimation(currentMissionContainers())
-    appDashboardStore.clearStartupPriority()
-    clearHoverUrlNow()
-    const requestId = appDashboardStore.switchSource(nextSource)
-    if (requestId !== null) {
-      pendingSourceSwitchRectsRef.current = { rects: previousRects, requestId }
-    }
-  }, [clearHoverUrlNow, currentMissionContainers, dashboardViewSelection, setDashboardViewSelection, source, sourceSelection, startupReady])
+    getCardMoves().runSourceSwitchMove(() => {
+      appDashboardStore.clearStartupPriority()
+      clearHoverUrlNow()
+      return appDashboardStore.switchSource(nextSource)
+    })
+  }, [getCardMoves, clearHoverUrlNow, dashboardViewSelection, setDashboardViewSelection, source, sourceSelection, startupReady])
 
   const primaryMissionsEmpty = matchedCards.length === 0
   const showHistorySection = showHistoryRange || showHistoryMatches
