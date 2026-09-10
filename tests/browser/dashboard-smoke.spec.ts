@@ -6,6 +6,7 @@ import type { ClassRetentionProbeTarget } from './page-realm/dashboard.js'
 import { createDashboardHarness, evaluateExpression, evaluateInPage, wait, waitForBrowserCondition } from './page-realm/harness.js'
 import type { DashboardHarness } from './page-realm/harness.js'
 import * as titleExpansionPage from './page-realm/title-expansion.js'
+import * as tooltipPage from './page-realm/tooltip.js'
 
 type FilterReloadTrace = {
   replacedFilterValues: Array<string | null>
@@ -863,15 +864,7 @@ async function waitForHistoryScrollbarThumbOpacity(harness: DashboardHarness, op
 }
 
 async function getVisibleTooltipTexts(harness: DashboardHarness) {
-  return evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `Array.from(document.querySelectorAll('[data-slot="tooltip-content"]'))
-      .filter((tooltip) => {
-        const rect = tooltip.getBoundingClientRect()
-        return rect.width > 0 && rect.height > 0 && !tooltip.hasAttribute('data-ending-style')
-      })
-      .map((tooltip) => tooltip.textContent || '')`,
-  }).then((result: any) => result.result.value)
+  return evaluateInPage(harness, tooltipPage.readVisibleTooltipTexts)
 }
 
 async function measureTooltipFreeze(harness: DashboardHarness) {
@@ -882,39 +875,7 @@ async function measureTooltipFreeze(harness: DashboardHarness) {
     mobile: false,
   })
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chipText = Array.from(document.querySelectorAll('.page-chip .chip-text'))
-          .find((candidate) =>
-            candidate.closest('.page-chip')?.textContent?.includes(${JSON.stringify(PAGE_CHIP_EXPANSION_SMOKE_LABEL)})
-          )
-        const rect = chipText?.getBoundingClientRect()
-        if (rect && rect.width > 120 && rect.height > 8) {
-          const startX = Math.round(rect.left + Math.min(24, rect.width / 2))
-          const y = Math.round(rect.top + rect.height / 2)
-          resolve({
-            startX,
-            moveX: Math.round(Math.min(rect.right - 8, startX + 80)),
-            textLeft: Math.round(rect.left),
-            textLeftExact: Math.round(rect.left * 100) / 100,
-            textRight: Math.round(rect.right),
-            textTop: Math.round(rect.top),
-            textTopExact: Math.round(rect.top * 100) / 100,
-            y
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findTooltipFreezeTarget, { label: PAGE_CHIP_EXPANSION_SMOKE_LABEL })
 
   assert.ok(target, 'expected a page chip to hover for tooltip smoke test')
 
@@ -933,14 +894,9 @@ async function measureTooltipFreeze(harness: DashboardHarness) {
   await wait(150)
   const second = await waitForPageChipExpansionRect(harness, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
 
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollBy(0, 160)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardBy, { top: 160 })
   await waitForNoPageChipExpansion(harness)
-  const afterScrollExpandedCount = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `document.querySelectorAll('.page-chip-expanded').length`,
-  }).then((result: any) => result.result.value)
+  const afterScrollExpandedCount = await evaluateInPage(harness, dashboardPage.countExpandedPageChips)
 
   return { target, first, second, afterScrollExpandedCount, closing: null }
 }
@@ -955,59 +911,7 @@ async function measureTooltipTextPaddingHitArea(harness: DashboardHarness) {
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const hitArea = Array.from(document.querySelectorAll('.chip-text-expansion-hit-area'))
-          .find((candidate) =>
-            candidate.closest('.page-chip')?.textContent?.includes('enough tooltip text')
-          )
-        const chip = hitArea?.closest('.page-chip')
-        const chipText = hitArea?.querySelector('.chip-text-truncated')
-        const chipRect = chip?.getBoundingClientRect()
-        const hitRect = hitArea?.getBoundingClientRect()
-        const textRect = chipText?.getBoundingClientRect()
-        if (
-          chipRect &&
-          hitRect &&
-          textRect &&
-          chipRect.left + 2 < hitRect.left - 1 &&
-          hitRect.width > 120 &&
-          textRect.width > 120 &&
-          hitRect.top < textRect.top &&
-          hitRect.bottom > textRect.bottom
-        ) {
-          const topGap = textRect.top - hitRect.top
-          const bottomGap = hitRect.bottom - textRect.bottom
-          resolve({
-            x: Math.round(textRect.left + Math.min(24, textRect.width / 2)),
-            aboveY: Math.round(textRect.top - Math.max(1, topGap / 2)),
-            belowY: Math.round(textRect.bottom + Math.max(1, bottomGap / 2)),
-            chipSurfaceX: Math.round(chipRect.left + Math.max(2, (hitRect.left - chipRect.left) / 2)),
-            chipSurfaceY: Math.round(textRect.top + Math.min(textRect.height / 2, 10)),
-            chipLeft: Math.round(chipRect.left),
-            chipRight: Math.round(chipRect.right),
-            hitTop: Math.round(hitRect.top),
-            hitBottom: Math.round(hitRect.bottom),
-            hitLeft: Math.round(hitRect.left),
-            textLeft: Math.round(textRect.left),
-            textLeftExact: Math.round(textRect.left * 100) / 100,
-            textTop: Math.round(textRect.top),
-            textTopExact: Math.round(textRect.top * 100) / 100,
-            textBottom: Math.round(textRect.bottom)
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findExpansionHitAreaTarget)
 
   assert.ok(target, 'expected a page chip expansion hit area for padding hover smoke test')
 
@@ -1066,63 +970,13 @@ async function measurePageChipInternalPointerMoveExpansion(harness: DashboardHar
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chip = Array.from(document.querySelectorAll('.page-chip'))
-          .find((candidate) => candidate.textContent?.includes('enough tooltip text'))
-        const chipText = chip?.querySelector('.chip-text-truncated')
-        const chipRect = chip?.getBoundingClientRect()
-        const textRect = chipText?.getBoundingClientRect()
-        if (
-          chip instanceof HTMLElement &&
-          chipRect &&
-          textRect &&
-          chipRect.left + 2 < textRect.left - 1 &&
-          textRect.width > 120 &&
-          textRect.height > 8
-        ) {
-          resolve({
-            x: Math.round(chipRect.left + Math.max(2, (textRect.left - chipRect.left) / 2)),
-            y: Math.round(textRect.top + Math.min(textRect.height / 2, 10)),
-            chipLeft: Math.round(chipRect.left),
-            chipRight: Math.round(chipRect.right),
-            textLeft: Math.round(textRect.left),
-            textTopExact: Math.round(textRect.top * 100) / 100
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findInternalPointerTarget)
 
   assert.ok(target, 'expected a page chip with left-side internal hover surface')
 
-  const before = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `document.querySelectorAll('.page-chip-expanded').length`,
-  }).then((result: any) => result.result.value)
+  const before = await evaluateInPage(harness, dashboardPage.countExpandedPageChips)
 
-  await evaluateExpression(harness, {
-    expression: `(() => {
-      const chip = Array.from(document.querySelectorAll('.page-chip'))
-        .find((candidate) => candidate.textContent?.includes('enough tooltip text'))
-      chip?.dispatchEvent(new PointerEvent('pointermove', {
-        bubbles: true,
-        clientX: ${target.x},
-        clientY: ${target.y},
-        pointerId: 1,
-        pointerType: 'mouse'
-      }))
-    })()`,
-  })
+  await evaluateInPage(harness, tooltipPage.dispatchChipPointerMove, { label: 'enough tooltip text', x: target.x, y: target.y })
   const expansion = await waitForPageChipExpansionRect(harness, 'enough tooltip text')
 
   await harness.session.send('Input.dispatchMouseEvent', {
@@ -1144,47 +998,13 @@ async function measureTooltipAfterActiveStateChanges(harness: DashboardHarness) 
   })
 
   async function setActiveTab(tabId: number, windowId = 1) {
-    await evaluateExpression(harness, {
-      awaitPromise: true,
-      expression: `window.__tabOutSmokeSetActiveTab?.(${tabId}, ${windowId})`,
-    })
-    await evaluateExpression(harness, {
-      expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-    })
+    await evaluateInPage(harness, tooltipPage.setActiveTab, { tabId, windowId })
+    await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
     await waitForDashboardSettled(harness)
   }
 
   async function findTarget() {
-    return evaluateExpression(harness, {
-      awaitPromise: true,
-      returnByValue: true,
-      expression: `new Promise((resolve) => {
-        const start = Date.now()
-        const wait = () => {
-          const chip = Array.from(document.querySelectorAll('.page-chip'))
-            .find((candidate) =>
-              candidate.textContent?.includes('Example 2 with enough tooltip text')
-            )
-          const chipText = chip?.querySelector('.chip-text-truncated')
-          const rect = chipText?.getBoundingClientRect()
-          if (chip && rect && rect.width > 120 && rect.height > 8) {
-            resolve({
-              activeFrame: !!chip.querySelector('.active-chip-frame'),
-              currentActive: chip.classList.contains('current-active-chip'),
-              x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-              y: Math.round(rect.top + Math.min(rect.height / 2, 10)),
-              textLeftExact: Math.round(rect.left * 100) / 100,
-              textTopExact: Math.round(rect.top * 100) / 100
-            })
-          } else if (Date.now() - start > 5000) {
-            resolve(null)
-          } else {
-            setTimeout(wait, 50)
-          }
-        }
-        wait()
-      })`,
-    }).then((result: any) => result.result.value)
+    return evaluateInPage(harness, tooltipPage.findActiveStateTarget)
   }
 
   async function hoverTarget(target: { x: number, y: number }) {
@@ -1226,32 +1046,7 @@ async function measureSuppressionMarkerTooltipLine(harness: DashboardHarness, la
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chipText = Array.from(document.querySelectorAll('.page-chip .chip-text'))
-          .find((candidate) =>
-            !candidate.closest('[data-slot="tooltip-content"]') &&
-            candidate.textContent?.includes(${JSON.stringify(label)})
-          )
-        const rect = chipText?.getBoundingClientRect()
-        if (rect && rect.width > 120 && rect.height > 8) {
-          resolve({
-            x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + Math.min(rect.height / 2, 10))
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findSuppressionMarkerChipTarget, { label })
 
   assert.ok(target, `expected a title-suppression page chip for ${label}`)
 
@@ -1262,43 +1057,7 @@ async function measureSuppressionMarkerTooltipLine(harness: DashboardHarness, la
   })
   await waitForPageChipExpansionRect(harness, label)
 
-  const result = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const expandedChip = Array.from(document.querySelectorAll('.page-chip-expanded'))
-        .find((candidate) => candidate.textContent?.includes(${JSON.stringify(label)}))
-      const expandedText = expandedChip?.querySelector('.chip-text')
-      const marker = expandedChip?.querySelector('.chip-title-suppression-marker')
-      const tooltipRect = expandedChip?.getBoundingClientRect()
-      const textRect = expandedText?.getBoundingClientRect()
-      const markerRect = marker?.getBoundingClientRect()
-      if (!expandedChip || !expandedText || !marker || !tooltipRect || !textRect || !markerRect) return null
-
-      const textStyles = window.getComputedStyle(expandedText)
-      const markerStyles = window.getComputedStyle(marker)
-      const lineHeight = Number.parseFloat(textStyles.lineHeight) || 16.25
-      const markerLine = Math.round((markerRect.top - textRect.top) / lineHeight) + 1
-      const lineTop = textRect.top + (markerLine - 1) * lineHeight
-      const markerCenter = markerRect.top + markerRect.height / 2
-      const lineCenter = lineTop + lineHeight / 2
-
-      return {
-        label: ${JSON.stringify(label)},
-        text: expandedChip.textContent || '',
-        markerLine,
-        markerCenterDelta: Math.round((markerCenter - lineCenter) * 100) / 100,
-        markerHeight: Math.round(markerRect.height * 100) / 100,
-        markerLineHeight: markerStyles.lineHeight,
-        markerVerticalAlign: markerStyles.verticalAlign,
-        textLineHeight: Math.round(lineHeight * 100) / 100,
-        tooltipRight: Math.round(tooltipRect.right),
-        viewportRight: window.innerWidth,
-        tooltipTop: Math.round(tooltipRect.top),
-        textTop: Math.round(textRect.top),
-        markerTop: Math.round(markerRect.top)
-      }
-    })()`,
-  }).then((measurement: any) => measurement.result.value)
+  const result = await evaluateInPage(harness, tooltipPage.readSuppressionMarkerExpansionLine, { label })
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -1320,54 +1079,7 @@ async function measureSuppressionMarkerChipLine(harness: DashboardHarness, label
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const result = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chipText = Array.from(document.querySelectorAll('.page-chip .chip-text'))
-          .find((candidate) =>
-            !candidate.closest('[data-slot="tooltip-content"]') &&
-            candidate.textContent?.includes(${JSON.stringify(label)})
-          )
-        const marker = chipText?.querySelector('.chip-title-suppression-marker')
-        const glyph = marker?.querySelector('.chip-title-suppression-glyph')
-        const textRect = chipText?.getBoundingClientRect()
-        const markerRect = marker?.getBoundingClientRect()
-        const glyphRect = glyph?.getBoundingClientRect()
-        if (chipText && marker && glyph && textRect && markerRect && glyphRect && textRect.width > 120 && textRect.height > 8) {
-          const textStyles = window.getComputedStyle(chipText)
-          const markerStyles = window.getComputedStyle(marker)
-          const lineHeight = Number.parseFloat(textStyles.lineHeight) || 16.25
-          const markerLine = Math.round((markerRect.top - textRect.top) / lineHeight) + 1
-          const lineTop = textRect.top + (markerLine - 1) * lineHeight
-          const markerCenter = markerRect.top + markerRect.height / 2
-          const glyphCenter = glyphRect.top + glyphRect.height / 2
-          const lineCenter = lineTop + lineHeight / 2
-          resolve({
-            label: ${JSON.stringify(label)},
-            text: chipText.textContent || '',
-            markerLine,
-            markerCenterDelta: Math.round((markerCenter - lineCenter) * 100) / 100,
-            glyphCenterDelta: Math.round((glyphCenter - markerCenter) * 100) / 100,
-            markerHeight: Math.round(markerRect.height * 100) / 100,
-            glyphHeight: Math.round(glyphRect.height * 100) / 100,
-            markerLineHeight: markerStyles.lineHeight,
-            markerVerticalAlign: markerStyles.verticalAlign,
-            textLineHeight: Math.round(lineHeight * 100) / 100,
-            textTop: Math.round(textRect.top),
-            markerTop: Math.round(markerRect.top)
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((measurement: any) => measurement.result.value)
+  const result = await evaluateInPage(harness, tooltipPage.measureSuppressionMarkerRestingLine, { label })
 
   return { result }
 }
@@ -1382,35 +1094,11 @@ async function measureSuppressionTokenCloseHighlight(harness: DashboardHarness) 
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const token = Array.from(document.querySelectorAll('.title-suppression-token'))
-          .find((el) => (el.textContent || '').trim().startsWith('— Shared Workspace'))
-        if (token instanceof HTMLElement) {
-          token.scrollIntoView({ block: 'center' })
-          const rect = token.getBoundingClientRect()
-          if (rect.width > 0 && rect.height > 0) {
-            resolve({ x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) })
-            return
-          }
-        }
-        if (Date.now() - start > 5000) resolve(null)
-        else setTimeout(wait, 50)
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findSuppressionTokenTarget, { prefix: '— Shared Workspace' })
 
   assert.ok(target, 'expected a "— Shared Workspace" title-suppression token for the close-highlight smoke test')
 
-  const readHighlightedChips = () => evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `document.querySelectorAll('.page-chip-suppression-highlighted').length`,
-  }).then((result: any) => result.result.value)
+  const readHighlightedChips = () => evaluateInPage(harness, tooltipPage.countSuppressionHighlightedChips)
 
   const baseline = await readHighlightedChips()
 
@@ -1422,17 +1110,7 @@ async function measureSuppressionTokenCloseHighlight(harness: DashboardHarness) 
   await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'right', buttons: 0, clickCount: 1, x: target.x, y: target.y })
   await waitForContextMenuState(harness, true)
 
-  const onRightClick = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const menu = document.querySelector('[data-slot="context-menu-content"]')
-      return {
-        highlightedChips: document.querySelectorAll('.page-chip-suppression-highlighted').length,
-        menuOpen: !!menu && menu.getClientRects().length > 0,
-        itemTexts: Array.from(document.querySelectorAll('[data-slot="context-menu-item"]')).map((item) => (item.textContent || '').trim())
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const onRightClick = await evaluateInPage(harness, tooltipPage.readSuppressionHighlightMenuState)
 
   // Close the menu by clicking elsewhere with the mouse (away from the menu). Base UI
   // restores focus to the token on close; the highlight must still clear because that
@@ -1442,14 +1120,7 @@ async function measureSuppressionTokenCloseHighlight(harness: DashboardHarness) 
   await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', buttons: 0, clickCount: 1, x: 8, y: 860 })
   await waitForContextMenuState(harness, false)
 
-  const afterClickAway = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => ({
-      menuOpen: !!document.querySelector('[data-slot="context-menu-content"]'),
-      highlightedChips: document.querySelectorAll('.page-chip-suppression-highlighted').length,
-      activeIsToken: !!(document.activeElement && document.activeElement.classList.contains('title-suppression-token'))
-    }))()`,
-  }).then((result: any) => result.result.value)
+  const afterClickAway = await evaluateInPage(harness, tooltipPage.readSuppressionHighlightAfterClickAway)
 
   // Park the pointer away so later smoke measurements start clean.
   await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 8, y: 8 })

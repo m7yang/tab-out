@@ -373,3 +373,11 @@ export function waitForTooltipRect(): Promise<TooltipRect | null> {
     poll()
   })
 }
+
+export function scrollDashboardBy(params: { top: number }): void {
+  document.querySelector('.scroll-region')?.scrollBy(0, params.top)
+}
+
+export function countExpandedPageChips(): number {
+  return document.querySelectorAll('.page-chip-expanded').length
+}
