@@ -82,7 +82,7 @@ test('extension build configuration produces the committed package', async () =>
   const nodeTsconfig = JSON.parse(readFileSync('tsconfig.node.json', 'utf8'))
   const testTsconfig = JSON.parse(readFileSync('tsconfig.test.json', 'utf8'))
   const shadcnConfig = JSON.parse(readFileSync('components.json', 'utf8'))
-  assert.equal(readFileSync('.node-version', 'utf8').trim(), '26.8.1')
+  assert.equal(readFileSync('.node-version', 'utf8').trim(), '26.8.2')
   assert.match(pkg.packageManager, /^pnpm@/)
   assert.equal(pkg.scripts?.['setup:hooks'], 'git config core.hooksPath .githooks')
   assert.equal(
