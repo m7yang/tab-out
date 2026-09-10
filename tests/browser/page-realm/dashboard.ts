@@ -22,6 +22,10 @@ type DashboardSmokeWindow = Window & {
   __tabOutSmokeSetBookmarks?: (count: number) => void
 }
 
+export function scrollDashboardToTop(): void {
+  document.querySelector('.scroll-region')?.scrollTo(0, 0)
+}
+
 export function startClassRetentionProbe(params: ClassRetentionProbeTarget): boolean {
   const smokeWindow = window as unknown as DashboardSmokeWindow
   const target = Array.from(document.querySelectorAll(params.selector))

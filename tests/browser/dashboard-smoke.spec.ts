@@ -5,6 +5,7 @@ import * as dashboardPage from './page-realm/dashboard.js'
 import type { ClassRetentionProbeTarget } from './page-realm/dashboard.js'
 import { createDashboardHarness, evaluateExpression, evaluateInPage, wait, waitForBrowserCondition } from './page-realm/harness.js'
 import type { DashboardHarness } from './page-realm/harness.js'
+import * as titleExpansionPage from './page-realm/title-expansion.js'
 
 type FilterReloadTrace = {
   replacedFilterValues: Array<string | null>
@@ -737,88 +738,20 @@ const MARKER_WRAP_REFLOW_SMOKE_LABEL = 'Content: All content overview'
  * line only when the previous line has no room for it.
  */
 async function measureMarkerWrapExpansionReflow(harness: DashboardHarness, options: { forcedTextWidth?: number, viewportWidth?: number } = {}) {
-  await evaluateExpression(harness, {
-    awaitPromise: true,
-    expression: `window.__tabOutSmokeAddMarkerWrapPathGroupTabs?.()`,
-  })
+  await evaluateInPage(harness, titleExpansionPage.addMarkerWrapPathGroupTabs)
   await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: options.viewportWidth || 1000,
     height: 900,
     deviceScaleFactor: 2,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      let forceSettled = false
-      const wait = () => {
-        const chipText = Array.from(document.querySelectorAll('.page-chip .chip-text'))
-          .find((candidate) =>
-            !candidate.closest('.page-chip-expanded') &&
-            !candidate.closest('[data-slot="tooltip-content"]') &&
-            candidate.textContent?.includes(${JSON.stringify(MARKER_WRAP_REFLOW_SMOKE_LABEL)})
-          )
-        if (!(chipText instanceof HTMLElement) || chipText.closest('.page-chips-overflow')) {
-          // The crowded contentful card can tuck this path group behind an
-          // overflow whose Page Chips are not mounted until it is expanded.
-          const card = document.querySelector('[data-tabout="domain-card"][data-tabout-domain="contentful.com"]')
-          const toggles = card?.querySelectorAll('[data-tabout-part="overflow-expander"]') ?? []
-          if (toggles.length > 0) {
-            toggles.forEach((toggle) => toggle.click())
-            setTimeout(wait, 300)
-            return
-          }
-        }
-        if (chipText instanceof HTMLElement && !forceSettled) {
-          const forcedTextWidth = ${JSON.stringify(options.forcedTextWidth || 0)}
-          chipText.style.flex = forcedTextWidth ? '0 0 ' + forcedTextWidth + 'px' : ''
-          chipText.style.maxWidth = forcedTextWidth ? forcedTextWidth + 'px' : ''
-          // Forced geometry changes re-run the clamped-title capture; let it
-          // settle before reading line counts (see the tooltip helper above).
-          forceSettled = true
-          setTimeout(wait, 160)
-          return
-        }
-        const rect = chipText?.getBoundingClientRect()
-        if (
-          chipText instanceof HTMLElement &&
-          rect &&
-          (rect.top < 24 || rect.bottom > window.innerHeight - 24)
-        ) {
-          chipText.scrollIntoView({ block: 'center', inline: 'nearest' })
-          setTimeout(wait, 120)
-          return
-        }
-        if (chipText instanceof HTMLElement && rect && rect.width > 80 && rect.height > 8) {
-          const styles = window.getComputedStyle(chipText)
-          const lineHeight = Number.parseFloat(styles.lineHeight) || 16.25
-          resolve({
-            x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + Math.min(rect.height / 2, 10)),
-            chipLineCount: Math.max(1, Math.round(rect.height / lineHeight)),
-            suppressionPillCount: chipText.querySelectorAll('.chip-title-suppression-marker').length,
-            labeledPlaceholderCount: chipText.querySelectorAll('.chip-strip-indicator[aria-label]').length,
-            pillLines: Array.from(chipText.querySelectorAll('.chip-title-suppression-marker, .chip-strip-indicator[aria-label]')).map((pill) => {
-              const pillRect = pill.getBoundingClientRect()
-              return Math.round((pillRect.top - rect.top) / lineHeight)
-            })
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, titleExpansionPage.findMarkerWrapChipTarget, {
+    label: MARKER_WRAP_REFLOW_SMOKE_LABEL,
+    forcedTextWidth: options.forcedTextWidth || 0,
+  })
 
   if (!target) return { target, expansion: null }
 
@@ -829,73 +762,7 @@ async function measureMarkerWrapExpansionReflow(harness: DashboardHarness, optio
   })
   await waitForPageChipExpansionRect(harness, MARKER_WRAP_REFLOW_SMOKE_LABEL)
 
-  const expansion = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const chip = Array.from(document.querySelectorAll('.page-chip-expanded'))
-        .find((candidate) => candidate.textContent?.includes(${JSON.stringify(MARKER_WRAP_REFLOW_SMOKE_LABEL)}))
-      const textEl = chip?.querySelector('.chip-text')
-      if (!(chip instanceof HTMLElement) || !(textEl instanceof HTMLElement)) return null
-
-      const paintedContentRight = (root) => {
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-          acceptNode(node) {
-            return node.textContent?.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
-          }
-        })
-        const range = document.createRange()
-        let maxRight = 0
-        while (true) {
-          const node = walker.nextNode()
-          if (!node) break
-          range.selectNodeContents(node)
-          for (const rect of range.getClientRects()) {
-            if (rect.width > 0) maxRight = Math.max(maxRight, rect.right)
-          }
-        }
-        for (const pill of root.querySelectorAll('.chip-title-suppression-marker, .chip-strip-indicator')) {
-          const rect = pill.getBoundingClientRect()
-          if (rect.width > 0) maxRight = Math.max(maxRight, rect.right)
-        }
-        return maxRight
-      }
-
-      const lines = Array.from(chip.querySelectorAll('.page-chip-expanded-line'))
-      const lineContentRights = lines.map((line) => Math.round(paintedContentRight(line) * 100) / 100)
-      const viewportAllowanceRight = window.innerWidth - 12
-      const textRect = textEl.getBoundingClientRect()
-      const lineHeight = Number.parseFloat(window.getComputedStyle(textEl).lineHeight) || 16.25
-      const pills = Array.from(textEl.querySelectorAll('.chip-title-suppression-marker, .chip-strip-indicator[aria-label]')).map((pill) => {
-        const rect = pill.getBoundingClientRect()
-        const lineIndex = lines.findIndex((line) => line.contains(pill))
-        const line = lineIndex >= 0 ? lines[lineIndex] : null
-        const startsLine = !!line && rect.left - line.getBoundingClientRect().left <= 2
-        const previousLineFreeRoom = lineIndex > 0
-          ? Math.round((viewportAllowanceRight - lineContentRights[lineIndex - 1]) * 100) / 100
-          : 0
-        return {
-          text: pill.textContent || '',
-          width: Math.round(rect.width * 100) / 100,
-          lineIndex,
-          visualLine: Math.round((rect.top - textRect.top) / lineHeight),
-          startsLine,
-          previousLineFreeRoom
-        }
-      })
-      const strandedPills = pills.filter((pill) => (
-        pill.lineIndex > 0 && pill.startsLine && pill.previousLineFreeRoom >= pill.width + 6
-      ))
-      return {
-        text: textEl.textContent || '',
-        expandedLineCount: lines.length,
-        lineTexts: lines.map((line) => line.textContent || ''),
-        lineContentRights,
-        innerWidth: window.innerWidth,
-        pills,
-        strandedPills
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const expansion = await evaluateInPage(harness, titleExpansionPage.readMarkerWrapExpansion, { label: MARKER_WRAP_REFLOW_SMOKE_LABEL })
 
   await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2 })
   await waitForNoPageChipExpansion(harness)
@@ -913,82 +780,17 @@ const MARKER_ONLY_LINE_SMOKE_LABEL = 'Platform Ops Dev 2026'
  * line instead of reflowing it up into the title line.
  */
 async function measureMarkerOnlyLineExpansion(harness: DashboardHarness) {
-  await evaluateExpression(harness, {
-    awaitPromise: true,
-    expression: `window.__tabOutSmokeAddMarkerWrapPathGroupTabs?.()`,
-  })
+  await evaluateInPage(harness, titleExpansionPage.addMarkerWrapPathGroupTabs)
   await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 2,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      let forceSettled = false
-      const wait = () => {
-        const chipText = Array.from(document.querySelectorAll('.page-chip .chip-text'))
-          .find((candidate) =>
-            !candidate.closest('.page-chip-expanded') &&
-            !candidate.closest('[data-slot="tooltip-content"]') &&
-            candidate.textContent?.includes(${JSON.stringify(MARKER_ONLY_LINE_SMOKE_LABEL)}) &&
-            candidate.textContent?.includes('assignee')
-          )
-        if (!(chipText instanceof HTMLElement) || chipText.closest('.page-chips-overflow')) {
-          const card = document.querySelector('[data-tabout="domain-card"][data-tabout-domain="atlassian.net"]')
-          const toggles = card?.querySelectorAll('[data-tabout-part="overflow-expander"]') ?? []
-          if (toggles.length > 0) {
-            toggles.forEach((toggle) => toggle.click())
-            setTimeout(wait, 300)
-            return
-          }
-        }
-        if (chipText instanceof HTMLElement && !forceSettled) {
-          chipText.style.flex = '0 0 276px'
-          chipText.style.maxWidth = '276px'
-          forceSettled = true
-          setTimeout(wait, 160)
-          return
-        }
-        const rect = chipText?.getBoundingClientRect()
-        if (
-          chipText instanceof HTMLElement &&
-          rect &&
-          (rect.top < 24 || rect.bottom > window.innerHeight - 24)
-        ) {
-          chipText.scrollIntoView({ block: 'center', inline: 'nearest' })
-          setTimeout(wait, 120)
-          return
-        }
-        if (chipText instanceof HTMLElement && rect && rect.width > 80 && rect.height > 8) {
-          const styles = window.getComputedStyle(chipText)
-          const lineHeight = Number.parseFloat(styles.lineHeight) || 16.25
-          const marker = chipText.querySelector('.chip-title-suppression-marker')
-          const markerRect = marker?.getBoundingClientRect()
-          resolve({
-            x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + Math.min(rect.height / 2, 10)),
-            chipLineCount: Math.max(1, Math.round(rect.height / lineHeight)),
-            markerLine: markerRect ? Math.round((markerRect.top - rect.top) / lineHeight) : null,
-            markerLeftOffset: markerRect ? Math.round(markerRect.left - rect.left) : null
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, titleExpansionPage.findMarkerOnlyLineChipTarget, { label: MARKER_ONLY_LINE_SMOKE_LABEL })
 
   if (!target) return { target, expansion: null }
 
@@ -999,25 +801,7 @@ async function measureMarkerOnlyLineExpansion(harness: DashboardHarness) {
   })
   await waitForPageChipExpansionRect(harness, MARKER_ONLY_LINE_SMOKE_LABEL)
 
-  const expansion = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const chip = Array.from(document.querySelectorAll('.page-chip-expanded'))
-        .find((candidate) => candidate.textContent?.includes(${JSON.stringify(MARKER_ONLY_LINE_SMOKE_LABEL)}))
-      const textEl = chip?.querySelector('.chip-text')
-      if (!(chip instanceof HTMLElement) || !(textEl instanceof HTMLElement)) return null
-      const textRect = textEl.getBoundingClientRect()
-      const lineHeight = Number.parseFloat(window.getComputedStyle(textEl).lineHeight) || 16.25
-      const marker = textEl.querySelector('.chip-title-suppression-marker')
-      const markerRect = marker?.getBoundingClientRect()
-      return {
-        markerLine: markerRect ? Math.round((markerRect.top - textRect.top) / lineHeight) : null,
-        markerText: marker?.textContent || '',
-        visualLineCount: Math.max(1, Math.round(textRect.height / lineHeight)),
-        text: (textEl.textContent || '').slice(0, 160)
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const expansion = await evaluateInPage(harness, titleExpansionPage.readMarkerOnlyLineExpansion, { label: MARKER_ONLY_LINE_SMOKE_LABEL })
 
   await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2 })
   await waitForNoPageChipExpansion(harness)
@@ -1034,10 +818,7 @@ const VARIANT_TITLE_ROW_SMOKE_LABEL = 'Skills for Real Engineers'
  * second line's text stays on the second line instead of reflowing up.
  */
 async function measureVariantTitleRowStability(harness: DashboardHarness) {
-  await evaluateExpression(harness, {
-    awaitPromise: true,
-    expression: `window.__tabOutSmokeAddMarkerWrapPathGroupTabs?.()`,
-  })
+  await evaluateInPage(harness, titleExpansionPage.addMarkerWrapPathGroupTabs)
   // Wide viewport: the hydrated indicator label needs rightward room on its
   // frozen first line wherever the masonry parks this card; the scenario
   // pins line stability, not the viewport-constrained wrap.
@@ -1047,83 +828,10 @@ async function measureVariantTitleRowStability(harness: DashboardHarness) {
     deviceScaleFactor: 2,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const probeExpression = (mode: 'rest' | 'expanded') => `new Promise((resolve) => {
-    const start = Date.now()
-    let forceSettled = ${JSON.stringify(mode === 'expanded')}
-    const wait = () => {
-      const root = ${mode === 'rest'
-        ? `Array.from(document.querySelectorAll('.page-chip:not(.page-chip-expanded) .chip-title-row'))
-            .find((candidate) => candidate.textContent?.includes(${JSON.stringify(VARIANT_TITLE_ROW_SMOKE_LABEL)}))`
-        : `Array.from(document.querySelectorAll('.page-chip-expanded .chip-title-row'))
-            .find((candidate) => candidate.textContent?.includes(${JSON.stringify(VARIANT_TITLE_ROW_SMOKE_LABEL)}))`}
-      const chipText = root?.closest('.chip-text')
-      if (root instanceof HTMLElement && chipText instanceof HTMLElement && !forceSettled) {
-        chipText.style.flex = '0 0 260px'
-        chipText.style.maxWidth = '260px'
-        forceSettled = true
-        setTimeout(wait, 160)
-        return
-      }
-      const rect = root?.getBoundingClientRect()
-      if (root instanceof HTMLElement && rect && (rect.top < 24 || rect.bottom > window.innerHeight - 24)) {
-        root.scrollIntoView({ block: 'center', inline: 'nearest' })
-        setTimeout(wait, 120)
-        return
-      }
-      if (root instanceof HTMLElement && rect && rect.width > 80 && rect.height > 8) {
-        const lineHeight = Number.parseFloat(window.getComputedStyle(root).lineHeight) || 16.25
-        const indicator = root.querySelector('.chip-strip-indicator')
-        const indicatorRect = indicator?.getBoundingClientRect()
-        // Bionic rendering splits words across text nodes, so bucket painted
-        // characters into visual lines and find the anchor phrase per line.
-        const lineTexts = []
-        const range = document.createRange()
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-          acceptNode(node) {
-            return node.textContent ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
-          }
-        })
-        while (true) {
-          const node = walker.nextNode()
-          if (!node) break
-          const text = node.textContent || ''
-          for (let offset = 0; offset < text.length; offset += 1) {
-            range.setStart(node, offset)
-            range.setEnd(node, offset + 1)
-            const rects = Array.from(range.getClientRects()).filter((candidate) => candidate.width > 0 || candidate.height > 0)
-            const charRect = rects.at(-1)
-            if (!charRect) continue
-            const line = Math.max(0, Math.round((charRect.top - rect.top) / lineHeight))
-            lineTexts[line] = (lineTexts[line] || '') + text[offset]
-          }
-        }
-        resolve({
-          x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-          y: Math.round(rect.top + Math.min(rect.height / 2, 10)),
-          titleRowLines: Math.max(1, Math.round(rect.height / lineHeight)),
-          indicatorLine: indicatorRect ? Math.round((indicatorRect.top - rect.top) / lineHeight) : null,
-          indicatorText: (indicator?.textContent || '').slice(0, 40),
-          anchorLine: lineTexts.findIndex((text) => (text || '').includes('from my'))
-        })
-      } else if (Date.now() - start > 5000) {
-        resolve(null)
-      } else {
-        setTimeout(wait, 50)
-      }
-    }
-    wait()
-  })`
-
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: probeExpression('rest'),
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, titleExpansionPage.probeVariantTitleRow, { mode: 'rest', label: VARIANT_TITLE_ROW_SMOKE_LABEL })
 
   if (!target) return { target, expansion: null }
 
@@ -1134,11 +842,7 @@ async function measureVariantTitleRowStability(harness: DashboardHarness) {
   })
   await waitForPageChipExpansionRect(harness, VARIANT_TITLE_ROW_SMOKE_LABEL)
 
-  const expansion = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: probeExpression('expanded'),
-  }).then((result: any) => result.result.value)
+  const expansion = await evaluateInPage(harness, titleExpansionPage.probeVariantTitleRow, { mode: 'expanded', label: VARIANT_TITLE_ROW_SMOKE_LABEL })
 
   await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2 })
   await waitForNoPageChipExpansion(harness)
@@ -1147,124 +851,15 @@ async function measureVariantTitleRowStability(harness: DashboardHarness) {
 }
 
 async function waitForPageChipExpansionRect(harness: DashboardHarness, text: string, timeoutMs = 2000) {
-  return evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chip = Array.from(document.querySelectorAll('.page-chip-expanded'))
-          .find((candidate) => candidate.textContent?.includes(${JSON.stringify(text)}))
-        const rect = chip?.getBoundingClientRect()
-        const chipText = chip?.querySelector('.chip-text')
-        const textRect = chipText?.getBoundingClientRect()
-        if (chip instanceof HTMLElement && rect && chipText && textRect && rect.width > 0 && rect.height > 0) {
-          const styles = window.getComputedStyle(chipText)
-          const lineHeight = Number.parseFloat(styles.lineHeight) || 16.25
-          resolve({
-            left: Math.round(rect.left),
-            right: Math.round(rect.right),
-            top: Math.round(rect.top),
-            bottom: Math.round(rect.bottom),
-            width: Math.round(rect.width),
-            height: Math.round(rect.height),
-            textLeft: Math.round(textRect.left * 100) / 100,
-            textTop: Math.round(textRect.top * 100) / 100,
-            textWidth: Math.round(textRect.width * 100) / 100,
-            textHeight: Math.round(textRect.height * 100) / 100,
-            textLineHeight: Math.round(lineHeight * 100) / 100,
-            textLineCount: Math.max(1, Math.round(textRect.height / lineHeight)),
-            text: chip.textContent || '',
-            visibleTooltipCount: Array.from(document.querySelectorAll('[data-slot="tooltip-content"]')).filter((tooltip) => {
-              const tooltipRect = tooltip.getBoundingClientRect()
-              return tooltipRect.width > 0 && tooltipRect.height > 0 && !tooltip.hasAttribute('data-ending-style')
-            }).length,
-            viewportRight: window.innerWidth
-          })
-        } else if (Date.now() - start > ${JSON.stringify(timeoutMs)}) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  return evaluateInPage(harness, titleExpansionPage.waitForPageChipExpansionRect, { text, timeoutMs })
 }
 
 async function waitForHistoryEntryExpansionRect(harness: DashboardHarness, text: string, timeoutMs = 2000) {
-  return evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const entry = Array.from(document.querySelectorAll('.history-entry-expanded'))
-          .find((candidate) => candidate.textContent?.includes(${JSON.stringify(text)}))
-        const rect = entry?.getBoundingClientRect()
-        const title = entry?.querySelector('.history-entry-title')
-        const titleRect = title?.getBoundingClientRect()
-        if (entry instanceof HTMLElement && rect && title instanceof HTMLElement && titleRect && rect.width > 0 && rect.height > 0) {
-          const styles = window.getComputedStyle(title)
-          const lineHeight = Number.parseFloat(styles.lineHeight) || 16.25
-          const lineNodes = Array.from(title.querySelectorAll('.history-entry-expanded-line'))
-          const expandedLineTexts = lineNodes.length > 0
-            ? lineNodes.map((node) => node.textContent || '')
-            : [title.textContent || '']
-          const expandedLineOverflows = lineNodes.map((node) => node.scrollWidth - node.clientWidth > 1)
-          resolve({
-            left: Math.round(rect.left),
-            right: Math.round(rect.right),
-            top: Math.round(rect.top),
-            bottom: Math.round(rect.bottom),
-            width: Math.round(rect.width),
-            height: Math.round(rect.height),
-            titleLeft: Math.round(titleRect.left * 100) / 100,
-            titleTop: Math.round(titleRect.top * 100) / 100,
-            titleWidth: Math.round(titleRect.width * 100) / 100,
-            titleHeight: Math.round(titleRect.height * 100) / 100,
-            titleLineHeight: Math.round(lineHeight * 100) / 100,
-            expandedLineCount: Math.max(1, Math.round(titleRect.height / lineHeight)),
-            expandedLineTexts,
-            expandedLineOverflows,
-            text: entry.textContent || '',
-            visibleTooltipCount: Array.from(document.querySelectorAll('[data-slot="tooltip-content"]')).filter((tooltip) => {
-              const tooltipRect = tooltip.getBoundingClientRect()
-              return tooltipRect.width > 0 && tooltipRect.height > 0 && !tooltip.hasAttribute('data-ending-style')
-            }).length,
-            viewportRight: window.innerWidth,
-            webkitLineClamp: styles.webkitLineClamp || null
-          })
-        } else if (Date.now() - start > ${JSON.stringify(timeoutMs)}) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  return evaluateInPage(harness, titleExpansionPage.waitForHistoryEntryExpansionRect, { text, timeoutMs })
 }
 
 async function waitForHistoryScrollbarThumbOpacity(harness: DashboardHarness, opacity: string, timeoutMs = 1000) {
-  return evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const thumb = document.querySelector('.history-entry-scrollbar-thumb')
-        if (thumb && window.getComputedStyle(thumb).opacity === ${JSON.stringify(opacity)}) {
-          resolve(true)
-        } else if (Date.now() - start > ${JSON.stringify(timeoutMs)}) {
-          resolve(false)
-        } else {
-          requestAnimationFrame(wait)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  return evaluateInPage(harness, titleExpansionPage.waitForHistoryScrollbarThumbOpacity, { opacity, timeoutMs })
 }
 
 async function getVisibleTooltipTexts(harness: DashboardHarness) {
@@ -1357,9 +952,7 @@ async function measureTooltipTextPaddingHitArea(harness: DashboardHarness) {
     deviceScaleFactor: 2,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -1470,9 +1063,7 @@ async function measurePageChipInternalPointerMoveExpansion(harness: DashboardHar
     deviceScaleFactor: 2,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -1632,9 +1223,7 @@ async function measureSuppressionMarkerTooltipLine(harness: DashboardHarness, la
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -1728,9 +1317,7 @@ async function measureSuppressionMarkerChipLine(harness: DashboardHarness, label
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const result = await evaluateExpression(harness, {
@@ -1792,9 +1379,7 @@ async function measureSuppressionTokenCloseHighlight(harness: DashboardHarness) 
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -1884,9 +1469,7 @@ async function measurePageChipTooltipLineCount(
     deviceScaleFactor: 2,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -2076,9 +1659,7 @@ async function measureFoldedPageChipTooltipTitleLineCount(
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -2180,9 +1761,7 @@ async function measureFoldedEnvHoverTooltips(
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
@@ -2253,9 +1832,7 @@ async function measureInteractiveTooltipClickReturnFocus(
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -2357,9 +1934,7 @@ async function measurePageChipOriginalSlotLeave(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -3137,9 +2712,7 @@ async function measureTooltipPopupWheelScroll(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -4141,9 +3714,7 @@ async function measureTooltipWindowBlurClose(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -4202,9 +3773,7 @@ async function measureTooltipVisibilityChangeClose(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -4290,9 +3859,7 @@ async function measureActionTooltipClickClose(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -4370,9 +3937,7 @@ async function measureMarkerToChipTooltipHandoff(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -4495,9 +4060,7 @@ async function measureTooltipEdgeFlip(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -4559,9 +4122,7 @@ async function measureCompactTitleVariantExpansion(harness: DashboardHarness) {
     awaitPromise: true,
     expression: `window.__tabOutSmokeAddCompactTitleVariantTabs?.()`,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -4663,9 +4224,7 @@ async function measurePlainTitleVariantEdgeExpansion(harness: DashboardHarness) 
     awaitPromise: true,
     expression: `window.__tabOutSmokeAddPlainTitleVariantTabs?.()`,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -4872,9 +4431,7 @@ async function measureWrappedTitleVariantExpansion(harness: DashboardHarness) {
     awaitPromise: true,
     expression: `window.__tabOutSmokeAddWrappedTitleVariantTabs?.()`,
   })
-  await evaluateExpression(harness, {
-    expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
-  })
+  await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
   const target = await evaluateExpression(harness, {
@@ -6079,7 +5636,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page }) => {
   )
   assert.ok(markerWrapStability.expansion, `marker-wrap chip should expand in place: ${JSON.stringify(markerWrapStability)}`)
   assert.ok(
-    ['Example Website', 'Contentful', 'dev2'].every((part) => markerWrapStability.expansion.text.includes(part)),
+    ['Example Website', 'Contentful', 'dev2'].every((part) => markerWrapStability.expansion?.text.includes(part)),
     `marker-wrap expansion should reveal every suppressed/placeholder label: ${JSON.stringify(markerWrapStability.expansion)}`,
   )
   assert.deepEqual(
@@ -6103,7 +5660,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page }) => {
   )
   assert.ok(markerWrapConstrainedReflow.expansion, `constrained marker-wrap chip should expand in place: ${JSON.stringify(markerWrapConstrainedReflow)}`)
   assert.ok(
-    ['Example Website', 'Contentful', 'dev2'].every((part) => markerWrapConstrainedReflow.expansion.text.includes(part)),
+    ['Example Website', 'Contentful', 'dev2'].every((part) => markerWrapConstrainedReflow.expansion?.text.includes(part)),
     `constrained marker-wrap expansion should reveal every suppressed/placeholder label: ${JSON.stringify(markerWrapConstrainedReflow.expansion)}`,
   )
   assert.equal(
@@ -6127,7 +5684,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page }) => {
   // Long opaque assignee values render as bounded stable fingerprints, so the
   // hydrated suffix is the readable query key plus each variant's fingerprint.
   assert.ok(
-    ['assignee=', '1RLVW78', '08KCGBG'].every((part) => markerOnlyLine.expansion.text.includes(part)),
+    ['assignee=', '1RLVW78', '08KCGBG'].every((part) => markerOnlyLine.expansion?.text.includes(part)),
     `marker-only-line expansion should reveal the fingerprinted URL suffixes: ${JSON.stringify(markerOnlyLine.expansion)}`,
   )
 
