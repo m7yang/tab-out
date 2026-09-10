@@ -655,6 +655,9 @@ async function waitForContextMenuState(harness: DashboardHarness, open: boolean)
     `context menu should ${open ? 'open' : 'close'}`,
     { args: [open] },
   )
+  // A dismissal dispatched within a few milliseconds of open races the
+  // trigger-press mark Floating UI clears on a zero-delay timer.
+  if (open) await evaluateInPage(harness, contextMenuPage.settleMenuOpen)
 }
 
 async function startClassRetentionProbe(harness: DashboardHarness, target: ClassRetentionProbeTarget) {

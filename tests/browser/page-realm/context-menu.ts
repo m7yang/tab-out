@@ -295,3 +295,12 @@ export function readOutsideClickResult(params: { activeBefore: string }) {
     menuOpen: !!document.querySelector('[data-slot="context-menu-content"]:not([hidden])'),
   }
 }
+
+// Floating UI marks a trigger press as inside its tree and clears the mark on
+// a zero-delay timer; an outside press that arrives before that timer runs is
+// ignored. Yielding one macrotask after a menu opens lets a dismissal issued
+// immediately afterwards be honored, which only automation is fast enough to
+// need.
+export function settleMenuOpen(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
