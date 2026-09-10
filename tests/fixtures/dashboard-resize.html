@@ -175,10 +175,14 @@
       const initialBookmarks = Math.max(0, Number.parseInt(fixtureParams.get('initialBookmarks') || '0', 10) || 0)
       let bookmarkTree = initialBookmarks > 0 ? bookmarkTreeForCount(initialBookmarks) : []
       const rememberedHistoryRange = fixtureParams.get('rememberedHistoryRange')
+      const pinnedDomainsSeed = (fixtureParams.get('pinnedDomains') || '').split(',').filter(Boolean)
       const staleLegacyStartup = fixtureParams.has('staleLegacyStartup')
       const localStorageStore = {
         ...(rememberedHistoryRange
           ? { tabOutHistoryRangeV1: rememberedHistoryRange }
+          : {}),
+        ...(pinnedDomainsSeed.length > 0
+          ? { tabOutPinnedDomainsV1: pinnedDomainsSeed }
           : {}),
         tabOutPinnedPageChipsV1: [
           'page-chip|tabs|' +

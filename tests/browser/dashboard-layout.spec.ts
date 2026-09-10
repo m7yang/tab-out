@@ -4609,3 +4609,88 @@ test('reduced motion keeps a visible Activation History reorder still', async ({
   await expect(page.locator('[data-tabout-layout-key="stack:1:9101"] .history-entry').first()).toHaveAttribute('data-current', 'true')
   await expectNoHistoryReorderMoves(page)
 })
+
+test('a pinned domain drag paints reorder feedback on the hovered card and reorders on release', async ({ page }) => {
+  const pinnedSeed = ['tab-out-smoke-01.com', 'tab-out-smoke-02.com', 'tab-out-smoke-03.com']
+  await page.goto(`/tests/fixtures/dashboard-resize.html?pinnedDomains=${pinnedSeed.join(',')}`)
+  const pinnedCards = page.locator('#openTabsMissions [data-tabout="domain-card"][data-tabout-domain-pinned="true"]')
+  const pinnedOrder = () => pinnedCards.evaluateAll((cards) => cards.map((card) => (card as HTMLElement).dataset.taboutDomain))
+  await expect(pinnedCards).toHaveCount(pinnedSeed.length)
+  await expect.poll(pinnedOrder).toEqual(pinnedSeed)
+  await expect(page.locator('#openTabsMissions.is-packed')).toHaveCount(1)
+
+  const card = (domain: string) => page.locator(`[data-tabout="domain-card"][data-tabout-domain="${domain}"]`)
+  const source = card('tab-out-smoke-01.com')
+  const second = card('tab-out-smoke-02.com')
+  const third = card('tab-out-smoke-03.com')
+  const body = page.locator('body')
+  const handleBox = await source.locator('[data-tabout-part="reorder-handle"]').boundingBox()
+  const secondBox = await second.boundingBox()
+  const thirdBox = await third.boundingBox()
+  if (!handleBox || !secondBox || !thirdBox) throw new Error('pinned cards must be laid out before dragging')
+  const handleCenter = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 }
+
+  await page.mouse.move(handleCenter.x, handleCenter.y)
+  await page.mouse.down()
+  // Inside the drag threshold nothing is painted yet.
+  await page.mouse.move(handleCenter.x, handleCenter.y + 2)
+  await expect(source).not.toHaveAttribute('data-tabout-reorder-source')
+  await expect(body).not.toHaveAttribute('data-tabout-domain-reorder-active')
+
+  await page.mouse.move(handleCenter.x, handleCenter.y + 12, { steps: 3 })
+  await expect(source).toHaveAttribute('data-tabout-reorder-source', 'true')
+  await expect(body).toHaveAttribute('data-tabout-domain-reorder-active', 'true')
+
+  // The top half of the next pinned card: dropping there keeps the order, so the indicator mutes.
+  await page.mouse.move(secondBox.x + secondBox.width * 0.75, secondBox.y + 6, { steps: 4 })
+  await expect(second).toHaveAttribute('data-tabout-reorder-target', 'true')
+  await expect(second).toHaveAttribute('data-tabout-reorder-placement', 'before')
+  await expect(second).toHaveAttribute('data-tabout-reorder-noop', 'true')
+
+  // The bottom half of the last pinned card is a real move; the previous target clears.
+  await page.mouse.move(thirdBox.x + thirdBox.width * 0.75, thirdBox.y + thirdBox.height - 6, { steps: 4 })
+  await expect(third).toHaveAttribute('data-tabout-reorder-target', 'true')
+  await expect(third).toHaveAttribute('data-tabout-reorder-placement', 'after')
+  await expect(third).not.toHaveAttribute('data-tabout-reorder-noop')
+  await expect(second).not.toHaveAttribute('data-tabout-reorder-target')
+  await expect(second).not.toHaveAttribute('data-tabout-reorder-placement')
+  await expect(second).not.toHaveAttribute('data-tabout-reorder-noop')
+
+  await page.mouse.up()
+  await expect(source).not.toHaveAttribute('data-tabout-reorder-source')
+  await expect(third).not.toHaveAttribute('data-tabout-reorder-target')
+  await expect(third).not.toHaveAttribute('data-tabout-reorder-placement')
+  await expect(body).not.toHaveAttribute('data-tabout-domain-reorder-active')
+  await expect.poll(pinnedOrder).toEqual(['tab-out-smoke-02.com', 'tab-out-smoke-03.com', 'tab-out-smoke-01.com'])
+})
+
+test('cancelling a pinned domain drag clears every reorder marker without reordering', async ({ page }) => {
+  const pinnedSeed = ['tab-out-smoke-01.com', 'tab-out-smoke-02.com']
+  await page.goto(`/tests/fixtures/dashboard-resize.html?pinnedDomains=${pinnedSeed.join(',')}`)
+  const pinnedCards = page.locator('#openTabsMissions [data-tabout="domain-card"][data-tabout-domain-pinned="true"]')
+  const pinnedOrder = () => pinnedCards.evaluateAll((cards) => cards.map((card) => (card as HTMLElement).dataset.taboutDomain))
+  await expect(pinnedCards).toHaveCount(pinnedSeed.length)
+  await expect(page.locator('#openTabsMissions.is-packed')).toHaveCount(1)
+
+  const source = page.locator('[data-tabout="domain-card"][data-tabout-domain="tab-out-smoke-01.com"]')
+  const target = page.locator('[data-tabout="domain-card"][data-tabout-domain="tab-out-smoke-02.com"]')
+  const handleBox = await source.locator('[data-tabout-part="reorder-handle"]').boundingBox()
+  const targetBox = await target.boundingBox()
+  if (!handleBox || !targetBox) throw new Error('pinned cards must be laid out before dragging')
+
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(targetBox.x + targetBox.width * 0.75, targetBox.y + targetBox.height - 6, { steps: 6 })
+  await expect(source).toHaveAttribute('data-tabout-reorder-source', 'true')
+  await expect(target).toHaveAttribute('data-tabout-reorder-target', 'true')
+  await expect(target).toHaveAttribute('data-tabout-reorder-placement', 'after')
+
+  // Window blur is one of the cancel paths (pointercancel shares the same handler).
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+  await expect(source).not.toHaveAttribute('data-tabout-reorder-source')
+  await expect(target).not.toHaveAttribute('data-tabout-reorder-target')
+  await expect(target).not.toHaveAttribute('data-tabout-reorder-placement')
+  await expect(page.locator('body')).not.toHaveAttribute('data-tabout-domain-reorder-active')
+  await page.mouse.up()
+  await expect.poll(pinnedOrder).toEqual(pinnedSeed)
+})

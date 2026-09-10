@@ -5,6 +5,14 @@ import { removeRetainedPageTargets } from '../extension/retained-page-actions.js
 import { DomainCardProvider } from './DomainCardContext'
 import { captureDomainCardFocusRecovery } from './DomainCardFocusRecovery'
 import { useDashboardActions } from './DashboardInteractionContext'
+import {
+  endDomainReorder,
+  getDomainReorderFeedback,
+  setDomainReorderTarget,
+  startDomainReorder,
+  useDomainReorderCardFeedback,
+  type DomainReorderPlacement,
+} from './domain-reorder-feedback'
 import { SubdomainSection } from './SubdomainSection'
 import { CardActionsMenu } from './CardActionsMenu'
 import { SavedPageIcon } from './SavedPageIcon'
@@ -30,15 +38,6 @@ const DOMAIN_REORDER_DRAG_THRESHOLD_PX = 4
 const DOMAIN_CARD_CLOSE_SETTLE_MS = 250
 const DOMAIN_CARD_SELECTOR = '[data-tabout="domain-card"][data-tabout-domain]'
 const PINNED_DOMAIN_CARD_SELECTOR = `${DOMAIN_CARD_SELECTOR}[data-tabout-domain-pinned="true"]`
-
-type DomainReorderPlacement = 'before' | 'after'
-
-function clearReorderTarget(block: HTMLElement | null) {
-  if (!block) return
-  block.removeAttribute('data-tabout-reorder-target')
-  block.removeAttribute('data-tabout-reorder-placement')
-  block.removeAttribute('data-tabout-reorder-noop')
-}
 
 function domainBlockFromNode(node: Element | null): HTMLElement | null {
   return node?.closest<HTMLElement>(DOMAIN_CARD_SELECTOR) ?? null
@@ -206,6 +205,7 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
   // its fade until the refresh unmounts it, so no reset is scheduled here: a
   // timed reset could pop the card back before that refresh lands.
   const [cardClosing, setCardClosing] = useState(false)
+  const reorderFeedback = useDomainReorderCardFeedback(group.domain)
   const blockRef = useRef<HTMLDivElement>(null)
   const cardContext = {
     activeSuppressedTitle,
@@ -327,46 +327,30 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
     const startX = e.clientX
     const startY = e.clientY
     let dragging = false
-    let lastTarget: HTMLElement | null = null
-    let lastPlacement: DomainReorderPlacement | null = null
     const controller = new AbortController()
 
-    function setReorderTarget(nextTarget: HTMLElement | null, nextPlacement: DomainReorderPlacement | null) {
-      if (lastTarget && lastTarget !== nextTarget) clearReorderTarget(lastTarget)
-      if (!nextTarget || !nextPlacement) {
-        clearReorderTarget(lastTarget)
-        lastTarget = null
-        lastPlacement = null
+    // Hit-testing stays on the DOM; the resulting target is published to the
+    // reorder-feedback store, and the source/target cards render it.
+    function updateReorderTarget(event: globalThis.PointerEvent) {
+      const nextTarget = pinnedDomainBlockAtPoint(dragContainer, dragSourceBlock, event.clientX, event.clientY)
+      const targetDomain = nextTarget?.dataset.taboutDomain
+      if (!nextTarget || !targetDomain) {
+        setDomainReorderTarget(null)
         return
       }
-
-      nextTarget.setAttribute('data-tabout-reorder-target', 'true')
-      nextTarget.setAttribute('data-tabout-reorder-placement', nextPlacement)
-      if (reorderKeepsPinnedDomainOrder(dragSourceBlock, nextTarget, nextPlacement)) {
-        nextTarget.setAttribute('data-tabout-reorder-noop', 'true')
-      } else {
-        nextTarget.removeAttribute('data-tabout-reorder-noop')
-      }
-      lastTarget = nextTarget
-      lastPlacement = nextPlacement
+      const placement = reorderPlacementForPoint(nextTarget, event.clientY)
+      setDomainReorderTarget({
+        domain: targetDomain,
+        placement,
+        keepsOrder: reorderKeepsPinnedDomainOrder(dragSourceBlock, nextTarget, placement),
+      })
     }
 
     function clearDragState() {
       controller.abort()
-      dragSourceBlock.removeAttribute('data-tabout-reorder-source')
+      endDomainReorder()
+      // Body is outside the React root; base.css reads this for the drag cursor.
       document.body.removeAttribute('data-tabout-domain-reorder-active')
-      clearReorderTarget(lastTarget)
-      lastTarget = null
-      lastPlacement = null
-    }
-
-    function updateReorderTarget(event: globalThis.PointerEvent) {
-      const nextTarget = pinnedDomainBlockAtPoint(dragContainer, dragSourceBlock, event.clientX, event.clientY)
-      if (!nextTarget) {
-        setReorderTarget(null, null)
-        return
-      }
-      setReorderTarget(nextTarget, reorderPlacementForPoint(nextTarget, event.clientY))
     }
 
     function onPointerMove(event: globalThis.PointerEvent) {
@@ -374,7 +358,7 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
         const moved = Math.hypot(event.clientX - startX, event.clientY - startY)
         if (moved < DOMAIN_REORDER_DRAG_THRESHOLD_PX) return
         dragging = true
-        dragSourceBlock.setAttribute('data-tabout-reorder-source', 'true')
+        startDomainReorder(group.domain)
         document.body.setAttribute('data-tabout-domain-reorder-active', 'true')
       }
 
@@ -383,10 +367,10 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
     }
 
     function onPointerUp(event: globalThis.PointerEvent) {
-      if (dragging && lastTarget && lastPlacement) {
+      const { target } = getDomainReorderFeedback()
+      if (dragging && target) {
         event.preventDefault()
-        const targetDomain = lastTarget.dataset.taboutDomain
-        if (targetDomain) void onReorderPinnedDomain?.(group.domain, { targetDomain, position: lastPlacement })
+        void onReorderPinnedDomain?.(group.domain, { targetDomain: target.domain, position: target.placement })
       }
       clearDragState()
     }
@@ -408,12 +392,16 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
         data-tabout="domain-card"
         data-tabout-domain={group.domain}
         data-tabout-domain-pinned={group.pinned ? 'true' : undefined}
+        data-tabout-reorder-source={reorderFeedback.isSource ? 'true' : undefined}
+        data-tabout-reorder-target={reorderFeedback.targetPlacement ? 'true' : undefined}
+        data-tabout-reorder-placement={reorderFeedback.targetPlacement ?? undefined}
+        data-tabout-reorder-noop={reorderFeedback.targetKeepsOrder ? 'true' : undefined}
         className={cn(
           'domain-block group/domain-block relative flex flex-col gap-1 data-[tabout-reorder-source=true]:opacity-65 [.missions.is-packed_&.layout-moving]:z-3 [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transition-[opacity,transform] [&.closing]:duration-200 [&.closing]:ease-swift [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none',
-          // The pinned-domain drag controller drives reorder feedback through
-          // data attributes on this block (imperative dataset writes, not
-          // React state); the indicator bar and its noop/placement variants
-          // react to them below.
+          // The pinned-domain drag controller publishes reorder feedback to
+          // the domain-reorder-feedback store; this card renders its share as
+          // the data attributes above, and the indicator bar with its
+          // noop/placement variants reacts to them below.
           "data-[tabout-reorder-target=true]:before:pointer-events-none data-[tabout-reorder-target=true]:before:absolute data-[tabout-reorder-target=true]:before:inset-x-0 data-[tabout-reorder-target=true]:before:z-5 data-[tabout-reorder-target=true]:before:h-0.5 data-[tabout-reorder-target=true]:before:rounded-full data-[tabout-reorder-target=true]:before:content-[''] [&[data-tabout-reorder-target=true]:not([data-tabout-reorder-noop=true])]:before:bg-(--accent-amber) [&[data-tabout-reorder-target=true]:not([data-tabout-reorder-noop=true])]:before:shadow-[0_1px_2px_rgba(10,10,10,0.1)] data-[tabout-reorder-noop=true]:before:bg-[color-mix(in_srgb,var(--accent-amber)_36%,var(--warm-gray))] data-[tabout-reorder-noop=true]:before:shadow-[0_1px_1px_rgba(10,10,10,0.05)] data-[tabout-reorder-placement=before]:before:-top-1.5 data-[tabout-reorder-placement=after]:before:-bottom-1.5",
           isAppsCard && 'domain-block-apps',
           group.pinned && 'domain-block-pinned',
