@@ -24,6 +24,7 @@ export type {
   TitleExpansionScheduler,
 } from './controller'
 export { useTitleExpansionController } from './use-title-expansion'
+export { useCloseOnOutsideActivity } from './use-close-on-outside-activity'
 /** @public — sanctioned seam surface (consumers import from the barrel; ADR-0002). */
 export type { UseTitleExpansionControllerOptions } from './use-title-expansion'
 export { searchExpandedWidth } from './width-search'

@@ -19,6 +19,7 @@ import { SavedPageIcon } from './SavedPageIcon'
 import { TitleSuppressionSummary } from './TitleSuppressionSummary'
 import { TooltipAnchor } from './ui/tooltip'
 import { cn } from '@/lib/utils'
+import { startPointerDrag } from '@/lib/pointer-drag'
 import { domainCardCloseRemovesAllItems } from './domain-card-close-policy.js'
 import { useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
@@ -327,7 +328,6 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
     const startX = e.clientX
     const startY = e.clientY
     let dragging = false
-    const controller = new AbortController()
 
     // Hit-testing stays on the DOM; the resulting target is published to the
     // reorder-feedback store, and the source/target cards render it.
@@ -346,8 +346,7 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
       })
     }
 
-    function clearDragState() {
-      controller.abort()
+    function releaseDragState() {
       endDomainReorder()
       // Body is outside the React root; base.css reads this for the drag cursor.
       document.body.removeAttribute('data-tabout-domain-reorder-active')
@@ -372,17 +371,10 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
         event.preventDefault()
         void onReorderPinnedDomain?.(group.domain, { targetDomain: target.domain, position: target.placement })
       }
-      clearDragState()
+      releaseDragState()
     }
 
-    function onPointerCancel() {
-      clearDragState()
-    }
-
-    window.addEventListener('pointermove', onPointerMove, { capture: true, signal: controller.signal })
-    window.addEventListener('pointerup', onPointerUp, { capture: true, signal: controller.signal })
-    window.addEventListener('pointercancel', onPointerCancel, { capture: true, signal: controller.signal })
-    window.addEventListener('blur', onPointerCancel, { signal: controller.signal })
+    startPointerDrag({ onMove: onPointerMove, onEnd: onPointerUp, onCancel: releaseDragState })
   }
 
   return (

@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { FocusEvent, PointerEvent, RefObject, SetStateAction } from 'react'
-import { createTitleExpansionLane, syncClampedTitleFadeEnd, syncTruncatedTitleFadeEnd, useTitleExpansionController } from '../title-expansion'
+import { createTitleExpansionLane, syncClampedTitleFadeEnd, syncTruncatedTitleFadeEnd, useCloseOnOutsideActivity, useTitleExpansionController } from '../title-expansion'
 import { isOutsidePressInsideElement } from '../context-menu-outside-press'
 import type { ContextMenuChangeEventDetails } from '../context-menu-outside-press'
 import { subscribeFontMetricsInvalidation } from '../font-metrics-invalidation.js'
@@ -208,35 +208,13 @@ export function useHistoryEntryExpansion(contextMenuOpenRef: RefObject<boolean>,
     titleExpansionController.close({ delayed: false })
   }
 
-  useEffect(() => {
-    if (!titleExpanded) return
-    const closeNow = () => {
-      titleExpansionController.closeNow()
-    }
-    const closeOnPointerMove = (event: globalThis.PointerEvent) => {
-      const slotRect = entrySlotRef.current?.getBoundingClientRect()
-      if (!slotRect) return
-      const insideOriginalSlot =
-        event.clientX >= slotRect.left &&
-        event.clientX <= slotRect.right &&
-        event.clientY >= slotRect.top &&
-        event.clientY <= slotRect.bottom
-      // Leaving the original entry slot closes immediately, vetoed inside
-      // the controller while the row menu holds the expansion.
-      if (!insideOriginalSlot) titleExpansionController.close({ delayed: false })
-    }
-    const closeOnVisibilityChange = () => {
-      if (document.hidden) closeNow()
-    }
-    window.addEventListener('blur', closeNow)
-    window.addEventListener('pointermove', closeOnPointerMove, true)
-    document.addEventListener('visibilitychange', closeOnVisibilityChange)
-    return () => {
-      window.removeEventListener('blur', closeNow)
-      window.removeEventListener('pointermove', closeOnPointerMove, true)
-      document.removeEventListener('visibilitychange', closeOnVisibilityChange)
-    }
-  }, [titleExpansionController, titleExpanded])
+  useCloseOnOutsideActivity({
+    expanded: titleExpanded,
+    controller: titleExpansionController,
+    // Leaving the original entry slot closes immediately, vetoed inside
+    // the controller while the row menu holds the expansion.
+    getPointerRegion: () => entrySlotRef.current?.getBoundingClientRect(),
+  })
 
   // Unlike PageChip (which force-opens the title expansion when its menu opens),
   // history rows only keep an already-open expansion from collapsing while the

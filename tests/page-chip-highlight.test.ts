@@ -1480,16 +1480,19 @@ test('PageChip expands same-title URL variant groups in place', () => {
   assert.match(pageChipSource, /shadow-\[0_3px_10px_rgba\(10,10,10,0\.055\)\]/)
   assert.match(pageChipSource, /transition-none!/)
   assert.match(pageChipSource, /w-\(--page-chip-expanded-width\)/)
-  assert.match(pageChipSource, /const closeOnPointerMove = \(event: globalThis\.PointerEvent\) =>/)
-  assert.match(pageChipSource, /chipSlotRef\.current\?\.getBoundingClientRect\(\)/)
-  assert.match(pageChipSource, /window\.addEventListener\('pointermove', closeOnPointerMove, true\)/)
-  // closeOnPointerMove must measure the EXPANDED chip, not the original slot —
+  // The outside-activity close is shared with Activation History rows: the
+  // chip declares its pointer region and the hook watches pointermove in the
+  // capture phase, closing the moment the pointer leaves that region.
+  const outsideActivitySource = readFileSync(new URL('../src/components/title-expansion/use-close-on-outside-activity.ts', import.meta.url), 'utf8')
+  assert.match(outsideActivitySource, /useWindowEvent\('pointermove', \(event\) => \{[\s\S]*?\}, \{ capture: true, enabled: expanded \}\)/)
+  assert.match(outsideActivitySource, /if \(!pointWithinRect\(\{ x: event\.clientX, y: event\.clientY \}, region\)\) controller\.close\(\{ delayed: false \}\)/)
+  // The chip's region must measure the EXPANDED chip, not the original slot —
   // the expanded chip floats wider/taller than its 1:1 slot, so testing the slot
   // rect collapsed the chip the instant the pointer reached the revealed overflow
   // (the blink-at-the-border bug). It keeps the chip open across the whole
   // expanded surface so the pointer can reach the URL, then closes at its edge.
-  assert.match(pageChipSource, /closeOnPointerMove[\s\S]*?chipSlotRef\.current\?\.querySelector<HTMLElement>\('\.page-chip'\)/)
-  assert.match(pageChipSource, /closeOnPointerMove[\s\S]*?insideExpandedChip/)
+  assert.match(pageChipSource, /useCloseOnOutsideActivity\(\{[\s\S]*?controller: chipExpansionController,[\s\S]*?getPointerRegion: \(\) => \{[\s\S]*?chipSlotRef\.current\?\.querySelector<HTMLElement>\('\.page-chip'\)[\s\S]*?\?\? chipSlotRef\.current\?\.getBoundingClientRect\(\)/)
+  assert.doesNotMatch(pageChipSource, /window\.addEventListener\('pointermove'/)
   assert.doesNotMatch(pageChipSource, /PAGE_CHIP_EXPANDED_POINTER_LEAVE_TOLERANCE_PX/)
   // Pointer departure always requests the close; an open menu or root
   // keyboard focus vetoes it inside the title-expansion controller via

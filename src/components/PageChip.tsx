@@ -38,7 +38,7 @@ import { createBionicTitleTextRenderer, isUrlLikeTitle } from './bionic-title-te
 import { highlightTermsForFilter, highlightedTextNodes } from './filter-highlight-text'
 import { titleSuppressionChipHighlightClass, titleSuppressionMarkerClass, titleSuppressionToneForText } from './title-suppression'
 import type { TitleSuppressionTone } from './title-suppression'
-import { createTitleExpansionLane, useTitleExpansionController } from './title-expansion'
+import { createTitleExpansionLane, useCloseOnOutsideActivity, useTitleExpansionController } from './title-expansion'
 import { chipTrim, CHIP_TRIM_TOKENS } from './chip-trim'
 import { FAVICON_DIM_CLASS_NAME, VARIANT_LABEL_DIM_CLASS_NAME } from './liveness-dim'
 import type { DashboardChipData } from './types'
@@ -593,40 +593,20 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     chipExpansionController.close({ delayed: false })
   }
 
-  useEffect(() => {
-    if (!chipExpanded) return
-    const closeNow = () => {
-      chipExpansionController.closeNow()
-    }
-    const closeOnPointerMove = (event: globalThis.PointerEvent) => {
-      // Measure the EXPANDED chip, not the original slot: the expanded chip floats
-      // wider/taller than its 1:1 slot, so testing the slot rect collapsed the chip
-      // the instant the pointer crossed into the revealed overflow — blinking it shut
-      // at the border before the revealed content could be reached. The expanded
-      // bounding box is the complete pointer region; leaving it closes immediately,
-      // vetoed inside the controller while a menu or root keyboard focus holds it.
+  useCloseOnOutsideActivity({
+    expanded: chipExpanded,
+    controller: chipExpansionController,
+    // Measure the EXPANDED chip, not the original slot: the expanded chip floats
+    // wider/taller than its 1:1 slot, so testing the slot rect collapsed the chip
+    // the instant the pointer crossed into the revealed overflow — blinking it shut
+    // at the border before the revealed content could be reached. The expanded
+    // bounding box is the complete pointer region; leaving it closes immediately,
+    // vetoed inside the controller while a menu or root keyboard focus holds it.
+    getPointerRegion: () => {
       const expandedChipEl = chipSlotRef.current?.querySelector<HTMLElement>('.page-chip')
-      const rect = expandedChipEl?.getBoundingClientRect() ?? chipSlotRef.current?.getBoundingClientRect()
-      if (!rect) return
-      const insideExpandedChip =
-        event.clientX >= rect.left &&
-        event.clientX <= rect.right &&
-        event.clientY >= rect.top &&
-        event.clientY <= rect.bottom
-      if (!insideExpandedChip) chipExpansionController.close({ delayed: false })
-    }
-    const closeOnVisibilityChange = () => {
-      if (document.hidden) closeNow()
-    }
-    window.addEventListener('blur', closeNow)
-    window.addEventListener('pointermove', closeOnPointerMove, true)
-    document.addEventListener('visibilitychange', closeOnVisibilityChange)
-    return () => {
-      window.removeEventListener('blur', closeNow)
-      window.removeEventListener('pointermove', closeOnPointerMove, true)
-      document.removeEventListener('visibilitychange', closeOnVisibilityChange)
-    }
-  }, [chipExpanded, chipExpansionController])
+      return expandedChipEl?.getBoundingClientRect() ?? chipSlotRef.current?.getBoundingClientRect()
+    },
+  })
 
   function onChipTextPointerEnter(_e: PointerEvent<HTMLSpanElement>) {
     chipTextLayout.refreshMetrics()

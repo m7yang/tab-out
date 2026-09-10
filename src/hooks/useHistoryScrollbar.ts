@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react'
 import { useRetimer } from 'foxact/use-retimer'
+import { startPointerDrag, type PointerDragHandle } from '../lib/pointer-drag.js'
 
 const HISTORY_ENTRY_SCROLLBAR_AXIS_PADDING_PX = 2
 const HISTORY_ENTRY_SCROLLBAR_MIN_THUMB_HEIGHT_PX = 33
@@ -121,7 +122,7 @@ export function useHistoryScrollbar(
   // Imperative flags read inside timers/listeners (avoid stale-closure churn).
   const hoveringRef = useRef(false)
   const draggingRef = useRef(false)
-  const dragListenerCleanupRef = useRef<(() => void) | null>(null)
+  const activeDragRef = useRef<PointerDragHandle | null>(null)
   const retimeHide = useRetimer()
 
   const scheduleHide = useCallback(() => {
@@ -224,7 +225,7 @@ export function useHistoryScrollbar(
     // Stop the track handler (jump-to-position) from also firing.
     event.preventDefault()
     event.stopPropagation()
-    dragListenerCleanupRef.current?.()
+    activeDragRef.current?.dispose()
 
     draggingRef.current = true
     setDragging(true)
@@ -241,27 +242,15 @@ export function useHistoryScrollbar(
         : 0
       listEl.scrollTop = clamp(startScrollTop + deltaScroll, 0, maxScrollTop)
     }
-    const cleanupListeners = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', finishDrag)
-      window.removeEventListener('pointercancel', finishDrag)
-      window.removeEventListener('blur', finishDrag)
-      if (dragListenerCleanupRef.current === cleanupListeners) {
-        dragListenerCleanupRef.current = null
-      }
-    }
+    // The helper has already detached its listeners when either callback runs.
     const finishDrag = () => {
-      cleanupListeners()
+      activeDragRef.current = null
       if (!draggingRef.current) return
       draggingRef.current = false
       setDragging(false)
       scheduleHide()
     }
-    dragListenerCleanupRef.current = cleanupListeners
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', finishDrag)
-    window.addEventListener('pointercancel', finishDrag)
-    window.addEventListener('blur', finishDrag)
+    activeDragRef.current = startPointerDrag({ onMove, onEnd: finishDrag, onCancel: finishDrag })
   }, [listRef, retimeHide, scheduleHide])
 
   const onPointerEnter = useCallback(() => {
@@ -278,7 +267,7 @@ export function useHistoryScrollbar(
   // Clean up any pending fade timer or global drag listeners on unmount.
   useEffect(() => () => {
     draggingRef.current = false
-    dragListenerCleanupRef.current?.()
+    activeDragRef.current?.dispose()
     retimeHide()
   }, [retimeHide])
 

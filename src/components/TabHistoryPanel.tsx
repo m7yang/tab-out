@@ -4,6 +4,7 @@ import { historyEntryFromClosedTab, historyEntryFromWorkingSetItem } from '../ex
 import type { ClosedTabEntry } from '../extension/closed-tabs.js'
 import { closedGhostDismissalKey, dismissClosedGhost, restoreClosedGhost, subscribeClosedGhostDismissals, type ClosedGhostDismissals } from '../extension/closed-ghost-dismissals.js'
 import { showToast } from '../extension/toast.js'
+import { useDocumentEvent } from '../hooks/useGlobalEvent'
 import { highlightTermsForFilter } from './filter-highlight-text'
 import { cn } from '@/lib/utils'
 import type { CSSVariableProperties } from '@/lib/css-properties'
@@ -200,20 +201,15 @@ export function TabHistoryPanel({
     )
   }, [filter, rows])
 
-  useEffect(() => {
-    function animateHistoryLayoutOnReturn() {
-      if (document.visibilityState !== 'visible') return
-      lastVisibleHistoryLayoutRef.current = syncVisibleHistoryLayout(
-        historyContentRef.current,
-        lastVisibleHistoryLayoutRef.current,
-        currentHistoryFilterRef.current,
-        true,
-      )
-    }
-
-    document.addEventListener('visibilitychange', animateHistoryLayoutOnReturn)
-    return () => document.removeEventListener('visibilitychange', animateHistoryLayoutOnReturn)
-  }, [])
+  useDocumentEvent('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return
+    lastVisibleHistoryLayoutRef.current = syncVisibleHistoryLayout(
+      historyContentRef.current,
+      lastVisibleHistoryLayoutRef.current,
+      filter,
+      true,
+    )
+  })
 
   return (
     <section

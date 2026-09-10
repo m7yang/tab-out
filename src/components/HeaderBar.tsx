@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Tabs as TabsPrimitive } from '@base-ui/react/tabs'
+import { useWindowEvent } from '../hooks/useGlobalEvent'
 import { HeaderStats } from './HeaderStats'
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs'
 import { dashboardViewOptionId, type DashboardView } from '../extension/dashboard-view.js'
@@ -330,17 +331,12 @@ export function HeaderBar({
     source,
   ])
 
-  useEffect(() => {
-    function onWindowKeyDown(e: KeyboardEvent) {
-      if (!isFilterFocusShortcut(e)) return
-      e.preventDefault()
-      inputRef.current?.focus()
-      inputRef.current?.select?.()
-    }
-
-    window.addEventListener('keydown', onWindowKeyDown)
-    return () => window.removeEventListener('keydown', onWindowKeyDown)
-  }, [])
+  useWindowEvent('keydown', (e) => {
+    if (!isFilterFocusShortcut(e)) return
+    e.preventDefault()
+    inputRef.current?.focus()
+    inputRef.current?.select?.()
+  })
 
   const filterPlaceholder = source === 'bookmarks' ? BOOKMARKS_FILTER_PLACEHOLDER : isHistoryFilterEnabled(historyRange) ? 'Filter tabs, bookmarks, history…' : 'Filter tabs and bookmarks…'
 
