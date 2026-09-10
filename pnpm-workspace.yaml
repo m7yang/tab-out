@@ -18,6 +18,13 @@ minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@typescript-eslint/types@8.67.0'
   - dependency-cruiser@18.2.0
+  # React 19.3.0 and its companions were selected by the authorized 2026-09-10 upgrade
+  # while they were inside the 24-hour quarantine window.
+  - 'react@19.3.0'
+  - 'react-dom@19.3.0'
+  - 'scheduler@0.28.0'
+  - '@types/react@19.3.0'
+  - '@types/react-dom@19.3.0'
 
 trustPolicy: no-downgrade
 trustPolicyExclude:
