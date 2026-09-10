@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { pathgroupPinId } from '../extension/section-pins.js'
 import { closeExactTabSection } from '../extension/tab-actions'
 import { useDomainCardContext } from './DomainCardContext'
@@ -89,6 +89,34 @@ function getPathgroupLabelResizeObserver() {
   return pathgroupLabelResizeObserver
 }
 
+/**
+ * Follows one mounted label: the shared ResizeObserver reports its truncation
+ * and font settlement re-measures it. Returns the detach cleanup that React's
+ * callback-ref lifecycle runs when the element leaves the tree.
+ */
+function attachPathgroupLabelTruncation(
+  labelEl: HTMLElement,
+  setPathgroupLabelTruncated: Dispatch<SetStateAction<boolean>>,
+): () => void {
+  let disposed = false
+  const observer = getPathgroupLabelResizeObserver()
+  pathgroupLabelTruncationCallbacks.set(labelEl, (isTruncated) => {
+    if (disposed) return
+    setPathgroupLabelTruncated((current) => current === isTruncated ? current : isTruncated)
+  })
+  observer.observe(labelEl)
+  const unsubscribeFontMetrics = subscribeFontMetricsInvalidation(() => {
+    if (!disposed) updatePathgroupLabelTruncation(labelEl, setPathgroupLabelTruncated)
+  })
+
+  return () => {
+    disposed = true
+    observer.unobserve(labelEl)
+    pathgroupLabelTruncationCallbacks.delete(labelEl)
+    unsubscribeFontMetrics()
+  }
+}
+
 function PathgroupCloseButton({ count, isFirstContent = false, onClick }: PathgroupCloseButtonProps) {
   const title = `Close ${count} tab${count !== 1 ? 's' : ''}`
   return (
@@ -111,8 +139,16 @@ function PathgroupCloseButton({ count, isFirstContent = false, onClick }: Pathgr
 }
 
 export function PathgroupSection({ domain = '', subdomainKey = '', websitePathKey = '', pathgroupKey = '', isPinned = false, onTogglePinnedSection = null, label, isPR, count, closableUrls, visibleChips, hiddenChips, hiddenCount, className, isFirstContent = false, filter = '', suppressedTitleParts = EMPTY_SUPPRESSED_TITLE_PARTS, useSuppressionTokenTones = false, suppressedTitleToneIndexByText = EMPTY_SUPPRESSION_TONE_INDEX, suppressedTitleToneByText }: PathgroupSectionProps) {
-  const labelRef = useRef<HTMLSpanElement | null>(null)
   const [pathgroupLabelTruncated, setPathgroupLabelTruncated] = useState(false)
+  // The observer follows the label element itself through a callback ref with
+  // cleanup, so it re-attaches on its own when TooltipAnchor swaps its tree
+  // once tooltip content appears. The compiler memoizes this callback (its only
+  // input is the stable state setter), and verify:compiler guards that; a fresh
+  // identity would only re-run detach and attach, never change the result.
+  const observePathgroupLabel = (labelEl: HTMLSpanElement | null) => {
+    if (!labelEl) return undefined
+    return attachPathgroupLabelTruncation(labelEl, setPathgroupLabelTruncated)
+  }
   const { activeSuppressedTitle, setActiveSuppressedTitle } = useDomainCardContext()
   const displayLabel = pathGroupDisplayLabel(label)
   const pathgroupLabelTooltipContent = pathgroupLabelTruncated ? (
@@ -133,33 +169,6 @@ export function PathgroupSection({ domain = '', subdomainKey = '', websitePathKe
   async function onTogglePin() {
     await onTogglePinnedSection?.(sectionLayoutKey)
   }
-
-  // TooltipAnchor changes its rendered tree when content becomes available,
-  // so reattach the observer to the current label after that state change.
-  useEffect(() => {
-    const labelEl = labelRef.current
-    if (!labelEl) return
-
-    let disposed = false
-    const observer = getPathgroupLabelResizeObserver()
-    pathgroupLabelTruncationCallbacks.set(labelEl, (isTruncated) => {
-      if (disposed) return
-      setPathgroupLabelTruncated((current) => current === isTruncated ? current : isTruncated)
-    })
-    observer.observe(labelEl)
-
-    const onFontsDone = () => {
-      if (!disposed) updatePathgroupLabelTruncation(labelEl, setPathgroupLabelTruncated)
-    }
-    const unsubscribeFontMetrics = subscribeFontMetricsInvalidation(onFontsDone)
-
-    return () => {
-      disposed = true
-      observer.unobserve(labelEl)
-      pathgroupLabelTruncationCallbacks.delete(labelEl)
-      unsubscribeFontMetrics()
-    }
-  }, [pathgroupLabelTruncated])
 
   async function onCloseCluster() {
     if (!closableUrls || closableUrls.length === 0) return
@@ -186,7 +195,7 @@ export function PathgroupSection({ domain = '', subdomainKey = '', websitePathKe
         )}
       >
         <TooltipAnchor content={pathgroupLabelTooltipContent}>
-          <span ref={labelRef} className="chip-pathgroup inline-block min-w-0 overflow-hidden rounded-lg bg-[rgba(115,115,115,0.1)] px-1.5 text-ellipsis whitespace-nowrap text-xs font-medium text-muted-foreground align-baseline [corner-shape:squircle]">
+          <span ref={observePathgroupLabel} className="chip-pathgroup inline-block min-w-0 overflow-hidden rounded-lg bg-[rgba(115,115,115,0.1)] px-1.5 text-ellipsis whitespace-nowrap text-xs font-medium text-muted-foreground align-baseline [corner-shape:squircle]">
             {displayLabel}
           </span>
         </TooltipAnchor>
