@@ -102,3 +102,25 @@ export async function waitForBrowserCondition<Args extends readonly unknown[] = 
 
   assert.equal(matched, true, description)
 }
+
+// Page functions run inside the page: they may use only page globals and the
+// single params argument, never closures over Node-side values or imports.
+// Playwright serializes them by source text, so keep them free of helpers.
+export function evaluateInPage<R>(harness: DashboardHarness, pageFunction: () => R | Promise<R>): Promise<R>
+export function evaluateInPage<P, R>(
+  harness: DashboardHarness,
+  pageFunction: (params: P) => R | Promise<R>,
+  params: P,
+): Promise<R>
+export function evaluateInPage<P, R>(
+  harness: DashboardHarness,
+  pageFunction: (params: P) => R | Promise<R>,
+  ...params: [] | [P]
+): Promise<R> {
+  // Playwright types the argument through its handle-unboxing mapped type,
+  // which a bare generic cannot satisfy; the overloads above carry the typing.
+  const evaluate = harness.page.evaluate.bind(harness.page) as (fn: unknown, arg?: unknown) => Promise<R>
+  if (params.length === 0) return withNavigationRetry(() => evaluate(pageFunction))
+  const [value] = params
+  return withNavigationRetry(() => evaluate(pageFunction, value))
+}

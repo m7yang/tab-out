@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { expect, test } from '@playwright/test'
-import { createDashboardHarness, evaluateExpression, wait, waitForBrowserCondition } from './page-realm/harness.js'
+import * as contextMenuPage from './page-realm/context-menu.js'
+import { createDashboardHarness, evaluateExpression, evaluateInPage, wait, waitForBrowserCondition } from './page-realm/harness.js'
 import type { DashboardHarness } from './page-realm/harness.js'
 
 type FilterReloadTrace = {
@@ -3077,93 +3078,15 @@ async function measurePageChipContextMenuSave(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `(() => {
-      document.querySelector('.scroll-region')?.scrollTo(0, 0)
-      window.__tabOutSmokeSavedStore = {}
-      window.__tabOutSmokeSavedSets = []
-      window.__tabOutSmokeCopiedText = null
-      window.__tabOutSmokeFocusUpdates = []
-      window.__tabOutSmokeOriginalTabsUpdate = chrome.tabs.update
-      window.__tabOutSmokeOriginalWindowsUpdate = chrome.windows.update
-      chrome.storage.local.get = async () => window.__tabOutSmokeSavedStore
-      chrome.storage.local.set = async (next) => {
-        window.__tabOutSmokeSavedStore = { ...window.__tabOutSmokeSavedStore, ...next }
-        window.__tabOutSmokeSavedSets.push(next)
-      }
-      chrome.tabs.update = async (...args) => {
-        window.__tabOutSmokeFocusUpdates.push({ kind: 'tab', args })
-        return window.__tabOutSmokeOriginalTabsUpdate(...args)
-      }
-      chrome.windows.update = async (...args) => {
-        window.__tabOutSmokeFocusUpdates.push({ kind: 'window', args })
-        return window.__tabOutSmokeOriginalWindowsUpdate(...args)
-      }
-      Object.defineProperty(navigator, 'clipboard', {
-        configurable: true,
-        value: {
-          writeText: async (text) => {
-            window.__tabOutSmokeCopiedText = text
-          }
-        }
-      })
-    })()`,
-  })
+  await evaluateInPage(harness, contextMenuPage.installSmokeChromeStubs)
   await waitForDashboardSettled(harness)
 
   async function findPageChipTarget(label: string, xOffset = 96) {
-    return evaluateExpression(harness, {
-      awaitPromise: true,
-      returnByValue: true,
-      expression: `new Promise((resolve) => {
-        const start = Date.now()
-        const wait = () => {
-          const chip = Array.from(document.querySelectorAll('.page-chip'))
-            .find((candidate) => candidate.textContent?.includes(${JSON.stringify(label)}))
-          const rect = chip?.getBoundingClientRect()
-          if (rect && rect.width > 120 && rect.height > 8) {
-            resolve({
-              label: ${JSON.stringify(label)},
-              x: Math.round(rect.left + Math.min(${xOffset}, rect.width - 8)),
-              y: Math.round(rect.top + rect.height / 2)
-            })
-          } else if (Date.now() - start > 5000) {
-            resolve(null)
-          } else {
-            setTimeout(wait, 50)
-          }
-        }
-        wait()
-      })`,
-    }).then((result: any) => result.result.value)
+    return evaluateInPage(harness, contextMenuPage.findPageChipTarget, { label, xOffset })
   }
 
   async function findPageChipFaviconTarget(label: string) {
-    return evaluateExpression(harness, {
-      awaitPromise: true,
-      returnByValue: true,
-      expression: `new Promise((resolve) => {
-        const start = Date.now()
-        const wait = () => {
-          const chip = Array.from(document.querySelectorAll('.page-chip'))
-            .find((candidate) => candidate.textContent?.includes(${JSON.stringify(label)}))
-          const faviconFrame = chip?.querySelector('.chip-favicon-frame')
-          const rect = faviconFrame?.getBoundingClientRect()
-          if (rect && rect.width > 4 && rect.height > 4) {
-            resolve({
-              label: ${JSON.stringify(label)},
-              x: Math.round(rect.left + rect.width / 2),
-              y: Math.round(rect.top + rect.height / 2)
-            })
-          } else if (Date.now() - start > 5000) {
-            resolve(null)
-          } else {
-            setTimeout(wait, 50)
-          }
-        }
-        wait()
-      })`,
-    }).then((result: any) => result.result.value)
+    return evaluateInPage(harness, contextMenuPage.findPageChipFaviconTarget, { label })
   }
 
   const target = await findPageChipTarget('Short title')
@@ -3175,6 +3098,8 @@ async function measurePageChipContextMenuSave(harness: DashboardHarness) {
   assert.ok(targetFavicon, 'expected a live page chip favicon target for close-hover smoke test')
   assert.ok(replacementTarget, 'expected a second live page chip for context menu replacement smoke test')
   assert.ok(historyMatchTarget, 'expected a live page chip with a matching history entry for context menu hover smoke test')
+  // Hoisted function declarations do not see the narrowing above.
+  const chipTarget = target
 
   async function openContextMenuAt(menuTarget: { x: number, y: number }) {
     await harness.session.send('Input.dispatchMouseEvent', {
@@ -3203,88 +3128,11 @@ async function measurePageChipContextMenuSave(harness: DashboardHarness) {
   }
 
   async function readContextMenuState() {
-    return evaluateExpression(harness, {
-      returnByValue: true,
-      expression: `(() => {
-        const visibleMenus = Array.from(document.querySelectorAll('[data-slot="context-menu-content"]'))
-          .filter((menu) => !menu.hidden && menu.getClientRects().length > 0 && window.getComputedStyle(menu).visibility !== 'hidden')
-        const menuStates = visibleMenus.map((menu) => {
-          const menuRect = menu.getBoundingClientRect()
-          const directChildren = Array.from(menu.children)
-            .filter((child) => child instanceof HTMLElement && child.dataset.slot)
-          return {
-            sequence: directChildren.map((child) => (
-              child.dataset.slot === 'context-menu-separator'
-                ? 'separator'
-                : child.textContent?.trim() || ''
-            )),
-            separatorInsets: directChildren
-              .filter((child) => child.dataset.slot === 'context-menu-separator')
-              .map((separator) => {
-                const rect = separator.getBoundingClientRect()
-                return {
-                  left: rect.left - menuRect.left,
-                  right: menuRect.right - rect.right
-                }
-              })
-          }
-        })
-        return {
-          visibleMenuCount: visibleMenus.length,
-          itemTexts: visibleMenus.flatMap((menu) =>
-            Array.from(menu.querySelectorAll('[data-slot="context-menu-item"]'))
-              .map((item) => item.textContent?.trim() || '')
-          ),
-          sequence: menuStates.flatMap((state) => state.sequence),
-          separatorInsets: menuStates.flatMap((state) => state.separatorInsets),
-          backdropCount: document.querySelectorAll('[data-slot="context-menu-backdrop"]:not([hidden])').length
-        }
-      })()`,
-    }).then((result: any) => result.result.value)
+    return evaluateInPage(harness, contextMenuPage.readContextMenuState)
   }
 
   async function readPageChipVisualState(menuTarget: { label: string }) {
-    return evaluateExpression(harness, {
-      returnByValue: true,
-      expression: `(() => {
-        const chip = Array.from(document.querySelectorAll('.page-chip'))
-          .find((candidate) => candidate.textContent?.includes(${JSON.stringify(menuTarget.label)}))
-        if (!(chip instanceof HTMLElement)) return null
-        const styles = window.getComputedStyle(chip)
-        const closeButton = chip.querySelector('.chip-close-favicon')
-        const faviconContent = chip.querySelector('.chip-favicon-content')
-        const duplicateStack = chip.querySelector('.chip-favicon-stack')
-        const expandedFill = chip.querySelector('.page-chip-expanded-fill')
-        const readPart = (part) => {
-          if (!(part instanceof HTMLElement)) return null
-          const partStyles = window.getComputedStyle(part)
-          return {
-            opacity: partStyles.opacity,
-            pointerEvents: partStyles.pointerEvents
-          }
-        }
-        return {
-          backgroundColor: styles.backgroundColor,
-          className: chip.className,
-          contextMenuOpen: chip.classList.contains('page-chip-context-menu-open'),
-          expanded: chip.classList.contains('page-chip-expanded'),
-          tooltipOpen: chip.classList.contains('page-chip-tooltip-open'),
-          transitionProperty: styles.transitionProperty,
-          width: Math.round(chip.getBoundingClientRect().width),
-          closeButton: readPart(closeButton),
-          duplicateStack: readPart(duplicateStack),
-          expandedFill: expandedFill instanceof HTMLElement
-            ? {
-                backgroundColor: window.getComputedStyle(expandedFill).backgroundColor,
-                opacity: window.getComputedStyle(expandedFill).opacity
-              }
-            : null,
-          faviconContent: readPart(faviconContent),
-          hover: chip.matches(':hover'),
-          urlPreview: document.querySelector('.url-preview span')?.textContent || ''
-        }
-      })()`,
-    }).then((result: any) => result.result.value)
+    return evaluateInPage(harness, contextMenuPage.readPageChipVisualState, { label: menuTarget.label })
   }
 
   async function dismissContextMenuWithPointer() {
@@ -3313,22 +3161,9 @@ async function measurePageChipContextMenuSave(harness: DashboardHarness) {
   }
 
   async function clickMenuItem(label: string) {
-    await openContextMenuAt(target)
+    await openContextMenuAt(chipTarget)
 
-    const item = await evaluateExpression(harness, {
-      returnByValue: true,
-      expression: `(() => {
-        const item = Array.from(document.querySelectorAll('[data-slot="context-menu-item"]'))
-          .find((candidate) => candidate.textContent?.trim() === ${JSON.stringify(label)})
-        const rect = item?.getBoundingClientRect()
-        if (!rect) return null
-        return {
-          text: item.textContent?.trim() || '',
-          x: Math.round(rect.left + rect.width / 2),
-          y: Math.round(rect.top + rect.height / 2)
-        }
-      })()`,
-    }).then((result: any) => result.result.value)
+    const item = await evaluateInPage(harness, contextMenuPage.findContextMenuItem, { label })
 
     assert.ok(item, `expected ${label} context menu item after right-click: ${JSON.stringify({ target })}`)
 
@@ -3448,13 +3283,7 @@ async function measurePageChipContextMenuSave(harness: DashboardHarness) {
   })
   await waitForPageChipExpansionRect(harness, 'Example 2 with enough tooltip text')
   const expandedHoverChipState = await readPageChipVisualState(replacementTarget)
-  const visibleTooltipCountBeforeMenu = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `Array.from(document.querySelectorAll('[data-slot="tooltip-content"]')).filter((tooltip) => {
-      const rect = tooltip.getBoundingClientRect()
-      return rect.width > 0 && rect.height > 0 && !tooltip.hasAttribute('data-ending-style')
-    }).length`,
-  }).then((result: any) => result.result.value)
+  const visibleTooltipCountBeforeMenu = await evaluateInPage(harness, contextMenuPage.countVisibleTooltips)
   assert.equal(expandedHoverChipState?.expanded, true, `page chip should expand in place before context-menu shield check: ${JSON.stringify({ replacementTarget, expandedHoverChipState })}`)
   assert.equal(expandedHoverChipState?.hover, true, `expanded page chip should still be under the pointer before context-menu shield check: ${JSON.stringify({ expandedHoverChipState })}`)
   assert.equal(expandedHoverChipState?.tooltipOpen, false, `in-place expansion should not impersonate an open tooltip: ${JSON.stringify({ expandedHoverChipState })}`)
@@ -3527,51 +3356,8 @@ async function measurePageChipContextMenuSave(harness: DashboardHarness) {
   assert.equal(backdropDismissAfterState?.expanded, false, `page chip should close its in-place expansion after backdrop dismissal and pointer exit: ${JSON.stringify({ backdropDismissOpenState, backdropDismissAfterState })}`)
   assert.equal(backdropDismissMenuState.visibleMenuCount, 0, `backdrop dismissal over the page chip should close the context menu: ${JSON.stringify({ backdropDismissMenuState })}`)
   await openContextMenuAt(replacementTarget)
-  const tooltipShieldPoint = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      document.querySelector('[data-smoke-tooltip-shield]')?.remove()
-      const syntheticTooltip = document.createElement('div')
-      syntheticTooltip.dataset.slot = 'tooltip-content'
-      syntheticTooltip.dataset.smokeTooltipShield = 'true'
-      syntheticTooltip.textContent = 'Synthetic tooltip shield target'
-      syntheticTooltip.style.cssText = [
-        'position:fixed',
-        'left:24px',
-        'top:24px',
-        'width:220px',
-        'height:32px',
-        'z-index:50',
-        'pointer-events:auto',
-        'background:canvas',
-        'color:canvastext'
-      ].join(';')
-      syntheticTooltip.addEventListener('click', () => {
-        chrome.tabs.update(1, { active: true })
-      })
-      document.body.append(syntheticTooltip)
-      const rect = syntheticTooltip.getBoundingClientRect()
-      return {
-        x: Math.round(rect.left + rect.width / 2),
-        y: Math.round(rect.top + rect.height / 2)
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
-  const shieldBeforeClick = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      window.__tabOutSmokeFocusUpdates = []
-      const target = document.elementFromPoint(${tooltipShieldPoint.x}, ${tooltipShieldPoint.y})
-      const owner = target?.closest?.('[data-slot]')
-      return {
-        point: ${JSON.stringify(tooltipShieldPoint)},
-        topSlot: owner?.getAttribute('data-slot') || '',
-        topText: owner?.textContent?.trim() || '',
-        menuOpen: !!document.querySelector('[data-slot="context-menu-content"]:not([hidden])'),
-        tooltipOpen: !!document.querySelector('[data-slot="tooltip-content"]:not([hidden])')
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const tooltipShieldPoint = await evaluateInPage(harness, contextMenuPage.installTooltipShield)
+  const shieldBeforeClick = await evaluateInPage(harness, contextMenuPage.readTooltipShieldTarget, { point: tooltipShieldPoint })
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -3596,64 +3382,20 @@ async function measurePageChipContextMenuSave(harness: DashboardHarness) {
     y: tooltipShieldPoint.y,
   })
   await waitForContextMenuState(harness, false)
-  const shieldAfterClick = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const focusUpdates = window.__tabOutSmokeFocusUpdates || []
-      chrome.tabs.update = window.__tabOutSmokeOriginalTabsUpdate
-      chrome.windows.update = window.__tabOutSmokeOriginalWindowsUpdate
-      document.querySelector('[data-smoke-tooltip-shield]')?.remove()
-      return {
-        focusUpdateCount: focusUpdates.length,
-        menuOpen: !!document.querySelector('[data-slot="context-menu-content"]:not([hidden])')
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const shieldAfterClick = await evaluateInPage(harness, contextMenuPage.restoreFocusUpdateStubs)
   assert.notEqual(shieldBeforeClick.topSlot, 'tooltip-content', `context menu backdrop should cover visible tooltips: ${JSON.stringify({ shieldBeforeClick, shieldAfterClick })}`)
   assert.equal(shieldAfterClick.focusUpdateCount, 0, `clicking where a tooltip is visible while context menu is open should not focus/open the page: ${JSON.stringify({ shieldBeforeClick, shieldAfterClick })}`)
   assert.equal(shieldAfterClick.menuOpen, false, `clicking the context menu backdrop over a tooltip should dismiss the menu: ${JSON.stringify({ shieldBeforeClick, shieldAfterClick })}`)
 
   const copyItem = await clickMenuItem('Copy page title text')
-  const copyResult = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `({
-      copiedText: window.__tabOutSmokeCopiedText,
-      menuOpen: !!document.querySelector('[data-slot="context-menu-content"]')
-    })`,
-  }).then((result: any) => result.result.value)
+  const copyResult = await evaluateInPage(harness, contextMenuPage.readCopyResult)
 
   const saveItem = await clickMenuItem('Save page')
 
-  const saveResult = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const store = window.__tabOutSmokeSavedStore?.tabOutSavedPagesV1
-      const pageKeys = store?.pages ? Object.keys(store.pages) : []
-      return {
-        itemText: ${JSON.stringify('Save page')},
-        menuOpen: !!document.querySelector('[data-slot="context-menu-content"]'),
-        pageKeys,
-        setCount: window.__tabOutSmokeSavedSets?.length || 0
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const saveResult = await evaluateInPage(harness, contextMenuPage.readSaveResult, { itemText: 'Save page' })
 
   await openContextMenuAt(target)
-  const sourceButtonTarget = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const button = Array.from(document.querySelectorAll('.source-switch-option'))
-        .find((candidate) => candidate.textContent?.trim() === 'Bookmarks')
-      const activeBefore = document.querySelector('.source-switch-option[data-active]')?.textContent?.trim() || ''
-      const rect = button?.getBoundingClientRect()
-      if (!rect) return null
-      return {
-        activeBefore,
-        x: Math.round(rect.left + rect.width / 2),
-        y: Math.round(rect.top + rect.height / 2)
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const sourceButtonTarget = await evaluateInPage(harness, contextMenuPage.findSourceSwitchButton, { label: 'Bookmarks' })
 
   assert.ok(sourceButtonTarget, 'expected the Bookmarks source switch button for context menu outside-click smoke test')
 
@@ -3689,14 +3431,7 @@ async function measurePageChipContextMenuSave(harness: DashboardHarness) {
     'outside click should close the context menu without activating Bookmarks',
   )
 
-  const outsideClickResult = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `({
-      activeBefore: ${JSON.stringify(sourceButtonTarget.activeBefore)},
-      activeAfter: document.querySelector('.source-switch-option[data-active]')?.textContent?.trim() || '',
-      menuOpen: !!document.querySelector('[data-slot="context-menu-content"]:not([hidden])')
-    })`,
-  }).then((result: any) => result.result.value)
+  const outsideClickResult = await evaluateInPage(harness, contextMenuPage.readOutsideClickResult, { activeBefore: sourceButtonTarget.activeBefore })
 
   return { target, firstOpenState, replacementState, shieldBeforeClick, shieldAfterClick, copyItem, copyResult, saveItem, saveResult, outsideClickResult }
 }
