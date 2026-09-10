@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import {
   isDesktopWindowMergeStatusChangedMessage,
   parseDesktopWindowMergeStartConfirmMessage,
@@ -56,77 +56,8 @@ export function DesktopWindowMergeHost() {
   const handledSessionIdsRef = useRef(new Set<string>())
   const mergePendingRef = useRef(false)
   const mergeSessionRef = useRef<DesktopWindowMergeJournal | null>(null)
-  const confirmMergeRef = useRef<((previewId: string) => Promise<void>) | null>(null)
   const [dialogState, setDialogState] =
     useState<DesktopWindowMergeDialogState | null>(null)
-
-  useEffect(() => {
-    let disposed = false
-    let latestStatusRequest = 0
-
-    const applyStatus = async () => {
-      latestStatusRequest += 1
-      const statusRequest = latestStatusRequest
-      const response = await getDesktopWindowMergeStatus()
-      if (disposed || statusRequest !== latestStatusRequest) return
-      if (!response) return
-      mergeSessionRef.current = response.session?.journal ?? null
-      const owned = response.session
-      if (!owned?.isOwner) return
-      const journal = owned.journal
-      if (journal.status === 'running') {
-        setDialogState((current) =>
-          current?.kind === 'result' ? current : { kind: 'progress' })
-        return
-      }
-      if (handledSessionIdsRef.current.has(journal.sessionId)) return
-      handledSessionIdsRef.current.add(journal.sessionId)
-      if (journal.status === 'succeeded') {
-        setDialogState(null)
-        showDesktopWindowMergeBackgroundReport(desktopWindowMergeSuccessMessage(journal))
-        const acknowledged = await acknowledgeDesktopWindowMerge(journal.sessionId)
-        if (!acknowledged) handledSessionIdsRef.current.delete(journal.sessionId)
-        else if (!disposed) mergeSessionRef.current = null
-        return
-      }
-      setDialogState({ kind: 'result', journal })
-      void bringThisPageForward()
-    }
-
-    void applyStatus()
-    const onRuntimeMessage = (
-      message: unknown,
-      _sender: chrome.runtime.MessageSender,
-      sendResponse: (response?: unknown) => void,
-    ) => {
-      if (isDesktopWindowMergeStatusChangedMessage(message)) {
-        void applyStatus()
-        return undefined
-      }
-      const startConfirmRequest = parseDesktopWindowMergeStartConfirmMessage(message)
-      if (startConfirmRequest) {
-        sendResponse({ ok: true })
-        void confirmMergeRef.current?.(startConfirmRequest.previewId)
-        return undefined
-      }
-      return undefined
-    }
-    const onWindowFocus = () => void applyStatus()
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') void applyStatus()
-    }
-    chrome.runtime.onMessage.addListener(onRuntimeMessage)
-    window.addEventListener('focus', onWindowFocus)
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    return () => {
-      disposed = true
-      latestStatusRequest += 1
-      chrome.runtime.onMessage.removeListener(onRuntimeMessage)
-      window.removeEventListener('focus', onWindowFocus)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-    }
-  }, [])
-
   async function confirmMerge(previewId: string) {
     // The handoff retries delivery until acknowledged; a lost acknowledgement
     // must not submit the same confirmation twice.
@@ -219,6 +150,80 @@ export function DesktopWindowMergeHost() {
     void bringThisPageForward()
   }
 
+  // The mount-once message listener reaches the current confirmMerge through
+  // this effect event instead of a ref it would otherwise have to re-sync after
+  // every render. The compiler needs confirmMerge declared above this point.
+  const confirmMergeFromMessage = useEffectEvent((previewId: string) => {
+    void confirmMerge(previewId)
+  })
+
+  useEffect(() => {
+    let disposed = false
+    let latestStatusRequest = 0
+
+    const applyStatus = async () => {
+      latestStatusRequest += 1
+      const statusRequest = latestStatusRequest
+      const response = await getDesktopWindowMergeStatus()
+      if (disposed || statusRequest !== latestStatusRequest) return
+      if (!response) return
+      mergeSessionRef.current = response.session?.journal ?? null
+      const owned = response.session
+      if (!owned?.isOwner) return
+      const journal = owned.journal
+      if (journal.status === 'running') {
+        setDialogState((current) =>
+          current?.kind === 'result' ? current : { kind: 'progress' })
+        return
+      }
+      if (handledSessionIdsRef.current.has(journal.sessionId)) return
+      handledSessionIdsRef.current.add(journal.sessionId)
+      if (journal.status === 'succeeded') {
+        setDialogState(null)
+        showDesktopWindowMergeBackgroundReport(desktopWindowMergeSuccessMessage(journal))
+        const acknowledged = await acknowledgeDesktopWindowMerge(journal.sessionId)
+        if (!acknowledged) handledSessionIdsRef.current.delete(journal.sessionId)
+        else if (!disposed) mergeSessionRef.current = null
+        return
+      }
+      setDialogState({ kind: 'result', journal })
+      void bringThisPageForward()
+    }
+
+    void applyStatus()
+    const onRuntimeMessage = (
+      message: unknown,
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response?: unknown) => void,
+    ) => {
+      if (isDesktopWindowMergeStatusChangedMessage(message)) {
+        void applyStatus()
+        return undefined
+      }
+      const startConfirmRequest = parseDesktopWindowMergeStartConfirmMessage(message)
+      if (startConfirmRequest) {
+        sendResponse({ ok: true })
+        confirmMergeFromMessage(startConfirmRequest.previewId)
+        return undefined
+      }
+      return undefined
+    }
+    const onWindowFocus = () => void applyStatus()
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void applyStatus()
+    }
+    chrome.runtime.onMessage.addListener(onRuntimeMessage)
+    window.addEventListener('focus', onWindowFocus)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      disposed = true
+      latestStatusRequest += 1
+      chrome.runtime.onMessage.removeListener(onRuntimeMessage)
+      window.removeEventListener('focus', onWindowFocus)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [])
+
   async function closeMergeResult(journal: DesktopWindowMergeJournal) {
     if (mergeResultAcknowledgementPendingRef.current) return
     mergeResultAcknowledgementPendingRef.current = true
@@ -243,11 +248,6 @@ export function DesktopWindowMergeHost() {
       setDialogState(null)
     }
   }
-
-  // Keep the mount-once message listener pointed at the current confirmMerge.
-  useEffect(() => {
-    confirmMergeRef.current = confirmMerge
-  })
 
   return (
     <DesktopWindowMergeDialog

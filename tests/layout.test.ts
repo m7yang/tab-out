@@ -100,7 +100,7 @@ test('Dashboard View source transitions keep one primed card-move refresh', () =
 
 test('pin-driven dashboard refresh cancels its pending animation frame', () => {
   const source = readFileSync(new URL('../src/hooks/useDashboardRefresh.ts', import.meta.url), 'utf8')
-  const callbackIndex = source.indexOf('callbacksRef.current.onBeforePinnedRefresh?.()')
+  const callbackIndex = source.indexOf('notifyBeforePinnedRefresh()')
   const effectStart = source.lastIndexOf('useEffect(() => {', callbackIndex)
   const effectEnd = source.indexOf('}, [initialDashboardIncludesPinnedDomains, pinnedDomains, localStateLoaded])', callbackIndex)
   const effectSource = source.slice(effectStart, effectEnd)

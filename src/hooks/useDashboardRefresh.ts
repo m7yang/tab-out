@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react'
 import { dashboardNeedsFilterSearchRefresh } from '../extension/filter-search.js'
 import { appDashboardStore, settleDashboardRefresh, type MissionOrderMap } from '../extension/dashboard-intake.js'
 import type { DashboardData, DashboardSource } from '../extension/types'
@@ -36,13 +36,13 @@ export function useDashboardRefresh({
   previousOrder,
   onBeforePinnedRefresh,
 }: UseDashboardRefreshOptions) {
-  const callbacksRef = useRef({ onBeforePinnedRefresh })
   const pinnedRefreshInitializedRef = useRef(false)
   const bookmarkSearchActive = source === 'tabs' && bookmarkFilter.trim() !== ''
-
-  useEffect(() => {
-    callbacksRef.current = { onBeforePinnedRefresh }
-  }, [onBeforePinnedRefresh])
+  // The pinned-refresh effect reacts to pin changes only; the callback it
+  // notifies is read at call time without joining the dependency list.
+  const notifyBeforePinnedRefresh = useEffectEvent(() => {
+    onBeforePinnedRefresh?.()
+  })
 
   useLayoutEffect(() => {
     appDashboardStore.setRefreshInputs({ filter, localStateLoaded, pinnedDomains, previousOrder })
@@ -67,7 +67,7 @@ export function useDashboardRefresh({
       pinnedRefreshInitializedRef.current = true
       if (initialDashboardIncludesPinnedDomains) return
     }
-    callbacksRef.current.onBeforePinnedRefresh?.()
+    notifyBeforePinnedRefresh()
     const frame = requestAnimationFrame(() => {
       void settleDashboardRefresh(appDashboardStore.refresh())
     })

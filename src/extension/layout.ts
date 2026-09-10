@@ -194,8 +194,13 @@ export function useMissionsMasonry(...args: unknown[]) {
   const observedContainerWidthsRef = useRef(new WeakMap<HTMLElement, number>())
   const containerRefsRef = useRef(containerRefs)
   const optionsRef = useRef({ onAfterLayout, onBeforePack, onAfterPack })
-  containerRefsRef.current = containerRefs
-  optionsRef.current = { onAfterLayout, onBeforePack, onAfterPack }
+  // The stable pack callbacks and the observers below read these at call time.
+  // Mirroring after commit keeps render free of ref writes; this effect is
+  // declared first so the observer effect and callers see the latest inputs.
+  useLayoutEffect(() => {
+    containerRefsRef.current = containerRefs
+    optionsRef.current = { onAfterLayout, onBeforePack, onAfterPack }
+  })
 
   const packMissionsMasonryNow = useCallback(function packMissionsMasonryNow({ unpin = false, animate = false }: { unpin?: boolean, animate?: boolean } = {}) {
     const containers = currentContainersFromRefs(containerRefsRef)

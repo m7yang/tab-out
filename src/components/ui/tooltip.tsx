@@ -2,6 +2,7 @@ import {
   cloneElement,
   useCallback,
   useEffect,
+  useEffectEvent,
   useId,
   useMemo,
   useRef,
@@ -301,7 +302,6 @@ function useTooltipAnchorController({
   const hoverOpenBlockedUntilRef = useRef(0)
   const hoverCloseScheduledRef = useRef(false)
   const tooltipWheelClosingRef = useRef(false)
-  const handleContentWheelRef = useRef<(event: WheelEvent) => void>(() => {})
   const retimeFrozenPointerClear = useRetimer()
   const retimeHoverOpen = useRetimer()
   const retimeHoverClose = useRetimer()
@@ -695,19 +695,23 @@ function useTooltipAnchorController({
     [beginTooltipWheelClose, contentOnWheel],
   )
 
-  useEffect(() => {
-    handleContentWheelRef.current = handleContentWheel
-  }, [handleContentWheel])
+  // The popup listener is attached once per open; the effect event keeps it
+  // pointed at the current wheel handler without re-attaching on every render.
+  const handlePopupWheel = useEffectEvent((event: WheelEvent) => {
+    handleContentWheel(event)
+  })
 
-  useAbortableEffect((signal) => {
+  useEffect(() => {
     if (!tooltipOpen || !popupElement) return
 
+    const controller = new AbortController()
     function handleWheel(event: WheelEvent) {
-      handleContentWheelRef.current(event)
+      handlePopupWheel(event)
     }
 
     // react-doctor-disable-next-line react-doctor/client-passive-event-listeners -- nested tooltip scrolling calls preventDefault after manual scroll.
-    popupElement.addEventListener('wheel', handleWheel, { passive: false, signal })
+    popupElement.addEventListener('wheel', handleWheel, { passive: false, signal: controller.signal })
+    return () => controller.abort()
   }, [popupElement, tooltipOpen])
 
   const triggerRef = useMemo(
