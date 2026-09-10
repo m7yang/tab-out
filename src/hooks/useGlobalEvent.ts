@@ -1,10 +1,8 @@
 import { useEffect, useEffectEvent } from 'react'
-import { omitUndefined } from '../lib/omit-undefined.js'
 
 export type GlobalEventOptions = {
   /** Register in the capture phase so the listener sees events before targets. */
   capture?: boolean
-  passive?: boolean
   /** Detach while false; the listener re-attaches when it turns true again. */
   enabled?: boolean
 }
@@ -26,7 +24,7 @@ function useGlobalEvent<EventValue extends Event>(
   targetKind: GlobalEventTargetKind,
   type: string,
   listener: (event: EventValue) => void,
-  { capture = false, passive, enabled = true }: GlobalEventOptions,
+  { capture = false, enabled = true }: GlobalEventOptions,
 ): void {
   const handleEvent = useEffectEvent(listener)
 
@@ -37,10 +35,10 @@ function useGlobalEvent<EventValue extends Event>(
     function onEvent(event: Event) {
       handleEvent(event as EventValue)
     }
-    target?.addEventListener(type, onEvent, omitUndefined({ capture, passive }))
+    target?.addEventListener(type, onEvent, { capture })
 
     return () => target?.removeEventListener(type, onEvent, { capture })
-  }, [capture, enabled, passive, targetKind, type])
+  }, [capture, enabled, targetKind, type])
 }
 
 export function useWindowEvent<Type extends keyof WindowEventMap>(
