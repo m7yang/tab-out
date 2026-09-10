@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { expect, test } from '@playwright/test'
 import * as contextMenuPage from './page-realm/context-menu.js'
+import * as dashboardPage from './page-realm/dashboard.js'
+import type { ClassRetentionProbeTarget } from './page-realm/dashboard.js'
 import { createDashboardHarness, evaluateExpression, evaluateInPage, wait, waitForBrowserCondition } from './page-realm/harness.js'
 import type { DashboardHarness } from './page-realm/harness.js'
 
@@ -649,66 +651,12 @@ async function waitForContextMenuState(harness: DashboardHarness, open: boolean)
   )
 }
 
-type ClassRetentionProbeTarget = {
-  selector: string
-  label: string
-  className: string
-}
-
 async function startClassRetentionProbe(harness: DashboardHarness, target: ClassRetentionProbeTarget) {
-  const result = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const target = Array.from(document.querySelectorAll(${JSON.stringify(target.selector)}))
-        .find((candidate) => candidate.textContent?.includes(${JSON.stringify(target.label)}))
-      if (!(target instanceof HTMLElement) || !target.classList.contains(${JSON.stringify(target.className)})) {
-        return false
-      }
-
-      const classListIncludes = (value) => (value || '').split(/\\s+/).includes(${JSON.stringify(target.className)})
-      const probe = {
-        target,
-        classWasRemoved: false,
-        observer: null,
-        consume(records) {
-          for (let index = 0; index < records.length; index += 1) {
-            const before = classListIncludes(records[index].oldValue)
-            const after = classListIncludes(records[index + 1]?.oldValue ?? target.getAttribute('class'))
-            if (before && !after) probe.classWasRemoved = true
-          }
-        }
-      }
-      const observer = new MutationObserver((records) => probe.consume(records))
-      probe.observer = observer
-      observer.observe(target, {
-        attributes: true,
-        attributeFilter: ['class'],
-        attributeOldValue: true
-      })
-      window.__tabOutSmokeClassRetentionProbe = probe
-      return true
-    })()`,
-  })
-  return result.result.value
+  return evaluateInPage(harness, dashboardPage.startClassRetentionProbe, target)
 }
 
 async function finishClassRetentionProbe(harness: DashboardHarness) {
-  const result = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const probe = window.__tabOutSmokeClassRetentionProbe
-      if (!probe) return null
-      // MutationObserver callbacks may batch the removal and re-addition. The
-      // next record's oldValue is the state after this record, so it preserves
-      // transitions that are already healed by the time the callback runs.
-      probe.consume(probe.observer.takeRecords())
-      probe.observer.disconnect()
-      const classWasRemoved = probe.classWasRemoved
-      delete window.__tabOutSmokeClassRetentionProbe
-      return classWasRemoved
-    })()`,
-  })
-  return result.result.value
+  return evaluateInPage(harness, dashboardPage.finishClassRetentionProbe)
 }
 
 async function waitForFocusUpdates(harness: DashboardHarness) {
@@ -733,171 +681,19 @@ async function measureDashboard(harness: DashboardHarness, width: number) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  return evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const done = () => {
-        const cards = Array.from(document.querySelectorAll('.domain-block'))
-        const rects = cards.map((card) => card.getBoundingClientRect()).filter((rect) => rect.width > 0)
-        const lefts = Array.from(new Set(rects.map((rect) => Math.round(rect.left))))
-        const round = (value) => Math.round(value * 100) / 100
-        const sourceSwitchRect = document.querySelector('[data-tabout="dashboard-view"]')?.getBoundingClientRect()
-        const headerControlsRect = document.querySelector('.header-controls')?.getBoundingClientRect()
-        const missionsRect = document.querySelector('.missions:not(.missions-empty)')?.getBoundingClientRect()
-        resolve({
-          cardCount: rects.length,
-          columns: lefts.length,
-          firstWidth: Math.round(rects[0]?.width || 0),
-          headerControlsRight: headerControlsRect ? round(headerControlsRect.right) : null,
-          missionsRight: missionsRect ? round(missionsRect.right) : null,
-          rootHtmlLength: document.getElementById('appRoot')?.innerHTML.length || 0,
-          sourceSwitchRight: sourceSwitchRect ? round(sourceSwitchRect.right) : null,
-          errors: window.__tabOutSmokeErrors || []
-        })
-      }
-      const start = Date.now()
-      const wait = () => {
-        if (document.querySelectorAll('.domain-block').length >= 12) {
-          requestAnimationFrame(() => setTimeout(done, 700))
-        } else if (Date.now() - start > 5000) {
-          done()
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  return evaluateInPage(harness, dashboardPage.measureDashboard)
 }
 
 async function measureInitialTooltipMeasureNodes(harness: DashboardHarness) {
-  return evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => ({
-      pageChipMeasureNodes: document.querySelectorAll('.page-chip-tooltip-measure').length,
-      historyExpansionMeasureNodes: document.querySelectorAll('.history-entry-title-expansion-measure').length,
-      visibleTooltipNodes: Array.from(document.querySelectorAll('[data-slot="tooltip-content"]')).filter((tooltip) => {
-        const rect = tooltip.getBoundingClientRect()
-        return rect.width > 0 && rect.height > 0 && !tooltip.hasAttribute('data-ending-style')
-      }).length
-    }))()`,
-  }).then((result: any) => result.result.value)
+  return evaluateInPage(harness, dashboardPage.readTooltipMeasureNodeCounts)
 }
 
 async function measureTruncatedTitleTailFill(harness: DashboardHarness) {
-  return evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => resolve((() => {
-      const summarize = (elements) => {
-        const truncated = elements.filter((el) => el.querySelector('.clamped-title-line'))
-        return {
-          truncatedCount: elements.length,
-          clampedCount: truncated.length,
-          tailOverflows: truncated.every((el) => {
-            const rows = el.querySelectorAll('.clamped-title-line')
-            const tail = rows[rows.length - 1]
-            return rows.length > 1 && tail.scrollWidth > el.clientWidth
-          }),
-          headsFit: truncated.every((el) => {
-            const rows = Array.from(el.querySelectorAll('.clamped-title-line')).slice(0, -1)
-            return rows.every((row) => row.scrollWidth <= el.clientWidth + 1)
-          })
-        }
-      }
-      const clampedPills = Array.from(document.querySelectorAll('.clamped-title-line .chip-title-suppression-marker'))
-      return {
-        history: summarize(Array.from(document.querySelectorAll('.history-entry-title.history-entry-title-truncated'))),
-        chips: summarize(Array.from(document.querySelectorAll('.chip-text.chip-text-truncated')).filter((el) => (
-          !el.closest('.page-chip-expanded') &&
-          !el.querySelector('.chip-title-variant-list, .chip-folded-content')
-        ))),
-        clampedPillCount: clampedPills.length,
-        clampedPillsKeepGlyph: clampedPills.every((pill) => !!pill.querySelector('svg.chip-title-suppression-glyph')),
-        untruncatedWithClamp: document.querySelectorAll('.history-entry-title:not(.history-entry-title-truncated) .clamped-title-line').length
-      }
-    })()), 120))))`,
-  }).then((result: any) => result.result.value)
+  return evaluateInPage(harness, dashboardPage.measureTruncatedTitleTailFill)
 }
 
 async function measureLargeBookmarkProgressiveRender(harness: DashboardHarness) {
-  return evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      window.__tabOutSmokeSetBookmarks?.(1008)
-      const trigger = Array.from(document.querySelectorAll('[data-tabout-part="dashboard-view-option"]'))
-        .find((candidate) => candidate.textContent?.trim() === 'Bookmarks')
-      const start = performance.now()
-      let initial = null
-      let steady = null
-      let lastScrollAt = 0
-      const committedSource = () => document.querySelector('[data-tabout="dashboard-shell"]')?.getAttribute('data-source') || ''
-      const cardCount = () => document.querySelectorAll('#openTabsMissions .domain-block').length
-      const snapshot = () => ({
-        count: cardCount(),
-        elapsedMs: Math.round(performance.now() - start),
-        elementCount: document.querySelectorAll('#openTabsMissions *').length,
-        measureNodeCount: document.querySelectorAll('.page-chip-tooltip-measure').length,
-        scrollTop: Math.round(document.querySelector('[data-tabout-part="scroll-region"]')?.scrollTop || 0)
-      })
-      const captureInitialCommit = () => {
-        if (initial || committedSource() !== 'bookmarks') return
-        const count = cardCount()
-        if (count === 0) return
-        initial = {
-          count,
-          elapsedMs: Math.round(performance.now() - start),
-          measureNodeCount: document.querySelectorAll('.page-chip-tooltip-measure').length
-        }
-      }
-      const observer = new MutationObserver(captureInitialCommit)
-      const appRoot = document.getElementById('appRoot')
-      if (appRoot) {
-        observer.observe(appRoot, {
-          attributes: true,
-          attributeFilter: ['data-source'],
-          subtree: true
-        })
-      }
-      trigger?.click()
-      captureInitialCommit()
-      const wait = () => {
-        captureInitialCommit()
-        const elapsed = performance.now() - start
-        const current = snapshot()
-        if (initial && !steady && committedSource() === 'bookmarks' && elapsed >= 1200) {
-          steady = current
-        }
-        if (steady && current.count < 1008 && elapsed - lastScrollAt >= 40) {
-          const scrollRegion = document.querySelector('[data-tabout-part="scroll-region"]')
-          if (scrollRegion) scrollRegion.scrollTop = scrollRegion.scrollHeight
-          lastScrollAt = elapsed
-        }
-        if (initial && steady && committedSource() === 'bookmarks' && current.count >= 1008) {
-          observer.disconnect()
-          resolve({
-            initial,
-            steady,
-            final: current
-          })
-          return
-        }
-        if (elapsed > 12000) {
-          observer.disconnect()
-          resolve({
-            initial,
-            steady,
-            final: current
-          })
-          return
-        }
-        setTimeout(wait, 16)
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  return evaluateInPage(harness, dashboardPage.measureLargeBookmarkProgressiveRender)
 }
 
 async function measureHorizontalScrollLock(harness: DashboardHarness) {
@@ -908,41 +704,7 @@ async function measureHorizontalScrollLock(harness: DashboardHarness) {
     mobile: false,
   })
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const scrollRegion = document.querySelector('.scroll-region')
-        const rect = scrollRegion?.getBoundingClientRect()
-        if (scrollRegion && rect && rect.width > 0 && rect.height > 0) {
-          const probe = document.createElement('div')
-          probe.dataset.scrollLockProbe = 'true'
-          probe.style.cssText = 'display:block;width:200vw;height:1px;pointer-events:none;'
-          scrollRegion.append(probe)
-          scrollRegion.scrollTo(0, 0)
-          requestAnimationFrame(() => {
-            const styles = window.getComputedStyle(scrollRegion)
-            resolve({
-              x: Math.round(rect.left + rect.width / 2),
-              y: Math.round(rect.top + Math.min(Math.max(rect.height / 2, 48), rect.height - 8)),
-              initialScrollLeft: scrollRegion.scrollLeft,
-              scrollWidth: scrollRegion.scrollWidth,
-              clientWidth: scrollRegion.clientWidth,
-              overflowX: styles.overflowX,
-              overscrollBehaviorX: styles.overscrollBehaviorX
-            })
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, dashboardPage.findScrollLockTarget)
 
   assert.ok(target, 'expected a scroll region for horizontal scroll lock smoke test')
 
@@ -955,81 +717,13 @@ async function measureHorizontalScrollLock(harness: DashboardHarness) {
   })
   await wait(160)
 
-  const after = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const scrollRegion = document.querySelector('.scroll-region')
-      const probe = scrollRegion?.querySelector('[data-scroll-lock-probe="true"]')
-      const result = {
-        scrollLeft: scrollRegion?.scrollLeft ?? null,
-        scrollWidth: scrollRegion?.scrollWidth ?? 0,
-        clientWidth: scrollRegion?.clientWidth ?? 0
-      }
-      probe?.remove()
-      return result
-    })()`,
-  }).then((result: any) => result.result.value)
+  const after = await evaluateInPage(harness, dashboardPage.readScrollLockAfter)
 
   return { ...target, afterScrollLeft: after.scrollLeft, afterScrollWidth: after.scrollWidth, afterClientWidth: after.clientWidth }
 }
 
 async function waitForTooltipRect(harness: DashboardHarness) {
-  return evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const tooltip = document.querySelector('[data-slot="tooltip-content"]')
-        const rect = tooltip?.getBoundingClientRect()
-        if (rect && rect.width > 0 && rect.height > 0) {
-          const tooltipText = tooltip.querySelector('.chip-text') || tooltip.querySelector('.history-entry-title-tooltip')
-          const textRect = tooltipText?.getBoundingClientRect()
-          const textStyles = tooltipText ? window.getComputedStyle(tooltipText) : null
-          const textLineHeight = Number.parseFloat(textStyles?.lineHeight || '') || null
-          const lineNodes = Array.from(tooltipText?.querySelectorAll('.page-chip-tooltip-line, .history-entry-title-tooltip-line') || [])
-          const tooltipLineTexts = lineNodes.length > 0
-            ? lineNodes.map((node) => node.textContent || '')
-            : [tooltipText?.textContent || '']
-          const styles = window.getComputedStyle(tooltip)
-          const outlineWidth = Number.parseFloat(styles.outlineWidth) || 0
-          resolve({
-            left: Math.round(rect.left),
-            right: Math.round(rect.right),
-            visualLeft: Math.round(rect.left - outlineWidth),
-            visualRight: Math.round(rect.right + outlineWidth),
-            top: Math.round(rect.top),
-            bottom: Math.round(rect.bottom),
-            width: Math.round(rect.width),
-            height: Math.round(rect.height),
-            textLeft: textRect ? Math.round(textRect.left * 100) / 100 : null,
-            textTop: textRect ? Math.round(textRect.top * 100) / 100 : null,
-            textWidth: textRect ? Math.round(textRect.width * 100) / 100 : null,
-            textHeight: textRect ? Math.round(textRect.height * 100) / 100 : null,
-            textLineHeight,
-            text: tooltip.textContent || '',
-            tooltipLineCount: textRect && textLineHeight ? Math.max(1, Math.round(textRect.height / textLineHeight)) : null,
-            tooltipLineTexts,
-            outlineWidth,
-            side: tooltip.getAttribute('data-side'),
-            align: tooltip.getAttribute('data-align'),
-            topLeftRadius: styles.borderTopLeftRadius,
-            topRightRadius: styles.borderTopRightRadius,
-            transitionDuration: styles.transitionDuration,
-            transitionProperty: styles.transitionProperty,
-            webkitLineClamp: textStyles?.webkitLineClamp || null,
-            svgCount: tooltip.querySelectorAll('svg').length,
-            viewportRight: window.innerWidth
-          })
-        } else if (Date.now() - start > 2000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  return evaluateInPage(harness, dashboardPage.waitForTooltipRect)
 }
 
 const MARKER_WRAP_REFLOW_SMOKE_LABEL = 'Content: All content overview'
@@ -5337,6 +5031,12 @@ async function measureDuplicateStackGeometry(harness: DashboardHarness) {
   }).then((result: any) => result.result.value)
 }
 
+// Missing geometry reads as misaligned, matching the NaN comparison the
+// untyped measurements relied on.
+function alignedWithin(left: number | null, right: number | null): boolean {
+  return left !== null && right !== null && Math.abs(left - right) <= 1
+}
+
 test('dashboard cards repack when the viewport resizes', async ({ page }) => {
   test.setTimeout(180_000)
   await page.goto('/tests/fixtures/dashboard-resize.html')
@@ -5358,14 +5058,14 @@ test('dashboard cards repack when the viewport resizes', async ({ page }) => {
   assert.ok(wide.cardCount >= 12, `dashboard should render enough cards for a column smoke test: ${JSON.stringify(wide)}`)
   assert.ok(wide.columns > narrow.columns, `expected columns to shrink after resize, got ${wide.columns} -> ${narrow.columns}`)
   assert.notEqual(wide.firstWidth, narrow.firstWidth, 'card width should respond to viewport resize')
-  assert.ok(Math.abs(wide.headerControlsRight - wide.missionsRight) <= 1, `wide header controls should align to the scrollable missions grid, not the native scrollbar gutter: ${JSON.stringify(wide)}`)
-  assert.ok(Math.abs(wide.sourceSwitchRight - wide.missionsRight) <= 1, `wide source switch should align to the scrollable missions grid, not the native scrollbar gutter: ${JSON.stringify(wide)}`)
-  assert.ok(Math.abs(besideFloor.headerControlsRight - besideFloor.missionsRight) <= 1, `beside-history floor header controls should align to the scrollable missions grid: ${JSON.stringify(besideFloor)}`)
-  assert.ok(Math.abs(besideFloor.sourceSwitchRight - besideFloor.missionsRight) <= 1, `beside-history floor source switch should align to the scrollable missions grid: ${JSON.stringify(besideFloor)}`)
-  assert.ok(Math.abs(constrained.headerControlsRight - constrained.missionsRight) <= 1, `stacked history layout header controls should align to the scrollable missions grid: ${JSON.stringify(constrained)}`)
-  assert.ok(Math.abs(constrained.sourceSwitchRight - constrained.missionsRight) <= 1, `stacked history layout source switch should align to the scrollable missions grid: ${JSON.stringify(constrained)}`)
-  assert.ok(Math.abs(narrow.headerControlsRight - narrow.missionsRight) <= 1, `narrow layout header controls should align to the scrollable missions grid: ${JSON.stringify(narrow)}`)
-  assert.ok(Math.abs(narrow.sourceSwitchRight - narrow.missionsRight) <= 1, `narrow layout source switch should align to the scrollable missions grid: ${JSON.stringify(narrow)}`)
+  assert.ok(alignedWithin(wide.headerControlsRight, wide.missionsRight), `wide header controls should align to the scrollable missions grid, not the native scrollbar gutter: ${JSON.stringify(wide)}`)
+  assert.ok(alignedWithin(wide.sourceSwitchRight, wide.missionsRight), `wide source switch should align to the scrollable missions grid, not the native scrollbar gutter: ${JSON.stringify(wide)}`)
+  assert.ok(alignedWithin(besideFloor.headerControlsRight, besideFloor.missionsRight), `beside-history floor header controls should align to the scrollable missions grid: ${JSON.stringify(besideFloor)}`)
+  assert.ok(alignedWithin(besideFloor.sourceSwitchRight, besideFloor.missionsRight), `beside-history floor source switch should align to the scrollable missions grid: ${JSON.stringify(besideFloor)}`)
+  assert.ok(alignedWithin(constrained.headerControlsRight, constrained.missionsRight), `stacked history layout header controls should align to the scrollable missions grid: ${JSON.stringify(constrained)}`)
+  assert.ok(alignedWithin(constrained.sourceSwitchRight, constrained.missionsRight), `stacked history layout source switch should align to the scrollable missions grid: ${JSON.stringify(constrained)}`)
+  assert.ok(alignedWithin(narrow.headerControlsRight, narrow.missionsRight), `narrow layout header controls should align to the scrollable missions grid: ${JSON.stringify(narrow)}`)
+  assert.ok(alignedWithin(narrow.sourceSwitchRight, narrow.missionsRight), `narrow layout source switch should align to the scrollable missions grid: ${JSON.stringify(narrow)}`)
   assert.equal(initialTooltipMeasureNodes.pageChipMeasureNodes, 0, `page chips should not mount hidden tooltip measurement nodes before hover: ${JSON.stringify(initialTooltipMeasureNodes)}`)
   assert.equal(initialTooltipMeasureNodes.historyExpansionMeasureNodes, 0, `history rows should not mount hidden expansion measurement nodes before hover: ${JSON.stringify(initialTooltipMeasureNodes)}`)
   assert.equal(initialTooltipMeasureNodes.visibleTooltipNodes, 0, `dashboard should not show tooltip popups before hover: ${JSON.stringify(initialTooltipMeasureNodes)}`)
