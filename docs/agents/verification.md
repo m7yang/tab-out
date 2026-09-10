@@ -24,6 +24,7 @@ For a requested commit, the pre-commit hook still runs `pnpm verify` as a separa
 
 - Install the bundled browser once with `pnpm exec playwright install chromium`.
 - The Playwright harness uses its bundled Chromium at the declared minimum Chrome major. The HTTP-fixture harness owns its local server and does not reuse another worktree's process. Set `TAB_OUT_PLAYWRIGHT_PORT` for concurrent worktree runs.
+- The dashboard smoke spec runs page-realm code as typed functions from `tests/browser/page-realm/*.ts` through `evaluateInPage` in `tests/browser/page-realm/harness.ts`. A page function receives one params object and may use only page globals plus that object, because Playwright serializes it by source text. `waitForBrowserCondition` is the only source-text boundary, for frame-accurate polling; the CDP session stays for `Input.*` and `Emulation.*` calls.
 - `pnpm test:browser` and `pnpm test:browser:all` run every HTTP-fixture browser spec. Use focused smoke, layout, or first-paint scripts for relevant iteration coverage; select the complete suite when broader coverage is required.
 
 ## Live QA And Evidence

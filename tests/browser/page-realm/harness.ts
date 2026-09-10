@@ -54,9 +54,9 @@ async function withNavigationRetry<T>(run: () => Promise<T>): Promise<T> {
   throw lastError
 }
 
-// Raw CDP evaluation of source text. Reserved for callers that must inject
-// code as text; prefer typed page functions everywhere else.
-export function evaluateExpression(harness: DashboardHarness, params: Record<string, unknown>): Promise<any> {
+// Raw CDP evaluation of source text, used only by the frame-accurate
+// condition helper below.
+function evaluateExpression(harness: DashboardHarness, params: Record<string, unknown>): Promise<any> {
   return withNavigationRetry(() => harness.session.send('Runtime.evaluate', params))
 }
 

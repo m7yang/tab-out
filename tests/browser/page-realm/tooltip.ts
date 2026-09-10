@@ -352,3 +352,148 @@ export function readOpenTooltipTexts(): string[] {
     .filter((tooltip) => !tooltip.hidden && tooltip.getClientRects().length > 0 && window.getComputedStyle(tooltip).visibility !== 'hidden')
     .map((tooltip) => tooltip.textContent || '')
 }
+
+export function dispatchWindowBlur(): void {
+  window.dispatchEvent(new Event('blur'))
+}
+
+// Reports the document as hidden for one visibilitychange dispatch, then
+// restores the native accessors.
+export function simulateDocumentHidden(): void {
+  const stateDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState')
+  const hiddenDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden')
+  try {
+    Object.defineProperty(Document.prototype, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
+    })
+    Object.defineProperty(Document.prototype, 'hidden', {
+      configurable: true,
+      get: () => true,
+    })
+    document.dispatchEvent(new Event('visibilitychange'))
+  } finally {
+    if (stateDescriptor) {
+      Object.defineProperty(Document.prototype, 'visibilityState', stateDescriptor)
+    }
+    if (hiddenDescriptor) {
+      Object.defineProperty(Document.prototype, 'hidden', hiddenDescriptor)
+    }
+  }
+}
+
+export function findSectionPinButton(): Promise<{ x: number, y: number, label: string | null } | null> {
+  return new Promise((resolve) => {
+    const start = Date.now()
+    const poll = () => {
+      const button = document.querySelector('[data-tabout-part="section-pin-button"]')
+      const rect = button?.getBoundingClientRect()
+      if (button && rect && rect.width > 0 && rect.height > 0) {
+        resolve({
+          x: Math.round(rect.left + rect.width / 2),
+          y: Math.round(rect.top + rect.height / 2),
+          label: button.getAttribute('aria-label'),
+        })
+      } else if (Date.now() - start > 5000) {
+        resolve(null)
+      } else {
+        setTimeout(poll, 50)
+      }
+    }
+    poll()
+  })
+}
+
+export function isSectionPinButtonFocused(): boolean {
+  return document.activeElement?.matches('[data-tabout-part="section-pin-button"]') || false
+}
+
+export function findHandoffChipTarget(params: { label: string }) {
+  const describe = (chip: Element, marker: Element, markerRect: DOMRect, textRect: DOMRect) => ({
+    markerX: Math.round(markerRect.left + markerRect.width / 2),
+    textX: Math.round(Math.min(textRect.right - 8, markerRect.right + 16)),
+    y: Math.round(markerRect.top + markerRect.height / 2),
+    markerText: marker.textContent || '',
+    chipText: chip.textContent || '',
+  })
+  return new Promise<ReturnType<typeof describe> | null>((resolve) => {
+    const start = Date.now()
+    const poll = () => {
+      const chip = Array.from(document.querySelectorAll('.page-chip'))
+        .find((candidate) => (
+          candidate.textContent?.includes(params.label) &&
+          candidate.querySelector('.chip-strip-indicator')
+        ))
+      const marker = chip?.querySelector('.chip-strip-indicator')
+      const markerRect = marker?.getBoundingClientRect()
+      const textRect = chip?.querySelector('.chip-text')?.getBoundingClientRect()
+      if (chip && marker && markerRect && textRect && markerRect.width > 0 && textRect.width > 0) {
+        resolve(describe(chip, marker, markerRect, textRect))
+      } else if (Date.now() - start > 5000) {
+        resolve(null)
+      } else {
+        setTimeout(poll, 50)
+      }
+    }
+    poll()
+  })
+}
+
+export function findShortChipTarget(params: { label: string }): Promise<{ startX: number, y: number, isTruncated: boolean } | null> {
+  return new Promise((resolve) => {
+    const start = Date.now()
+    const poll = () => {
+      const chip = Array.from(document.querySelectorAll('.page-chip'))
+        .find((candidate) => candidate.textContent?.includes(params.label))
+      const textEl = chip?.querySelector('.chip-text')
+      const rect = textEl?.getBoundingClientRect()
+      if (rect && textEl && rect.width > 120 && rect.height > 8) {
+        resolve({
+          startX: Math.round(rect.left + Math.min(24, rect.width / 2)),
+          y: Math.round(rect.top + rect.height / 2),
+          isTruncated: textEl.classList.contains('chip-text-truncated'),
+        })
+      } else if (Date.now() - start > 5000) {
+        resolve(null)
+      } else {
+        setTimeout(poll, 50)
+      }
+    }
+    poll()
+  })
+}
+
+export function countTooltipNodes(): number {
+  return document.querySelectorAll('[data-slot="tooltip-content"]').length
+}
+
+// The chip whose text reaches furthest right, so its expansion has to flip
+// away from the viewport edge.
+export function findViewportEdgeChipTarget(params: { marker: string }) {
+  const describe = (rect: DOMRect) => ({
+    startX: Math.round(rect.right - 4),
+    textLeft: Math.round(rect.left),
+    textRight: Math.round(rect.right),
+    y: Math.round(rect.top + rect.height / 2),
+    viewportRight: window.innerWidth,
+  })
+  return new Promise<ReturnType<typeof describe> | null>((resolve) => {
+    const start = Date.now()
+    const poll = () => {
+      const rects = Array.from(document.querySelectorAll('.page-chip'))
+        .filter((chip) => chip.textContent?.includes(params.marker))
+        .map((chip) => chip.querySelector('.chip-text')?.getBoundingClientRect())
+        .filter((rect): rect is DOMRect => !!rect && rect.width > 120 && rect.height > 8)
+        .sort((a, b) => b.right - a.right)
+      const rect = rects[0]
+      if (rect) {
+        resolve(describe(rect))
+      } else if (Date.now() - start > 5000) {
+        resolve(null)
+      } else {
+        setTimeout(poll, 50)
+      }
+    }
+    poll()
+  })
+}

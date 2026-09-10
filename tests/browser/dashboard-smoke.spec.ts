@@ -3,12 +3,13 @@ import { expect, test } from '@playwright/test'
 import * as contextMenuPage from './page-realm/context-menu.js'
 import * as dashboardPage from './page-realm/dashboard.js'
 import type { ClassRetentionProbeTarget } from './page-realm/dashboard.js'
-import { createDashboardHarness, evaluateExpression, evaluateInPage, wait, waitForBrowserCondition } from './page-realm/harness.js'
+import { createDashboardHarness, evaluateInPage, wait, waitForBrowserCondition } from './page-realm/harness.js'
 import type { DashboardHarness } from './page-realm/harness.js'
 import * as focusUpdatesPage from './page-realm/focus-updates.js'
 import * as historyEntryPage from './page-realm/history-entry.js'
 import * as pageChipExpansionPage from './page-realm/page-chip-expansion.js'
 import * as titleExpansionPage from './page-realm/title-expansion.js'
+import * as titleVariantsPage from './page-realm/title-variants.js'
 import * as tooltipPage from './page-realm/tooltip.js'
 
 type FilterReloadTrace = {
@@ -2392,16 +2393,10 @@ async function measureTooltipWindowBlurClose(harness: DashboardHarness) {
   })
   const first = await waitForPageChipExpansionRect(harness, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
 
-  await evaluateExpression(harness, {
-    expression: `window.dispatchEvent(new Event('blur'))`,
-  })
+  await evaluateInPage(harness, tooltipPage.dispatchWindowBlur)
   await waitForNoTitleExpansion(harness)
 
-  const afterBlurTooltips = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `Array.from(document.querySelectorAll('.page-chip-expanded'))
-      .map((chip) => chip.textContent || '')`,
-  }).then((result: any) => result.result.value)
+  const afterBlurTooltips = await evaluateInPage(harness, dashboardPage.readExpandedPageChipTexts)
 
   return { target, first, afterBlurTooltips }
 }
@@ -2433,37 +2428,10 @@ async function measureTooltipVisibilityChangeClose(harness: DashboardHarness) {
   })
   const first = await waitForPageChipExpansionRect(harness, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
 
-  await evaluateExpression(harness, {
-    expression: `(() => {
-      const stateDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState')
-      const hiddenDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden')
-      try {
-        Object.defineProperty(Document.prototype, 'visibilityState', {
-          configurable: true,
-          get: () => 'hidden'
-        })
-        Object.defineProperty(Document.prototype, 'hidden', {
-          configurable: true,
-          get: () => true
-        })
-        document.dispatchEvent(new Event('visibilitychange'))
-      } finally {
-        if (stateDescriptor) {
-          Object.defineProperty(Document.prototype, 'visibilityState', stateDescriptor)
-        }
-        if (hiddenDescriptor) {
-          Object.defineProperty(Document.prototype, 'hidden', hiddenDescriptor)
-        }
-      }
-    })()`,
-  })
+  await evaluateInPage(harness, tooltipPage.simulateDocumentHidden)
   await waitForNoTitleExpansion(harness)
 
-  const afterVisibilityChangeTooltips = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `Array.from(document.querySelectorAll('.page-chip-expanded'))
-      .map((chip) => chip.textContent || '')`,
-  }).then((result: any) => result.result.value)
+  const afterVisibilityChangeTooltips = await evaluateInPage(harness, dashboardPage.readExpandedPageChipTexts)
 
   return { target, first, afterVisibilityChangeTooltips }
 }
@@ -2478,29 +2446,7 @@ async function measureActionTooltipClickClose(harness: DashboardHarness) {
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const button = document.querySelector('[data-tabout-part="section-pin-button"]')
-        const rect = button?.getBoundingClientRect()
-        if (rect && rect.width > 0 && rect.height > 0) {
-          resolve({
-            x: Math.round(rect.left + rect.width / 2),
-            y: Math.round(rect.top + rect.height / 2),
-            label: button.getAttribute('aria-label')
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findSectionPinButton)
 
   assert.ok(target, 'expected a pin button for tooltip click-close smoke test')
 
@@ -2538,10 +2484,7 @@ async function measureActionTooltipClickClose(harness: DashboardHarness) {
 
   const afterLeaveTooltips = await getVisibleTooltipTexts(harness)
 
-  const focusedAfterLeave = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `document.activeElement?.matches('[data-tabout-part="section-pin-button"]') || false`,
-  }).then((result: any) => result.result.value)
+  const focusedAfterLeave = await evaluateInPage(harness, tooltipPage.isSectionPinButtonFocused)
 
   return { target, first, afterLeaveTooltips, focusedAfterLeave }
 }
@@ -2556,38 +2499,7 @@ async function measureMarkerToChipTooltipHandoff(harness: DashboardHarness) {
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chip = Array.from(document.querySelectorAll('.page-chip'))
-          .find((candidate) =>
-            candidate.textContent?.includes('Hover Handoff Title') &&
-            candidate.querySelector('.chip-strip-indicator')
-          )
-        const marker = chip?.querySelector('.chip-strip-indicator')
-        const text = chip?.querySelector('.chip-text')
-        const markerRect = marker?.getBoundingClientRect()
-        const textRect = text?.getBoundingClientRect()
-        if (markerRect && textRect && markerRect.width > 0 && textRect.width > 0) {
-          resolve({
-            markerX: Math.round(markerRect.left + markerRect.width / 2),
-            textX: Math.round(Math.min(textRect.right - 8, markerRect.right + 16)),
-            y: Math.round(markerRect.top + markerRect.height / 2),
-            markerText: marker.textContent || '',
-            chipText: chip?.textContent || ''
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findHandoffChipTarget, { label: 'Hover Handoff Title' })
 
   assert.ok(target, 'expected a chip with a strip indicator for expansion handoff smoke test')
 
@@ -2626,31 +2538,7 @@ async function measureShortChipTooltipAbsence(harness: DashboardHarness) {
     mobile: false,
   })
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chip = Array.from(document.querySelectorAll('.page-chip'))
-          .find((candidate) => candidate.textContent?.includes('Short title'))
-        const textEl = chip?.querySelector('.chip-text')
-        const rect = textEl?.getBoundingClientRect()
-        if (rect && textEl && rect.width > 120 && rect.height > 8) {
-          resolve({
-            startX: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + rect.height / 2),
-            isTruncated: textEl.classList.contains('chip-text-truncated')
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findShortChipTarget, { label: 'Short title' })
 
   assert.ok(target, 'expected a short page chip to hover for tooltip absence smoke test')
 
@@ -2661,10 +2549,7 @@ async function measureShortChipTooltipAbsence(harness: DashboardHarness) {
   })
   await wait(650)
 
-  const tooltipCount = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `document.querySelectorAll('[data-slot="tooltip-content"]').length`,
-  }).then((result: any) => result.result.value)
+  const tooltipCount = await evaluateInPage(harness, tooltipPage.countTooltipNodes)
 
   return { target, tooltipCount }
 }
@@ -2679,40 +2564,7 @@ async function measureTooltipEdgeFlip(harness: DashboardHarness) {
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chips = Array.from(document.querySelectorAll('.page-chip'))
-          .filter((chip) => chip.textContent?.includes('viewport-edge'))
-          .map((chip) => {
-            const textEl = chip.querySelector('.chip-text')
-            const rect = textEl?.getBoundingClientRect()
-            return { rect }
-          })
-          .filter(({ rect }) => rect && rect.width > 120 && rect.height > 8)
-          .sort((a, b) => b.rect.right - a.rect.right)
-
-        const target = chips[0]
-        if (target) {
-          resolve({
-            startX: Math.round(target.rect.right - 4),
-            textLeft: Math.round(target.rect.left),
-            textRight: Math.round(target.rect.right),
-            y: Math.round(target.rect.top + target.rect.height / 2),
-            viewportRight: window.innerWidth
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findViewportEdgeChipTarget, { marker: 'viewport-edge' })
 
   assert.ok(target, 'expected a right-edge page chip to hover for expansion smoke test')
 
@@ -2734,65 +2586,11 @@ async function measureCompactTitleVariantExpansion(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    awaitPromise: true,
-    expression: `window.__tabOutSmokeAddCompactTitleVariantTabs?.()`,
-  })
+  await evaluateInPage(harness, titleVariantsPage.injectSmokeTabs, { hook: '__tabOutSmokeAddCompactTitleVariantTabs' })
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chip = Array.from(document.querySelectorAll('.page-chip'))
-          .find((candidate) =>
-            candidate.textContent?.includes('Order Page') &&
-            candidate.textContent?.includes('productId=1060') &&
-            candidate.textContent?.includes('productId=9707')
-          )
-        const chipRect = chip?.getBoundingClientRect()
-        const titleRow = chip?.querySelector('.chip-title-row')
-        const variantLabels = Array.from(chip?.querySelectorAll('.chip-title-variant-label') || [])
-        const titleRect = titleRow?.getBoundingClientRect()
-        const labelRects = variantLabels.map((label) => label.getBoundingClientRect())
-        if (
-          chip instanceof HTMLElement &&
-          chipRect &&
-          (chipRect.top < 24 || chipRect.bottom > window.innerHeight - 24)
-        ) {
-          chip.scrollIntoView({ block: 'center', inline: 'nearest' })
-          setTimeout(wait, 120)
-          return
-        }
-        if (
-          chip instanceof HTMLElement &&
-          titleRow instanceof HTMLElement &&
-          chipRect &&
-          titleRect &&
-          labelRects.length === 2 &&
-          labelRects.every((rect) => rect.width > 40 && rect.height > 8)
-        ) {
-          const contentRight = Math.max(titleRect.right, ...labelRects.map((rect) => rect.right)) + 20
-          resolve({
-            x: Math.round(titleRect.left + Math.min(24, titleRect.width / 2)),
-            y: Math.round(titleRect.top + Math.min(titleRect.height / 2, 10)),
-            chipWidth: Math.round(chipRect.width),
-            contentWidth: Math.round(contentRight - chipRect.left),
-            titleWidth: Math.round(titleRect.width),
-            labelWidths: labelRects.map((rect) => Math.round(rect.width))
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, titleVariantsPage.findCompactVariantChipTarget)
 
   assert.ok(target, 'expected compact same-title URL variant chip for expansion width smoke')
 
@@ -2802,22 +2600,7 @@ async function measureCompactTitleVariantExpansion(harness: DashboardHarness) {
     y: target.y,
   })
   const expansion = await waitForPageChipExpansionRect(harness, 'Order Page')
-  const expandedVariantLabels = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const chip = Array.from(document.querySelectorAll('.page-chip-expanded'))
-        .find((candidate) => candidate.textContent?.includes('Order Page'))
-      return Array.from(chip?.querySelectorAll('.chip-title-variant-label') || []).map((label) => {
-        const rect = label.getBoundingClientRect()
-        return {
-          text: label.textContent || '',
-          clientWidth: Math.round((label.clientWidth || 0) * 100) / 100,
-          scrollWidth: Math.round((label.scrollWidth || 0) * 100) / 100,
-          width: Math.round(rect.width * 100) / 100
-        }
-      })
-    })()`,
-  }).then((result: any) => result.result.value)
+  const expandedVariantLabels = await evaluateInPage(harness, titleVariantsPage.readExpandedVariantLabels, { label: 'Order Page' })
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -2836,149 +2619,17 @@ async function measurePlainTitleVariantEdgeExpansion(harness: DashboardHarness) 
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    awaitPromise: true,
-    expression: `window.__tabOutSmokeAddPlainTitleVariantTabs?.()`,
-  })
+  await evaluateInPage(harness, titleVariantsPage.injectSmokeTabs, { hook: '__tabOutSmokeAddPlainTitleVariantTabs' })
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        // The long opaque tail (page=...&sourceType=...#comment-...) renders as a
-        // bounded stable fingerprint, so only the readable semantic query value
-        // is a durable text anchor for this variant row.
-        const chip = Array.from(document.querySelectorAll('.page-chip'))
-          .find((candidate) =>
-            candidate.textContent?.includes('Plain Title Variant') &&
-            candidate.textContent?.includes('focusedCommentId=667321')
-          )
-        const chipRect = chip?.getBoundingClientRect()
-        const variantLabels = Array.from(chip?.querySelectorAll('.chip-title-variant-label') || [])
-        const labelRects = variantLabels.map((label) => label.getBoundingClientRect())
-        const overflowingLabels = variantLabels.filter((label) => label.scrollWidth - label.clientWidth > 1).length
-        if (
-          chip instanceof HTMLElement &&
-          chipRect &&
-          (chipRect.top < 24 || chipRect.bottom > window.innerHeight - 24)
-        ) {
-          chip.scrollIntoView({ block: 'center', inline: 'nearest' })
-          setTimeout(wait, 120)
-          return
-        }
-        if (
-          chip instanceof HTMLElement &&
-          chipRect &&
-          labelRects.length === 2 &&
-          labelRects.every((rect) => rect.width > 0 && rect.height > 8) &&
-          overflowingLabels > 0
-        ) {
-          const slot = chip.closest('[data-tabout-part="slot"]')
-          const slotOnlyPoint = (() => {
-            if (!(slot instanceof HTMLElement)) return null
-            const slotRect = slot.getBoundingClientRect()
-            const points = [
-              { x: chipRect.left + 1, y: chipRect.top + 1 },
-              { x: chipRect.right - 1, y: chipRect.top + 1 },
-              { x: chipRect.left + 1, y: chipRect.bottom - 1 },
-              { x: chipRect.right - 1, y: chipRect.bottom - 1 },
-              { x: chipRect.left + 2, y: chipRect.top + 2 },
-              { x: chipRect.right - 2, y: chipRect.top + 2 },
-              { x: chipRect.left + 2, y: chipRect.bottom - 2 },
-              { x: chipRect.right - 2, y: chipRect.bottom - 2 }
-            ]
-            return points.find((point) => {
-              if (point.x < slotRect.left || point.x > slotRect.right || point.y < slotRect.top || point.y > slotRect.bottom) return false
-              const hit = document.elementFromPoint(point.x, point.y)
-              return hit instanceof Element && slot.contains(hit) && !chip.contains(hit)
-            }) || null
-          })()
-          const targetLabelRect = labelRects[0]
-          const titleRect = chip.querySelector('.chip-title-row')?.getBoundingClientRect()
-          resolve({
-            x: Math.round(chipRect.right - 4),
-            y: Math.round(targetLabelRect.top + targetLabelRect.height / 2),
-            chipLeft: Math.round(chipRect.left),
-            chipRight: Math.round(chipRect.right),
-            chipWidth: Math.round(chipRect.width),
-            labelClientWidths: variantLabels.map((label) => Math.round((label.clientWidth || 0) * 100) / 100),
-            labelScrollWidths: variantLabels.map((label) => Math.round((label.scrollWidth || 0) * 100) / 100),
-            overflowingLabels,
-            viewportRight: window.innerWidth,
-            surfaces: {
-              ...(slotOnlyPoint ? {
-                slotOnlyDefaultSurface: {
-                  x: Math.round(slotOnlyPoint.x),
-                  y: Math.round(slotOnlyPoint.y)
-                }
-              } : {}),
-              labelRightEdge: {
-                x: Math.round(chipRect.right - 4),
-                y: Math.round(targetLabelRect.top + targetLabelRect.height / 2)
-              },
-              leftGutter: {
-                x: Math.round(chipRect.left + 4),
-                y: Math.round((titleRect?.top || chipRect.top) + (titleRect?.height || chipRect.height) / 2)
-              },
-              titleRightEdge: {
-                x: Math.round(chipRect.right - 4),
-                y: Math.round((titleRect?.top || chipRect.top) + (titleRect?.height || chipRect.height) / 2)
-              }
-            }
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve({
-            chips: Array.from(document.querySelectorAll('.page-chip'))
-              .filter((candidate) => candidate.textContent?.includes('Plain Title Variant'))
-              .map((candidate) => {
-                const rect = candidate.getBoundingClientRect()
-                return {
-                  rect: { top: Math.round(rect.top), bottom: Math.round(rect.bottom), width: Math.round(rect.width) },
-                  variantLabels: Array.from(candidate.querySelectorAll('.chip-title-variant-label')).map((label) => ({
-                    text: label.textContent,
-                    clientWidth: label.clientWidth,
-                    scrollWidth: label.scrollWidth,
-                    height: Math.round(label.getBoundingClientRect().height)
-                  }))
-                }
-              }),
-            innerHeight: window.innerHeight,
-            missing: true
-          })
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, titleVariantsPage.findPlainVariantChipTarget)
 
   assert.ok(target?.surfaces, `expected plain same-title URL variant chip for edge expansion smoke: ${JSON.stringify(target)}`)
 
   const surfaceResults = []
   for (const [surface, point] of Object.entries(target.surfaces)) {
-    const preHoverState = await evaluateExpression(harness, {
-      returnByValue: true,
-      expression: `(() => {
-        const point = ${JSON.stringify(point)}
-        const slot = Array.from(document.querySelectorAll('[data-tabout-part="slot"]'))
-          .find((candidate) => candidate.textContent?.includes('Plain Title Variant'))
-        const chip = slot?.querySelector('.page-chip')
-        const hit = document.elementFromPoint(point.x, point.y)
-        return {
-          hitClassName: hit instanceof Element ? hit.className : '',
-          hitInsideChip: !!(chip && hit instanceof Node && chip.contains(hit)),
-          hitInsideSlot: !!(slot && hit instanceof Node && slot.contains(hit)),
-          hitTagName: hit instanceof Element ? hit.tagName : '',
-          chipHovered: !!(chip instanceof HTMLElement && chip.matches(':hover')),
-          slotHovered: !!(slot instanceof HTMLElement && slot.matches(':hover'))
-        }
-      })()`,
-    }).then((result: any) => result.result.value)
+    const preHoverState = await evaluateInPage(harness, titleVariantsPage.readPlainVariantHoverState, { point })
 
     await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
@@ -2986,42 +2637,8 @@ async function measurePlainTitleVariantEdgeExpansion(harness: DashboardHarness) 
       y: (point as { x: number, y: number }).y,
     })
     const expansion = await waitForPageChipExpansionRect(harness, 'Plain Title Variant')
-    const expandedVariantLabels = await evaluateExpression(harness, {
-      returnByValue: true,
-      expression: `(() => {
-        const chip = Array.from(document.querySelectorAll('.page-chip-expanded'))
-          .find((candidate) => candidate.textContent?.includes('Plain Title Variant'))
-        return Array.from(chip?.querySelectorAll('.chip-title-variant-label') || []).map((label) => ({
-          clientWidth: Math.round((label.clientWidth || 0) * 100) / 100,
-          scrollWidth: Math.round((label.scrollWidth || 0) * 100) / 100,
-          text: label.textContent || ''
-        }))
-      })()`,
-    }).then((result: any) => result.result.value)
-    const hoverState = await evaluateExpression(harness, {
-      returnByValue: true,
-      expression: `(() => {
-        const point = ${JSON.stringify(point)}
-        const slot = Array.from(document.querySelectorAll('[data-tabout-part="slot"]'))
-          .find((candidate) => candidate.textContent?.includes('Plain Title Variant'))
-        const chip = slot?.querySelector('.page-chip')
-        const defaultVariant = slot?.querySelector('.chip-title-variant[data-tabout-default-variant]')
-        const hit = document.elementFromPoint(point.x, point.y)
-        const defaultVariantStyle = defaultVariant instanceof HTMLElement
-          ? window.getComputedStyle(defaultVariant)
-          : null
-        return {
-          defaultVariantBackground: defaultVariantStyle?.backgroundColor || '',
-          defaultVariantColor: defaultVariantStyle?.color || '',
-          hitClassName: hit instanceof Element ? hit.className : '',
-          hitInsideChip: !!(chip && hit instanceof Node && chip.contains(hit)),
-          hitInsideSlot: !!(slot && hit instanceof Node && slot.contains(hit)),
-          hitTagName: hit instanceof Element ? hit.tagName : '',
-          chipHovered: !!(chip instanceof HTMLElement && chip.matches(':hover')),
-          slotHovered: !!(slot instanceof HTMLElement && slot.matches(':hover'))
-        }
-      })()`,
-    }).then((result: any) => result.result.value)
+    const expandedVariantLabels = await evaluateInPage(harness, titleVariantsPage.readExpandedVariantLabels, { label: 'Plain Title Variant' })
+    const hoverState = await evaluateInPage(harness, titleVariantsPage.readPlainVariantHoverState, { point })
 
     surfaceResults.push({ expandedVariantLabels, expansion, hoverState, point, preHoverState, surface })
 
@@ -3043,64 +2660,11 @@ async function measureWrappedTitleVariantExpansion(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    awaitPromise: true,
-    expression: `window.__tabOutSmokeAddWrappedTitleVariantTabs?.()`,
-  })
+  await evaluateInPage(harness, titleVariantsPage.injectSmokeTabs, { hook: '__tabOutSmokeAddWrappedTitleVariantTabs' })
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chip = Array.from(document.querySelectorAll('.page-chip'))
-          .find((candidate) =>
-            candidate.textContent?.includes('Example Store') &&
-            candidate.textContent?.includes('?example=alpha')
-          )
-        const chipRect = chip?.getBoundingClientRect()
-        const titleRow = chip?.querySelector('.chip-title-row')
-        const titleRect = titleRow?.getBoundingClientRect()
-        const markerCount = titleRow?.querySelectorAll('.chip-title-suppression-marker').length || 0
-        if (
-          chip instanceof HTMLElement &&
-          chipRect &&
-          (chipRect.top < 24 || chipRect.bottom > window.innerHeight - 24)
-        ) {
-          chip.scrollIntoView({ block: 'center', inline: 'nearest' })
-          setTimeout(wait, 120)
-          return
-        }
-        if (
-          chip instanceof HTMLElement &&
-          titleRow instanceof HTMLElement &&
-          chipRect &&
-          titleRect &&
-          titleRect.width > 120 &&
-          titleRect.height > 8
-        ) {
-          const lineHeight = Number.parseFloat(window.getComputedStyle(titleRow).lineHeight) || 16.25
-          resolve({
-            x: Math.round(titleRect.left + Math.min(24, titleRect.width / 2)),
-            y: Math.round(titleRect.top + Math.min(titleRect.height / 2, 10)),
-            chipWidth: Math.round(chipRect.width),
-            titleText: titleRow.textContent || '',
-            titleWidth: Math.round(titleRect.width),
-            titleLineCount: Math.max(1, Math.round(titleRect.height / lineHeight)),
-            markerCount
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, titleVariantsPage.findWrappedVariantChipTarget)
 
   assert.ok(target, 'expected wrapped same-title URL variant chip for expansion width smoke')
 
@@ -3109,41 +2673,7 @@ async function measureWrappedTitleVariantExpansion(harness: DashboardHarness) {
     x: target.x,
     y: target.y,
   })
-  const expansion = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chip = Array.from(document.querySelectorAll('.page-chip-expanded'))
-          .find((candidate) => candidate.textContent?.includes('Example Store'))
-        const titleRow = chip?.querySelector('.chip-title-row')
-        const chipRect = chip?.getBoundingClientRect()
-        const titleRect = titleRow?.getBoundingClientRect()
-        if (
-          chip instanceof HTMLElement &&
-          titleRow instanceof HTMLElement &&
-          chipRect &&
-          titleRect &&
-          chipRect.width > 0 &&
-          chipRect.height > 0
-        ) {
-          const lineHeight = Number.parseFloat(window.getComputedStyle(titleRow).lineHeight) || 16.25
-          resolve({
-            width: Math.round(chipRect.width),
-            titleText: titleRow.textContent || '',
-            titleLineCount: Math.max(1, Math.round(titleRect.height / lineHeight)),
-            titleLineTexts: Array.from(titleRow.querySelectorAll('.page-chip-expanded-line')).map((line) => line.textContent || '')
-          })
-        } else if (Date.now() - start > 2000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const expansion = await evaluateInPage(harness, titleVariantsPage.waitForWrappedVariantExpansion, { label: 'Example Store' })
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -3162,46 +2692,9 @@ async function measureDuplicateStackGeometry(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    awaitPromise: true,
-    expression: `window.__tabOutSmokeAddDuplicateStackTabs?.()`,
-  })
+  await evaluateInPage(harness, titleVariantsPage.injectSmokeTabs, { hook: '__tabOutSmokeAddDuplicateStackTabs' })
 
-  return evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chip = Array.from(document.querySelectorAll('.page-chip'))
-          .find((candidate) => candidate.textContent?.includes('Duplicate Stack Target'))
-        const frame = chip?.querySelector('.chip-favicon-stack')
-        const layers = Array.from(frame?.querySelectorAll('.chip-favicon-stack-layer') || [])
-        if (chip instanceof HTMLElement && frame instanceof HTMLElement && layers.length >= 2) {
-          const rectFor = (element) => {
-            const rect = element.getBoundingClientRect()
-            return {
-              left: Math.round(rect.left * 100) / 100,
-              top: Math.round(rect.top * 100) / 100,
-              width: Math.round(rect.width * 100) / 100,
-              height: Math.round(rect.height * 100) / 100
-            }
-          }
-          resolve({
-            chip: rectFor(chip),
-            frame: rectFor(frame),
-            layers: layers.map(rectFor),
-            className: frame.className
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  return evaluateInPage(harness, titleVariantsPage.measureDuplicateStackGeometry)
 }
 
 // Recorded Chrome focus calls carry their raw arguments; the update
@@ -4212,10 +3705,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page }) => {
     `duplicate page chip stack layers should not stretch into a tall overlay: ${JSON.stringify(duplicateStackGeometry)}`,
   )
 
-  await evaluateExpression(harness, {
-    awaitPromise: true,
-    expression: `window.__tabOutSmokeAddPathGroupPlaceholderTabs?.()`,
-  })
+  await evaluateInPage(harness, titleVariantsPage.injectSmokeTabs, { hook: '__tabOutSmokeAddPathGroupPlaceholderTabs' })
   const oneLinePathGroupPlaceholderTooltip = await measurePageChipTooltipLineCount(harness, 'at story/ABC-123_2', {
     forcedTextWidth: 130,
     forcedMaxLines: 1,
