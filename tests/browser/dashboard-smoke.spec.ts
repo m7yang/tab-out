@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { expect, test } from '@playwright/test'
-import type { CDPSession } from '@playwright/test'
+import { createDashboardHarness, evaluateExpression, wait, waitForBrowserCondition } from './page-realm/harness.js'
+import type { DashboardHarness } from './page-realm/harness.js'
 
 type FilterReloadTrace = {
   replacedFilterValues: Array<string | null>
@@ -558,84 +559,9 @@ test('a source choice made in the shell selects the admitted startup frame', asy
 const RUN_HISTORY_SCROLLBAR_OVERLAP_ONLY = process.env.HISTORY_SCROLLBAR_OVERLAP_ONLY === '1'
 const PAGE_CHIP_EXPANSION_SMOKE_LABEL = 'Hover Handoff Title'
 
-function wait(delay: number) {
-  return new Promise((resolveWait) => setTimeout(resolveWait, delay))
-}
-
-type CdpSession = {
-  send(method: string, params?: Record<string, any>): Promise<any>
-}
-
-function cdpSessionAdapter(session: CDPSession): CdpSession {
-  return {
-    send(method, params = {}) {
-      return session.send(method as Parameters<CDPSession['send']>[0], params as never)
-    },
-  }
-}
-
-async function evaluateWithNavigationRetry(session: CdpSession, params: Record<string, any>) {
-  const deadline = Date.now() + 10000
-  let lastError
-  while (Date.now() < deadline) {
-    try {
-      return await session.send('Runtime.evaluate', params)
-    } catch (error: any) {
-      lastError = error
-      if (!/Execution context was destroyed|Cannot find context|Inspected target navigated/.test(error.message)) {
-        throw error
-      }
-      await wait(100)
-    }
-  }
-  throw lastError
-}
-
-type BrowserConditionOptions<Args extends readonly unknown[]> = {
-  args?: Args
-  timeoutMs?: number
-}
-
-// Predicates run in the page realm; pass Node-side values through args instead of closures.
-async function waitForBrowserCondition<Args extends readonly unknown[] = []>(
-  session: CdpSession,
-  condition: (...args: Args) => boolean,
-  description: string,
-  options: BrowserConditionOptions<Args> = {},
-) {
-  const args = options.args ?? ([] as unknown as Args)
-  const timeoutMs = options.timeoutMs ?? 2000
-  // Runtime.evaluate requires source text, so keep the CDP serialization at this boundary.
-  const matched = await evaluateWithNavigationRetry(session, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const condition = (${condition.toString()})
-      const args = ${JSON.stringify(args)}
-      const start = Date.now()
-      const wait = () => {
-        try {
-          if (condition(...args)) {
-            resolve(true)
-            return
-          }
-        } catch {}
-        if (Date.now() - start > ${JSON.stringify(timeoutMs)}) {
-          resolve(false)
-        } else {
-          requestAnimationFrame(wait)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
-
-  assert.equal(matched, true, description)
-}
-
-async function waitForDashboardSettled(session: CdpSession) {
+async function waitForDashboardSettled(harness: DashboardHarness) {
   await waitForBrowserCondition(
-    session,
+    harness,
     () => {
       const containers = Array.from(document.querySelectorAll('.missions:not(.missions-empty)'))
         .filter((container) => container.clientWidth > 0 && container.querySelector('[data-tabout="domain-card"]:not(.closing)'))
@@ -661,9 +587,9 @@ async function waitForDashboardSettled(session: CdpSession) {
   )
 }
 
-async function waitForScrollTop(session: CdpSession, selector: string, expected = 0) {
+async function waitForScrollTop(harness: DashboardHarness, selector: string, expected = 0) {
   await waitForBrowserCondition(
-    session,
+    harness,
     (targetSelector: string, targetScrollTop: number) => {
       const scroller = document.querySelector(targetSelector)
       return !!scroller && Math.abs(scroller.scrollTop - targetScrollTop) <= 1
@@ -673,25 +599,25 @@ async function waitForScrollTop(session: CdpSession, selector: string, expected 
   )
 }
 
-async function waitForNoPageChipExpansion(session: CdpSession) {
+async function waitForNoPageChipExpansion(harness: DashboardHarness) {
   await waitForBrowserCondition(
-    session,
+    harness,
     () => !document.querySelector('.page-chip-expanded'),
     'page chip expansion should close',
   )
 }
 
-async function waitForNoHistoryEntryExpansion(session: CdpSession) {
+async function waitForNoHistoryEntryExpansion(harness: DashboardHarness) {
   await waitForBrowserCondition(
-    session,
+    harness,
     () => !document.querySelector('.history-entry-expanded'),
     'history entry expansion should close',
   )
 }
 
-async function waitForNoVisibleTooltip(session: CdpSession) {
+async function waitForNoVisibleTooltip(harness: DashboardHarness) {
   await waitForBrowserCondition(
-    session,
+    harness,
     () => !Array.from(document.querySelectorAll('[data-slot="tooltip-content"]')).some((tooltip) => {
       const rect = tooltip.getBoundingClientRect()
       return rect.width > 0 && rect.height > 0 && !tooltip.hasAttribute('data-ending-style')
@@ -700,17 +626,17 @@ async function waitForNoVisibleTooltip(session: CdpSession) {
   )
 }
 
-async function waitForNoTitleExpansion(session: CdpSession) {
+async function waitForNoTitleExpansion(harness: DashboardHarness) {
   await Promise.all([
-    waitForNoPageChipExpansion(session),
-    waitForNoHistoryEntryExpansion(session),
-    waitForNoVisibleTooltip(session),
+    waitForNoPageChipExpansion(harness),
+    waitForNoHistoryEntryExpansion(harness),
+    waitForNoVisibleTooltip(harness),
   ])
 }
 
-async function waitForContextMenuState(session: CdpSession, open: boolean) {
+async function waitForContextMenuState(harness: DashboardHarness, open: boolean) {
   await waitForBrowserCondition(
-    session,
+    harness,
     (shouldBeOpen: boolean) => {
       const menu = document.querySelector('[data-slot="context-menu-content"]')
       return shouldBeOpen
@@ -728,8 +654,8 @@ type ClassRetentionProbeTarget = {
   className: string
 }
 
-async function startClassRetentionProbe(session: CdpSession, target: ClassRetentionProbeTarget) {
-  const result = await evaluateWithNavigationRetry(session, {
+async function startClassRetentionProbe(harness: DashboardHarness, target: ClassRetentionProbeTarget) {
+  const result = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const target = Array.from(document.querySelectorAll(${JSON.stringify(target.selector)}))
@@ -765,8 +691,8 @@ async function startClassRetentionProbe(session: CdpSession, target: ClassRetent
   return result.result.value
 }
 
-async function finishClassRetentionProbe(session: CdpSession) {
-  const result = await evaluateWithNavigationRetry(session, {
+async function finishClassRetentionProbe(harness: DashboardHarness) {
+  const result = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const probe = window.__tabOutSmokeClassRetentionProbe
@@ -784,9 +710,9 @@ async function finishClassRetentionProbe(session: CdpSession) {
   return result.result.value
 }
 
-async function waitForFocusUpdates(session: CdpSession) {
+async function waitForFocusUpdates(harness: DashboardHarness) {
   await waitForBrowserCondition(
-    session,
+    harness,
     () => {
       const smokeWindow = window as typeof window & {
         __tabOutSmokeFocusUpdates?: Array<{ kind: string }>
@@ -799,14 +725,14 @@ async function waitForFocusUpdates(session: CdpSession) {
   )
 }
 
-async function measureDashboard(session: CdpSession, width: number) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureDashboard(harness: DashboardHarness, width: number) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  return evaluateWithNavigationRetry(session, {
+  return evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -844,8 +770,8 @@ async function measureDashboard(session: CdpSession, width: number) {
   }).then((result: any) => result.result.value)
 }
 
-async function measureInitialTooltipMeasureNodes(session: CdpSession) {
-  return evaluateWithNavigationRetry(session, {
+async function measureInitialTooltipMeasureNodes(harness: DashboardHarness) {
+  return evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => ({
       pageChipMeasureNodes: document.querySelectorAll('.page-chip-tooltip-measure').length,
@@ -858,8 +784,8 @@ async function measureInitialTooltipMeasureNodes(session: CdpSession) {
   }).then((result: any) => result.result.value)
 }
 
-async function measureTruncatedTitleTailFill(session: CdpSession) {
-  return evaluateWithNavigationRetry(session, {
+async function measureTruncatedTitleTailFill(harness: DashboardHarness) {
+  return evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => resolve((() => {
@@ -894,8 +820,8 @@ async function measureTruncatedTitleTailFill(session: CdpSession) {
   }).then((result: any) => result.result.value)
 }
 
-async function measureLargeBookmarkProgressiveRender(session: CdpSession) {
-  return evaluateWithNavigationRetry(session, {
+async function measureLargeBookmarkProgressiveRender(harness: DashboardHarness) {
+  return evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -973,15 +899,15 @@ async function measureLargeBookmarkProgressiveRender(session: CdpSession) {
   }).then((result: any) => result.result.value)
 }
 
-async function measureHorizontalScrollLock(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureHorizontalScrollLock(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 760,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -1019,7 +945,7 @@ async function measureHorizontalScrollLock(session: CdpSession) {
 
   assert.ok(target, 'expected a scroll region for horizontal scroll lock smoke test')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseWheel',
     x: target.x,
     y: target.y,
@@ -1028,7 +954,7 @@ async function measureHorizontalScrollLock(session: CdpSession) {
   })
   await wait(160)
 
-  const after = await evaluateWithNavigationRetry(session, {
+  const after = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const scrollRegion = document.querySelector('.scroll-region')
@@ -1046,8 +972,8 @@ async function measureHorizontalScrollLock(session: CdpSession) {
   return { ...target, afterScrollLeft: after.scrollLeft, afterScrollWidth: after.scrollWidth, afterClientWidth: after.clientWidth }
 }
 
-async function waitForTooltipRect(session: CdpSession) {
-  return evaluateWithNavigationRetry(session, {
+async function waitForTooltipRect(harness: DashboardHarness) {
+  return evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -1115,23 +1041,23 @@ const MARKER_WRAP_REFLOW_SMOKE_LABEL = 'Content: All content overview'
  * allowance instead of the resting width, so a pill starts a continuation
  * line only when the previous line has no room for it.
  */
-async function measureMarkerWrapExpansionReflow(session: CdpSession, options: { forcedTextWidth?: number, viewportWidth?: number } = {}) {
-  await evaluateWithNavigationRetry(session, {
+async function measureMarkerWrapExpansionReflow(harness: DashboardHarness, options: { forcedTextWidth?: number, viewportWidth?: number } = {}) {
+  await evaluateExpression(harness, {
     awaitPromise: true,
     expression: `window.__tabOutSmokeAddMarkerWrapPathGroupTabs?.()`,
   })
-  await session.send('Emulation.setDeviceMetricsOverride', {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: options.viewportWidth || 1000,
     height: 900,
     deviceScaleFactor: 2,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -1201,14 +1127,14 @@ async function measureMarkerWrapExpansionReflow(session: CdpSession, options: { 
 
   if (!target) return { target, expansion: null }
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  await waitForPageChipExpansionRect(session, MARKER_WRAP_REFLOW_SMOKE_LABEL)
+  await waitForPageChipExpansionRect(harness, MARKER_WRAP_REFLOW_SMOKE_LABEL)
 
-  const expansion = await evaluateWithNavigationRetry(session, {
+  const expansion = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const chip = Array.from(document.querySelectorAll('.page-chip-expanded'))
@@ -1276,8 +1202,8 @@ async function measureMarkerWrapExpansionReflow(session: CdpSession, options: { 
     })()`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2 })
-  await waitForNoPageChipExpansion(session)
+  await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2 })
+  await waitForNoPageChipExpansion(harness)
 
   return { target, expansion }
 }
@@ -1291,23 +1217,23 @@ const MARKER_ONLY_LINE_SMOKE_LABEL = 'Platform Ops Dev 2026'
  * on its line, so the expansion must keep it anchored on the same visible
  * line instead of reflowing it up into the title line.
  */
-async function measureMarkerOnlyLineExpansion(session: CdpSession) {
-  await evaluateWithNavigationRetry(session, {
+async function measureMarkerOnlyLineExpansion(harness: DashboardHarness) {
+  await evaluateExpression(harness, {
     awaitPromise: true,
     expression: `window.__tabOutSmokeAddMarkerWrapPathGroupTabs?.()`,
   })
-  await session.send('Emulation.setDeviceMetricsOverride', {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 2,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -1371,14 +1297,14 @@ async function measureMarkerOnlyLineExpansion(session: CdpSession) {
 
   if (!target) return { target, expansion: null }
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  await waitForPageChipExpansionRect(session, MARKER_ONLY_LINE_SMOKE_LABEL)
+  await waitForPageChipExpansionRect(harness, MARKER_ONLY_LINE_SMOKE_LABEL)
 
-  const expansion = await evaluateWithNavigationRetry(session, {
+  const expansion = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const chip = Array.from(document.querySelectorAll('.page-chip-expanded'))
@@ -1398,8 +1324,8 @@ async function measureMarkerOnlyLineExpansion(session: CdpSession) {
     })()`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2 })
-  await waitForNoPageChipExpansion(session)
+  await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2 })
+  await waitForNoPageChipExpansion(harness)
 
   return { target, expansion }
 }
@@ -1412,24 +1338,24 @@ const VARIANT_TITLE_ROW_SMOKE_LABEL = 'Skills for Real Engineers'
  * lines. Hydrating the indicator label must widen line 1 in place — the
  * second line's text stays on the second line instead of reflowing up.
  */
-async function measureVariantTitleRowStability(session: CdpSession) {
-  await evaluateWithNavigationRetry(session, {
+async function measureVariantTitleRowStability(harness: DashboardHarness) {
+  await evaluateExpression(harness, {
     awaitPromise: true,
     expression: `window.__tabOutSmokeAddMarkerWrapPathGroupTabs?.()`,
   })
   // Wide viewport: the hydrated indicator label needs rightward room on its
   // frozen first line wherever the masonry parks this card; the scenario
   // pins line stability, not the viewport-constrained wrap.
-  await session.send('Emulation.setDeviceMetricsOverride', {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1600,
     height: 900,
     deviceScaleFactor: 2,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
   const probeExpression = (mode: 'rest' | 'expanded') => `new Promise((resolve) => {
     const start = Date.now()
@@ -1498,7 +1424,7 @@ async function measureVariantTitleRowStability(session: CdpSession) {
     wait()
   })`
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: probeExpression('rest'),
@@ -1506,27 +1432,27 @@ async function measureVariantTitleRowStability(session: CdpSession) {
 
   if (!target) return { target, expansion: null }
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  await waitForPageChipExpansionRect(session, VARIANT_TITLE_ROW_SMOKE_LABEL)
+  await waitForPageChipExpansionRect(harness, VARIANT_TITLE_ROW_SMOKE_LABEL)
 
-  const expansion = await evaluateWithNavigationRetry(session, {
+  const expansion = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: probeExpression('expanded'),
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2 })
-  await waitForNoPageChipExpansion(session)
+  await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 2, y: 2 })
+  await waitForNoPageChipExpansion(harness)
 
   return { target, expansion }
 }
 
-async function waitForPageChipExpansionRect(session: CdpSession, text: string, timeoutMs = 2000) {
-  return evaluateWithNavigationRetry(session, {
+async function waitForPageChipExpansionRect(harness: DashboardHarness, text: string, timeoutMs = 2000) {
+  return evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -1571,8 +1497,8 @@ async function waitForPageChipExpansionRect(session: CdpSession, text: string, t
   }).then((result: any) => result.result.value)
 }
 
-async function waitForHistoryEntryExpansionRect(session: CdpSession, text: string, timeoutMs = 2000) {
-  return evaluateWithNavigationRetry(session, {
+async function waitForHistoryEntryExpansionRect(harness: DashboardHarness, text: string, timeoutMs = 2000) {
+  return evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -1625,8 +1551,8 @@ async function waitForHistoryEntryExpansionRect(session: CdpSession, text: strin
   }).then((result: any) => result.result.value)
 }
 
-async function waitForHistoryScrollbarThumbOpacity(session: CdpSession, opacity: string, timeoutMs = 1000) {
-  return evaluateWithNavigationRetry(session, {
+async function waitForHistoryScrollbarThumbOpacity(harness: DashboardHarness, opacity: string, timeoutMs = 1000) {
+  return evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -1646,8 +1572,8 @@ async function waitForHistoryScrollbarThumbOpacity(session: CdpSession, opacity:
   }).then((result: any) => result.result.value)
 }
 
-async function getVisibleTooltipTexts(session: CdpSession) {
-  return evaluateWithNavigationRetry(session, {
+async function getVisibleTooltipTexts(harness: DashboardHarness) {
+  return evaluateExpression(harness, {
     returnByValue: true,
     expression: `Array.from(document.querySelectorAll('[data-slot="tooltip-content"]'))
       .filter((tooltip) => {
@@ -1658,15 +1584,15 @@ async function getVisibleTooltipTexts(session: CdpSession) {
   }).then((result: any) => result.result.value)
 }
 
-async function measureTooltipFreeze(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureTooltipFreeze(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 2,
     mobile: false,
   })
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -1702,26 +1628,26 @@ async function measureTooltipFreeze(session: CdpSession) {
 
   assert.ok(target, 'expected a page chip to hover for tooltip smoke test')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.startX,
     y: target.y,
   })
-  const first = await waitForPageChipExpansionRect(session, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
+  const first = await waitForPageChipExpansionRect(harness, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.moveX,
     y: target.y,
   })
   await wait(150)
-  const second = await waitForPageChipExpansionRect(session, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
+  const second = await waitForPageChipExpansionRect(harness, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
 
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollBy(0, 160)`,
   })
-  await waitForNoPageChipExpansion(session)
-  const afterScrollExpandedCount = await evaluateWithNavigationRetry(session, {
+  await waitForNoPageChipExpansion(harness)
+  const afterScrollExpandedCount = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `document.querySelectorAll('.page-chip-expanded').length`,
   }).then((result: any) => result.result.value)
@@ -1729,19 +1655,19 @@ async function measureTooltipFreeze(session: CdpSession) {
   return { target, first, second, afterScrollExpandedCount, closing: null }
 }
 
-async function measureTooltipTextPaddingHitArea(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureTooltipTextPaddingHitArea(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 2,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -1797,64 +1723,64 @@ async function measureTooltipTextPaddingHitArea(session: CdpSession) {
 
   assert.ok(target, 'expected a page chip expansion hit area for padding hover smoke test')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.aboveY,
   })
-  const above = await waitForPageChipExpansionRect(session, 'enough tooltip text')
+  const above = await waitForPageChipExpansionRect(harness, 'enough tooltip text')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoPageChipExpansion(session)
+  await waitForNoPageChipExpansion(harness)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.belowY,
   })
-  const below = await waitForPageChipExpansionRect(session, 'enough tooltip text')
+  const below = await waitForPageChipExpansionRect(harness, 'enough tooltip text')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoPageChipExpansion(session)
+  await waitForNoPageChipExpansion(harness)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.chipSurfaceX,
     y: target.chipSurfaceY,
   })
-  const chipSurface = await waitForPageChipExpansionRect(session, 'enough tooltip text')
+  const chipSurface = await waitForPageChipExpansionRect(harness, 'enough tooltip text')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoPageChipExpansion(session)
+  await waitForNoPageChipExpansion(harness)
 
   return { target, above, below, chipSurface }
 }
 
-async function measurePageChipInternalPointerMoveExpansion(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measurePageChipInternalPointerMoveExpansion(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 2,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -1893,12 +1819,12 @@ async function measurePageChipInternalPointerMoveExpansion(session: CdpSession) 
 
   assert.ok(target, 'expected a page chip with left-side internal hover surface')
 
-  const before = await evaluateWithNavigationRetry(session, {
+  const before = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `document.querySelectorAll('.page-chip-expanded').length`,
   }).then((result: any) => result.result.value)
 
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `(() => {
       const chip = Array.from(document.querySelectorAll('.page-chip'))
         .find((candidate) => candidate.textContent?.includes('enough tooltip text'))
@@ -1911,20 +1837,20 @@ async function measurePageChipInternalPointerMoveExpansion(session: CdpSession) 
       }))
     })()`,
   })
-  const expansion = await waitForPageChipExpansionRect(session, 'enough tooltip text')
+  const expansion = await waitForPageChipExpansionRect(harness, 'enough tooltip text')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoPageChipExpansion(session)
+  await waitForNoPageChipExpansion(harness)
 
   return { target, before, expansion }
 }
 
-async function measureTooltipAfterActiveStateChanges(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureTooltipAfterActiveStateChanges(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 2,
@@ -1932,18 +1858,18 @@ async function measureTooltipAfterActiveStateChanges(session: CdpSession) {
   })
 
   async function setActiveTab(tabId: number, windowId = 1) {
-    await evaluateWithNavigationRetry(session, {
+    await evaluateExpression(harness, {
       awaitPromise: true,
       expression: `window.__tabOutSmokeSetActiveTab?.(${tabId}, ${windowId})`,
     })
-    await evaluateWithNavigationRetry(session, {
+    await evaluateExpression(harness, {
       expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
     })
-    await waitForDashboardSettled(session)
+    await waitForDashboardSettled(harness)
   }
 
   async function findTarget() {
-    return evaluateWithNavigationRetry(session, {
+    return evaluateExpression(harness, {
       awaitPromise: true,
       returnByValue: true,
       expression: `new Promise((resolve) => {
@@ -1976,18 +1902,18 @@ async function measureTooltipAfterActiveStateChanges(session: CdpSession) {
   }
 
   async function hoverTarget(target: { x: number, y: number }) {
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x: target.x,
       y: target.y,
     })
-    const tooltip = await waitForPageChipExpansionRect(session, 'Example 2 with enough tooltip text')
-    await session.send('Input.dispatchMouseEvent', {
+    const tooltip = await waitForPageChipExpansionRect(harness, 'Example 2 with enough tooltip text')
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x: 8,
       y: 8,
     })
-    await waitForNoPageChipExpansion(session)
+    await waitForNoPageChipExpansion(harness)
     return tooltip
   }
 
@@ -2004,19 +1930,19 @@ async function measureTooltipAfterActiveStateChanges(session: CdpSession) {
   return { activeTarget, activeTooltip, inactiveTarget, inactiveTooltip }
 }
 
-async function measureSuppressionMarkerTooltipLine(session: CdpSession, label: string) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureSuppressionMarkerTooltipLine(harness: DashboardHarness, label: string) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -2045,14 +1971,14 @@ async function measureSuppressionMarkerTooltipLine(session: CdpSession, label: s
 
   assert.ok(target, `expected a title-suppression page chip for ${label}`)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  await waitForPageChipExpansionRect(session, label)
+  await waitForPageChipExpansionRect(harness, label)
 
-  const result = await evaluateWithNavigationRetry(session, {
+  const result = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const expandedChip = Array.from(document.querySelectorAll('.page-chip-expanded'))
@@ -2090,29 +2016,29 @@ async function measureSuppressionMarkerTooltipLine(session: CdpSession, label: s
     })()`,
   }).then((measurement: any) => measurement.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoPageChipExpansion(session)
+  await waitForNoPageChipExpansion(harness)
 
   return { target, result }
 }
 
-async function measureSuppressionMarkerChipLine(session: CdpSession, label: string) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureSuppressionMarkerChipLine(harness: DashboardHarness, label: string) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const result = await evaluateWithNavigationRetry(session, {
+  const result = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -2164,19 +2090,19 @@ async function measureSuppressionMarkerChipLine(session: CdpSession, label: stri
   return { result }
 }
 
-async function measureSuppressionTokenCloseHighlight(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureSuppressionTokenCloseHighlight(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1420,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -2201,22 +2127,22 @@ async function measureSuppressionTokenCloseHighlight(session: CdpSession) {
 
   assert.ok(target, 'expected a "— Shared Workspace" title-suppression token for the close-highlight smoke test')
 
-  const readHighlightedChips = () => evaluateWithNavigationRetry(session, {
+  const readHighlightedChips = () => evaluateExpression(harness, {
     returnByValue: true,
     expression: `document.querySelectorAll('.page-chip-suppression-highlighted').length`,
   }).then((result: any) => result.result.value)
 
   const baseline = await readHighlightedChips()
 
-  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: target.x, y: target.y })
+  await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: target.x, y: target.y })
   await wait(150)
   const onHover = await readHighlightedChips()
 
-  await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'right', buttons: 2, clickCount: 1, x: target.x, y: target.y })
-  await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'right', buttons: 0, clickCount: 1, x: target.x, y: target.y })
-  await waitForContextMenuState(session, true)
+  await harness.session.send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'right', buttons: 2, clickCount: 1, x: target.x, y: target.y })
+  await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'right', buttons: 0, clickCount: 1, x: target.x, y: target.y })
+  await waitForContextMenuState(harness, true)
 
-  const onRightClick = await evaluateWithNavigationRetry(session, {
+  const onRightClick = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const menu = document.querySelector('[data-slot="context-menu-content"]')
@@ -2231,12 +2157,12 @@ async function measureSuppressionTokenCloseHighlight(session: CdpSession) {
   // Close the menu by clicking elsewhere with the mouse (away from the menu). Base UI
   // restores focus to the token on close; the highlight must still clear because that
   // restored focus is not :focus-visible (mouse modality), so onFocus does not re-arm it.
-  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 8, y: 860 })
-  await session.send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', buttons: 1, clickCount: 1, x: 8, y: 860 })
-  await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', buttons: 0, clickCount: 1, x: 8, y: 860 })
-  await waitForContextMenuState(session, false)
+  await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 8, y: 860 })
+  await harness.session.send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', buttons: 1, clickCount: 1, x: 8, y: 860 })
+  await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', buttons: 0, clickCount: 1, x: 8, y: 860 })
+  await waitForContextMenuState(harness, false)
 
-  const afterClickAway = await evaluateWithNavigationRetry(session, {
+  const afterClickAway = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => ({
       menuOpen: !!document.querySelector('[data-slot="context-menu-content"]'),
@@ -2246,29 +2172,29 @@ async function measureSuppressionTokenCloseHighlight(session: CdpSession) {
   }).then((result: any) => result.result.value)
 
   // Park the pointer away so later smoke measurements start clean.
-  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 8, y: 8 })
+  await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 8, y: 8 })
   await wait(150)
 
   return { baseline, onHover, onRightClick, afterClickAway }
 }
 
 async function measurePageChipTooltipLineCount(
-  session: CdpSession,
+  harness: DashboardHarness,
   label: string,
   options: { forcedTextWidth?: number, forcedMaxLines?: number, hoverWaitMs?: number, viewportWidth?: number } = {},
 ) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: options.viewportWidth || 1000,
     height: 900,
     deviceScaleFactor: 2,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -2362,18 +2288,18 @@ async function measurePageChipTooltipLineCount(
 
   assert.ok(target, `expected a page chip for tooltip line-count check: ${label}`)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
   if (options.hoverWaitMs === undefined) {
-    await waitForPageChipExpansionRect(session, label)
+    await waitForPageChipExpansionRect(harness, label)
   } else {
     await wait(options.hoverWaitMs)
   }
 
-  const tooltip = await evaluateWithNavigationRetry(session, {
+  const tooltip = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const tooltip = Array.from(document.querySelectorAll('.page-chip-expanded'))
@@ -2434,33 +2360,33 @@ async function measurePageChipTooltipLineCount(
     })()`,
   }).then((measurement: any) => measurement.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoPageChipExpansion(session)
+  await waitForNoPageChipExpansion(harness)
 
   return { target, tooltip }
 }
 
 async function measureFoldedPageChipTooltipTitleLineCount(
-  session: CdpSession,
+  harness: DashboardHarness,
   label: string,
   options: { forcedTextWidth?: number } = {},
 ) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1600,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -2502,14 +2428,14 @@ async function measureFoldedPageChipTooltipTitleLineCount(
 
   assert.ok(target, `expected a folded page chip for tooltip check: ${label}`)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  await waitForPageChipExpansionRect(session, label)
+  await waitForPageChipExpansionRect(harness, label)
 
-  const tooltip = await evaluateWithNavigationRetry(session, {
+  const tooltip = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const tooltip = Array.from(document.querySelectorAll('.page-chip-expanded.page-chip-folded'))
@@ -2539,40 +2465,40 @@ async function measureFoldedPageChipTooltipTitleLineCount(
     })()`,
   }).then((measurement: any) => measurement.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoPageChipExpansion(session)
+  await waitForNoPageChipExpansion(harness)
 
   return { target, tooltip }
 }
 
 async function measureFoldedEnvHoverTooltips(
-  session: CdpSession,
+  harness: DashboardHarness,
   label: string,
 ) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1600,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
   await Promise.all([
-    waitForDashboardSettled(session),
-    waitForNoTitleExpansion(session),
+    waitForDashboardSettled(harness),
+    waitForNoTitleExpansion(harness),
   ])
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -2600,44 +2526,44 @@ async function measureFoldedEnvHoverTooltips(
 
   assert.ok(target, `expected a folded env button for tooltip check: ${label}`)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  await waitForTooltipRect(session)
+  await waitForTooltipRect(harness)
 
-  const tooltipTexts = await getVisibleTooltipTexts(session)
+  const tooltipTexts = await getVisibleTooltipTexts(harness)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoTitleExpansion(session)
+  await waitForNoTitleExpansion(harness)
 
   return { target, tooltipTexts }
 }
 
 async function measureInteractiveTooltipClickReturnFocus(
-  session: CdpSession,
+  harness: DashboardHarness,
   selector: string,
   marker: string,
   targetLabel: string,
   requiredDescendantSelector: string,
 ) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -2670,15 +2596,15 @@ async function measureInteractiveTooltipClickReturnFocus(
 
   assert.ok(target, `expected a ${targetLabel} tooltip trigger for click-return smoke test`)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  const expansion = await waitForPageChipExpansionRect(session, marker)
+  const expansion = await waitForPageChipExpansionRect(harness, marker)
   const first = { found: !!expansion, expansion }
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     button: 'left',
     buttons: 1,
@@ -2686,7 +2612,7 @@ async function measureInteractiveTooltipClickReturnFocus(
     x: target.x,
     y: target.y,
   })
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
     button: 'left',
     buttons: 0,
@@ -2696,14 +2622,14 @@ async function measureInteractiveTooltipClickReturnFocus(
   })
   await wait(120)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoPageChipExpansion(session)
+  await waitForNoPageChipExpansion(harness)
 
-  const afterReturnFocus = await evaluateWithNavigationRetry(session, {
+  const afterReturnFocus = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const trigger = document.querySelector(${JSON.stringify(`[data-smoke-click-return-target="${targetLabel}"]`)})
@@ -2724,24 +2650,24 @@ async function measureInteractiveTooltipClickReturnFocus(
     target,
     first,
     afterReturnFocus,
-    afterReturnTooltips: await getVisibleTooltipTexts(session),
+    afterReturnTooltips: await getVisibleTooltipTexts(harness),
   }
 }
 
-async function measurePageChipOriginalSlotLeave(session: CdpSession) {
+async function measurePageChipOriginalSlotLeave(harness: DashboardHarness) {
   const label = 'Tooltip Boundary Alpha'
-  await session.send('Emulation.setDeviceMetricsOverride', {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1600,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -2796,12 +2722,12 @@ async function measurePageChipOriginalSlotLeave(session: CdpSession) {
 
   assert.ok(target, 'expected a page chip to hover for original-slot leave smoke test')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.startX,
     y: target.y,
   })
-  const first = await waitForPageChipExpansionRect(session, label)
+  const first = await waitForPageChipExpansionRect(harness, label)
 
   assert.ok(first, `page chip should expand before original-slot leave check: ${JSON.stringify({ target, first })}`)
   assert.ok(
@@ -2822,23 +2748,23 @@ async function measurePageChipOriginalSlotLeave(session: CdpSession) {
     `original-slot leave point should stay vertically inside the expanded chip: ${JSON.stringify({ target, first, expandedOnlyPoint })}`,
   )
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: expandedOnlyPoint.x,
     y: expandedOnlyPoint.y,
   })
   await wait(220)
-  const afterOriginalSlotLeave = await waitForPageChipExpansionRect(session, label, 250)
+  const afterOriginalSlotLeave = await waitForPageChipExpansionRect(harness, label, 250)
 
   for (let index = 0; index < 8; index += 1) {
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x: 8 + index * 16,
       y: 8 + index * 5,
     })
     await wait(80)
   }
-  const afterLeaveTooltips = await evaluateWithNavigationRetry(session, {
+  const afterLeaveTooltips = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `Array.from(document.querySelectorAll('.page-chip-expanded'))
       .map((chip) => chip.textContent || '')`,
@@ -2847,14 +2773,14 @@ async function measurePageChipOriginalSlotLeave(session: CdpSession) {
   return { target, first, expandedOnlyPoint, afterOriginalSlotLeave, afterLeaveTooltips }
 }
 
-async function measureTooltipPopupClickFocus(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureTooltipPopupClickFocus(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `(() => {
       document.querySelector('.scroll-region')?.scrollTo(0, 0)
       window.__tabOutSmokeFocusUpdates = []
@@ -2870,9 +2796,9 @@ async function measureTooltipPopupClickFocus(session: CdpSession) {
       }
     })()`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -2900,19 +2826,19 @@ async function measureTooltipPopupClickFocus(session: CdpSession) {
 
   assert.ok(target, 'expected a page chip to hover for popup click smoke test')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  const first = await waitForPageChipExpansionRect(session, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
+  const first = await waitForPageChipExpansionRect(harness, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
   assert.ok(first, `page chip should expand before in-place click check: ${JSON.stringify({ target, first })}`)
 
   const popupPoint = {
     x: Math.round(first.left + first.width / 2),
     y: Math.round(first.top + first.height / 2),
   }
-  const popupStyle = await evaluateWithNavigationRetry(session, {
+  const popupStyle = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const chip = Array.from(document.querySelectorAll('.page-chip-expanded'))
@@ -2926,13 +2852,13 @@ async function measureTooltipPopupClickFocus(session: CdpSession) {
     })()`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: popupPoint.x,
     y: popupPoint.y,
   })
   await wait(80)
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     button: 'left',
     buttons: 1,
@@ -2940,7 +2866,7 @@ async function measureTooltipPopupClickFocus(session: CdpSession) {
     x: popupPoint.x,
     y: popupPoint.y,
   })
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
     button: 'left',
     buttons: 0,
@@ -2948,9 +2874,9 @@ async function measureTooltipPopupClickFocus(session: CdpSession) {
     x: popupPoint.x,
     y: popupPoint.y,
   })
-  await waitForFocusUpdates(session)
+  await waitForFocusUpdates(harness)
 
-  const updates = await evaluateWithNavigationRetry(session, {
+  const updates = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const focusUpdates = window.__tabOutSmokeFocusUpdates || []
@@ -2963,14 +2889,14 @@ async function measureTooltipPopupClickFocus(session: CdpSession) {
   return { target, first, popupPoint, popupStyle, updates }
 }
 
-async function measureHistoryEntryExpansionClickFocus(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureHistoryEntryExpansionClickFocus(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1400,
     height: 260,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `(() => {
       document.querySelector('.history-entry-list')?.scrollTo(0, 0)
       window.__tabOutSmokeFocusUpdates = []
@@ -2987,11 +2913,11 @@ async function measureHistoryEntryExpansionClickFocus(session: CdpSession) {
     })()`,
   })
   await Promise.all([
-    waitForDashboardSettled(session),
-    waitForScrollTop(session, '.history-entry-list'),
+    waitForDashboardSettled(harness),
+    waitForScrollTop(harness, '.history-entry-list'),
   ])
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -3025,19 +2951,19 @@ async function measureHistoryEntryExpansionClickFocus(session: CdpSession) {
   assert.ok(target, 'expected a history-panel entry to hover for expansion click smoke test')
   await wait(180)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  const first = await waitForHistoryEntryExpansionRect(session, 'Low score history item with enough tooltip text')
+  const first = await waitForHistoryEntryExpansionRect(harness, 'Low score history item with enough tooltip text')
   assert.ok(first, `history entry should expand before click check: ${JSON.stringify({ target, first })}`)
 
   const expandedPoint = {
     x: Math.round(first.left + first.width / 2),
     y: Math.round(first.top + first.height / 2),
   }
-  const expandedStyle = await evaluateWithNavigationRetry(session, {
+  const expandedStyle = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const entry = document.querySelector('.history-entry-expanded')
@@ -3051,7 +2977,7 @@ async function measureHistoryEntryExpansionClickFocus(session: CdpSession) {
     })()`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     button: 'right',
     buttons: 2,
@@ -3059,7 +2985,7 @@ async function measureHistoryEntryExpansionClickFocus(session: CdpSession) {
     x: target.x,
     y: target.y,
   })
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
     button: 'right',
     buttons: 0,
@@ -3067,20 +2993,20 @@ async function measureHistoryEntryExpansionClickFocus(session: CdpSession) {
     x: target.x,
     y: target.y,
   })
-  await waitForContextMenuState(session, true)
-  await session.send('Input.dispatchMouseEvent', {
+  await waitForContextMenuState(harness, true)
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.dismissX,
     y: target.y,
   })
   await wait(80)
-  const expansionCollapseProbeStarted = await startClassRetentionProbe(session, {
+  const expansionCollapseProbeStarted = await startClassRetentionProbe(harness, {
     selector: '[data-tabout="activation-history-entry"]',
     label: 'Low score history item with enough tooltip text',
     className: 'history-entry-row-expanded-open',
   })
   assert.equal(expansionCollapseProbeStarted, true, `expected to observe history-entry expansion during backdrop dismissal: ${JSON.stringify({ target, first })}`)
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     button: 'left',
     buttons: 1,
@@ -3088,7 +3014,7 @@ async function measureHistoryEntryExpansionClickFocus(session: CdpSession) {
     x: target.dismissX,
     y: target.y,
   })
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
     button: 'left',
     buttons: 0,
@@ -3096,17 +3022,17 @@ async function measureHistoryEntryExpansionClickFocus(session: CdpSession) {
     x: target.dismissX,
     y: target.y,
   })
-  await waitForContextMenuState(session, false)
-  const expansionCollapsedDuringBackdropDismissal = await finishClassRetentionProbe(session)
+  await waitForContextMenuState(harness, false)
+  const expansionCollapsedDuringBackdropDismissal = await finishClassRetentionProbe(harness)
   assert.equal(expansionCollapsedDuringBackdropDismissal, false, `clicking the context menu backdrop over the original history-entry slot should not collapse and reopen its expansion: ${JSON.stringify({ target, first })}`)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
   await wait(80)
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     button: 'left',
     buttons: 1,
@@ -3114,7 +3040,7 @@ async function measureHistoryEntryExpansionClickFocus(session: CdpSession) {
     x: target.x,
     y: target.y,
   })
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
     button: 'left',
     buttons: 0,
@@ -3122,9 +3048,9 @@ async function measureHistoryEntryExpansionClickFocus(session: CdpSession) {
     x: target.x,
     y: target.y,
   })
-  await waitForFocusUpdates(session)
+  await waitForFocusUpdates(harness)
 
-  const updates = await evaluateWithNavigationRetry(session, {
+  const updates = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const focusUpdates = window.__tabOutSmokeFocusUpdates || []
@@ -3134,24 +3060,24 @@ async function measureHistoryEntryExpansionClickFocus(session: CdpSession) {
     })()`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoHistoryEntryExpansion(session)
+  await waitForNoHistoryEntryExpansion(harness)
 
   return { target, first, expandedPoint, activationPoint: target, expandedStyle, updates }
 }
 
-async function measurePageChipContextMenuSave(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measurePageChipContextMenuSave(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `(() => {
       document.querySelector('.scroll-region')?.scrollTo(0, 0)
       window.__tabOutSmokeSavedStore = {}
@@ -3183,10 +3109,10 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
       })
     })()`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
   async function findPageChipTarget(label: string, xOffset = 96) {
-    return evaluateWithNavigationRetry(session, {
+    return evaluateExpression(harness, {
       awaitPromise: true,
       returnByValue: true,
       expression: `new Promise((resolve) => {
@@ -3213,7 +3139,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
   }
 
   async function findPageChipFaviconTarget(label: string) {
-    return evaluateWithNavigationRetry(session, {
+    return evaluateExpression(harness, {
       awaitPromise: true,
       returnByValue: true,
       expression: `new Promise((resolve) => {
@@ -3251,13 +3177,13 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
   assert.ok(historyMatchTarget, 'expected a live page chip with a matching history entry for context menu hover smoke test')
 
   async function openContextMenuAt(menuTarget: { x: number, y: number }) {
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x: menuTarget.x,
       y: menuTarget.y,
     })
     await wait(80)
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mousePressed',
       button: 'right',
       buttons: 2,
@@ -3265,7 +3191,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
       x: menuTarget.x,
       y: menuTarget.y,
     })
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseReleased',
       button: 'right',
       buttons: 0,
@@ -3273,11 +3199,11 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
       x: menuTarget.x,
       y: menuTarget.y,
     })
-    await waitForContextMenuState(session, true)
+    await waitForContextMenuState(harness, true)
   }
 
   async function readContextMenuState() {
-    return evaluateWithNavigationRetry(session, {
+    return evaluateExpression(harness, {
       returnByValue: true,
       expression: `(() => {
         const visibleMenus = Array.from(document.querySelectorAll('[data-slot="context-menu-content"]'))
@@ -3318,7 +3244,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
   }
 
   async function readPageChipVisualState(menuTarget: { label: string }) {
-    return evaluateWithNavigationRetry(session, {
+    return evaluateExpression(harness, {
       returnByValue: true,
       expression: `(() => {
         const chip = Array.from(document.querySelectorAll('.page-chip'))
@@ -3362,12 +3288,12 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
   }
 
   async function dismissContextMenuWithPointer() {
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x: 8,
       y: 8,
     })
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mousePressed',
       button: 'left',
       buttons: 1,
@@ -3375,7 +3301,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
       x: 8,
       y: 8,
     })
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseReleased',
       button: 'left',
       buttons: 0,
@@ -3383,13 +3309,13 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
       x: 8,
       y: 8,
     })
-    await waitForContextMenuState(session, false)
+    await waitForContextMenuState(harness, false)
   }
 
   async function clickMenuItem(label: string) {
     await openContextMenuAt(target)
 
-    const item = await evaluateWithNavigationRetry(session, {
+    const item = await evaluateExpression(harness, {
       returnByValue: true,
       expression: `(() => {
         const item = Array.from(document.querySelectorAll('[data-slot="context-menu-item"]'))
@@ -3406,13 +3332,13 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
 
     assert.ok(item, `expected ${label} context menu item after right-click: ${JSON.stringify({ target })}`)
 
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x: item.x,
       y: item.y,
     })
     await wait(80)
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mousePressed',
       button: 'left',
       buttons: 1,
@@ -3420,7 +3346,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
       x: item.x,
       y: item.y,
     })
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseReleased',
       button: 'left',
       buttons: 0,
@@ -3429,7 +3355,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
       y: item.y,
     })
     await waitForBrowserCondition(
-      session,
+      harness,
       (actionLabel: string) => {
         const smokeWindow = window as typeof window & {
           __tabOutSmokeCopiedText?: string | null
@@ -3452,21 +3378,21 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
     return item
   }
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
   await wait(180)
   const restingChipState = await readPageChipVisualState(target)
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
   await wait(180)
   const hoverChipState = await readPageChipVisualState(target)
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: targetFavicon.x,
     y: targetFavicon.y,
@@ -3501,7 +3427,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
 
   const freshHistoryMatchTarget = await findPageChipTarget('Example 3 with enough tooltip text', 16)
   assert.ok(freshHistoryMatchTarget, 'expected the matching-history page chip target to remain visible after context-menu replacement smoke')
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: freshHistoryMatchTarget.x,
     y: freshHistoryMatchTarget.y,
@@ -3515,14 +3441,14 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
   assert.equal(contextMenuHistoryChipState?.urlPreview, hoveredHistoryChipState?.urlPreview, `opening the page chip context menu should keep the shared hover URL active for cross-surface matching: ${JSON.stringify({ hoveredHistoryChipState, contextMenuHistoryChipState })}`)
   await dismissContextMenuWithPointer()
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: replacementTarget.x,
     y: replacementTarget.y,
   })
-  await waitForPageChipExpansionRect(session, 'Example 2 with enough tooltip text')
+  await waitForPageChipExpansionRect(harness, 'Example 2 with enough tooltip text')
   const expandedHoverChipState = await readPageChipVisualState(replacementTarget)
-  const visibleTooltipCountBeforeMenu = await evaluateWithNavigationRetry(session, {
+  const visibleTooltipCountBeforeMenu = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `Array.from(document.querySelectorAll('[data-slot="tooltip-content"]')).filter((tooltip) => {
       const rect = tooltip.getBoundingClientRect()
@@ -3545,19 +3471,19 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
   const backdropDismissPoint = await findPageChipTarget('Example 2 with enough tooltip text', 40)
   assert.ok(backdropDismissPoint, `expected a page-chip point outside the context menu for backdrop-dismiss smoke: ${JSON.stringify({ replacementTarget })}`)
   const backdropDismissOpenState = await readPageChipVisualState(replacementTarget)
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: backdropDismissPoint.x,
     y: backdropDismissPoint.y,
   })
   await wait(80)
-  const expansionCollapseProbeStarted = await startClassRetentionProbe(session, {
+  const expansionCollapseProbeStarted = await startClassRetentionProbe(harness, {
     selector: '[data-tabout="page-chip"]',
     label: replacementTarget.label,
     className: 'page-chip-expanded',
   })
   assert.equal(expansionCollapseProbeStarted, true, `expected to observe page-chip expansion during backdrop dismissal: ${JSON.stringify({ replacementTarget })}`)
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     button: 'left',
     buttons: 1,
@@ -3567,7 +3493,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
   })
   await wait(30)
   const backdropDismissPressedState = await readPageChipVisualState(replacementTarget)
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
     button: 'left',
     buttons: 0,
@@ -3577,16 +3503,16 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
   })
   await wait(20)
   const backdropDismissReleasedState = await readPageChipVisualState(replacementTarget)
-  await waitForContextMenuState(session, false)
-  const expansionCollapsedDuringBackdropDismissal = await finishClassRetentionProbe(session)
-  await session.send('Input.dispatchMouseEvent', {
+  await waitForContextMenuState(harness, false)
+  const expansionCollapsedDuringBackdropDismissal = await finishClassRetentionProbe(harness)
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoPageChipExpansion(session)
+  await waitForNoPageChipExpansion(harness)
   await waitForBrowserCondition(
-    session,
+    harness,
     () => !document.querySelector('.page-chip-context-menu-open'),
     'page chip context-menu visual state should clear after backdrop dismissal',
   )
@@ -3601,7 +3527,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
   assert.equal(backdropDismissAfterState?.expanded, false, `page chip should close its in-place expansion after backdrop dismissal and pointer exit: ${JSON.stringify({ backdropDismissOpenState, backdropDismissAfterState })}`)
   assert.equal(backdropDismissMenuState.visibleMenuCount, 0, `backdrop dismissal over the page chip should close the context menu: ${JSON.stringify({ backdropDismissMenuState })}`)
   await openContextMenuAt(replacementTarget)
-  const tooltipShieldPoint = await evaluateWithNavigationRetry(session, {
+  const tooltipShieldPoint = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       document.querySelector('[data-smoke-tooltip-shield]')?.remove()
@@ -3631,7 +3557,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
       }
     })()`,
   }).then((result: any) => result.result.value)
-  const shieldBeforeClick = await evaluateWithNavigationRetry(session, {
+  const shieldBeforeClick = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       window.__tabOutSmokeFocusUpdates = []
@@ -3647,13 +3573,13 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
     })()`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: tooltipShieldPoint.x,
     y: tooltipShieldPoint.y,
   })
   await wait(80)
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     button: 'left',
     buttons: 1,
@@ -3661,7 +3587,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
     x: tooltipShieldPoint.x,
     y: tooltipShieldPoint.y,
   })
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
     button: 'left',
     buttons: 0,
@@ -3669,8 +3595,8 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
     x: tooltipShieldPoint.x,
     y: tooltipShieldPoint.y,
   })
-  await waitForContextMenuState(session, false)
-  const shieldAfterClick = await evaluateWithNavigationRetry(session, {
+  await waitForContextMenuState(harness, false)
+  const shieldAfterClick = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const focusUpdates = window.__tabOutSmokeFocusUpdates || []
@@ -3688,7 +3614,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
   assert.equal(shieldAfterClick.menuOpen, false, `clicking the context menu backdrop over a tooltip should dismiss the menu: ${JSON.stringify({ shieldBeforeClick, shieldAfterClick })}`)
 
   const copyItem = await clickMenuItem('Copy page title text')
-  const copyResult = await evaluateWithNavigationRetry(session, {
+  const copyResult = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `({
       copiedText: window.__tabOutSmokeCopiedText,
@@ -3698,7 +3624,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
 
   const saveItem = await clickMenuItem('Save page')
 
-  const saveResult = await evaluateWithNavigationRetry(session, {
+  const saveResult = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const store = window.__tabOutSmokeSavedStore?.tabOutSavedPagesV1
@@ -3713,7 +3639,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
   }).then((result: any) => result.result.value)
 
   await openContextMenuAt(target)
-  const sourceButtonTarget = await evaluateWithNavigationRetry(session, {
+  const sourceButtonTarget = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const button = Array.from(document.querySelectorAll('.source-switch-option'))
@@ -3731,13 +3657,13 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
 
   assert.ok(sourceButtonTarget, 'expected the Bookmarks source switch button for context menu outside-click smoke test')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: sourceButtonTarget.x,
     y: sourceButtonTarget.y,
   })
   await wait(80)
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     button: 'left',
     buttons: 1,
@@ -3745,7 +3671,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
     x: sourceButtonTarget.x,
     y: sourceButtonTarget.y,
   })
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
     button: 'left',
     buttons: 0,
@@ -3754,7 +3680,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
     y: sourceButtonTarget.y,
   })
   await waitForBrowserCondition(
-    session,
+    harness,
     () => {
       const active = document.querySelector('.source-switch-option[data-active]')?.textContent?.trim()
       const menu = document.querySelector('[data-slot="context-menu-content"]')
@@ -3763,7 +3689,7 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
     'outside click should close the context menu without activating Bookmarks',
   )
 
-  const outsideClickResult = await evaluateWithNavigationRetry(session, {
+  const outsideClickResult = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `({
       activeBefore: ${JSON.stringify(sourceButtonTarget.activeBefore)},
@@ -3775,19 +3701,19 @@ async function measurePageChipContextMenuSave(session: CdpSession) {
   return { target, firstOpenState, replacementState, shieldBeforeClick, shieldAfterClick, copyItem, copyResult, saveItem, saveResult, outsideClickResult }
 }
 
-async function measureTooltipPopupWheelScroll(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureTooltipPopupWheelScroll(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -3815,12 +3741,12 @@ async function measureTooltipPopupWheelScroll(session: CdpSession) {
 
   assert.ok(target, 'expected a page chip to hover for popup wheel smoke test')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  const first = await waitForPageChipExpansionRect(session, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
+  const first = await waitForPageChipExpansionRect(harness, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
 
   assert.ok(first, `page chip should expand before in-place wheel check: ${JSON.stringify({ target, first })}`)
 
@@ -3829,21 +3755,21 @@ async function measureTooltipPopupWheelScroll(session: CdpSession) {
     y: Math.round(first.top + first.height / 2),
   }
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: popupPoint.x,
     y: popupPoint.y,
   })
   await wait(80)
 
-  const beforeScrollTop = await evaluateWithNavigationRetry(session, {
+  const beforeScrollTop = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `document.querySelector('.scroll-region')?.scrollTop ?? 0`,
   }).then((result: any) => result.result.value)
 
   const wheelSteps = []
   for (let index = 0; index < 4; index += 1) {
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseWheel',
       deltaX: 0,
       deltaY: 36,
@@ -3851,7 +3777,7 @@ async function measureTooltipPopupWheelScroll(session: CdpSession) {
       y: popupPoint.y,
     })
     await wait(60)
-    wheelSteps.push(await evaluateWithNavigationRetry(session, {
+    wheelSteps.push(await evaluateExpression(harness, {
       returnByValue: true,
       expression: `(() => {
         const scrollRegion = document.querySelector('.scroll-region')
@@ -3863,9 +3789,9 @@ async function measureTooltipPopupWheelScroll(session: CdpSession) {
       })()`,
     }).then((result: any) => result.result.value))
   }
-  await waitForNoPageChipExpansion(session)
+  await waitForNoPageChipExpansion(harness)
 
-  const after = await evaluateWithNavigationRetry(session, {
+  const after = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const scrollRegion = document.querySelector('.scroll-region')
@@ -3877,14 +3803,14 @@ async function measureTooltipPopupWheelScroll(session: CdpSession) {
     })()`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoTitleExpansion(session)
+  await waitForNoTitleExpansion(harness)
 
-  const afterLeaveExpandedCount = await evaluateWithNavigationRetry(session, {
+  const afterLeaveExpandedCount = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `document.querySelectorAll('.page-chip-expanded').length`,
   }).then((result: any) => result.result.value)
@@ -3892,28 +3818,28 @@ async function measureTooltipPopupWheelScroll(session: CdpSession) {
   return { target, first, popupPoint, beforeScrollTop, wheelSteps, after, afterLeaveExpandedCount }
 }
 
-async function measureHistoryEntryExpansionSurfaceHitArea(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureHistoryEntryExpansionSurfaceHitArea(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1400,
     height: 260,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.history-entry-list')?.scrollTo(0, 0)`,
   })
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
   await Promise.all([
-    waitForDashboardSettled(session),
-    waitForScrollTop(session, '.history-entry-list'),
-    waitForNoTitleExpansion(session),
+    waitForDashboardSettled(harness),
+    waitForScrollTop(harness, '.history-entry-list'),
+    waitForNoTitleExpansion(harness),
   ])
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -3958,7 +3884,7 @@ async function measureHistoryEntryExpansionSurfaceHitArea(session: CdpSession) {
   await wait(180)
 
   async function visibleTooltipTexts() {
-    return evaluateWithNavigationRetry(session, {
+    return evaluateExpression(harness, {
       returnByValue: true,
       expression: `Array.from(document.querySelectorAll('[data-slot="tooltip-content"]'))
         .filter((tooltip) => !tooltip.hidden && tooltip.getClientRects().length > 0 && window.getComputedStyle(tooltip).visibility !== 'hidden')
@@ -3966,55 +3892,55 @@ async function measureHistoryEntryExpansionSurfaceHitArea(session: CdpSession) {
     }).then((result: any) => result.result.value)
   }
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.aboveY,
   })
-  const above = await waitForHistoryEntryExpansionRect(session, 'Low score history item with enough tooltip text')
+  const above = await waitForHistoryEntryExpansionRect(harness, 'Low score history item with enough tooltip text')
   const aboveTooltipTexts = await visibleTooltipTexts()
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoHistoryEntryExpansion(session)
+  await waitForNoHistoryEntryExpansion(harness)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.belowY,
   })
-  const below = await waitForHistoryEntryExpansionRect(session, 'Low score history item with enough tooltip text')
+  const below = await waitForHistoryEntryExpansionRect(harness, 'Low score history item with enough tooltip text')
   const belowTooltipTexts = await visibleTooltipTexts()
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoHistoryEntryExpansion(session)
+  await waitForNoHistoryEntryExpansion(harness)
 
   return { target, above, below, aboveTooltipTexts, belowTooltipTexts }
 }
 
-async function measureHistoryEntryExpansionWheelScroll(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureHistoryEntryExpansionWheelScroll(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1400,
     height: 260,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.history-entry-list')?.scrollTo(0, 0)`,
   })
   await Promise.all([
-    waitForDashboardSettled(session),
-    waitForScrollTop(session, '.history-entry-list'),
+    waitForDashboardSettled(harness),
+    waitForScrollTop(harness, '.history-entry-list'),
   ])
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -4101,7 +4027,7 @@ async function measureHistoryEntryExpansionWheelScroll(session: CdpSession) {
   assert.ok(target, 'expected a history-panel entry to hover for expansion wheel smoke test')
   await wait(180)
 
-  const scrollbarGeometry = await evaluateWithNavigationRetry(session, {
+  const scrollbarGeometry = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const panel = document.querySelector('.tab-history-panel')
@@ -4132,23 +4058,23 @@ async function measureHistoryEntryExpansionWheelScroll(session: CdpSession) {
     })()`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: scrollbarGeometry.revealPoint.x,
     y: scrollbarGeometry.revealPoint.y,
   })
   await wait(60)
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  const first = await waitForHistoryEntryExpansionRect(session, 'Low score history item with enough tooltip text')
-  await waitForHistoryScrollbarThumbOpacity(session, '1')
+  const first = await waitForHistoryEntryExpansionRect(harness, 'Low score history item with enough tooltip text')
+  await waitForHistoryScrollbarThumbOpacity(harness, '1')
 
   assert.ok(first, `history entry should expand before wheel check: ${JSON.stringify({ target, first })}`)
 
-  const tooltipOpenEntryState = await evaluateWithNavigationRetry(session, {
+  const tooltipOpenEntryState = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const entry = Array.from(document.querySelectorAll('.history-entry-expanded'))
@@ -4176,7 +4102,7 @@ async function measureHistoryEntryExpansionWheelScroll(session: CdpSession) {
     })()`,
   }).then((result: any) => result.result.value)
 
-  const scrollbarOverlapState = await evaluateWithNavigationRetry(session, {
+  const scrollbarOverlapState = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const entry = Array.from(document.querySelectorAll('.history-entry-expanded'))
@@ -4275,7 +4201,7 @@ async function measureHistoryEntryExpansionWheelScroll(session: CdpSession) {
     expandedOnlyPoint.x > target.slotRight + 1 && expandedOnlyPoint.x < first.right,
     `history original-slot leave point should be outside the original slot and inside the expanded entry: ${JSON.stringify({ target, first, expandedOnlyPoint })}`,
   )
-  const expandedOnlyHitTarget = await evaluateWithNavigationRetry(session, {
+  const expandedOnlyHitTarget = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
 	      const expandedEntry = Array.from(document.querySelectorAll('.history-entry-expanded'))
@@ -4291,7 +4217,7 @@ async function measureHistoryEntryExpansionWheelScroll(session: CdpSession) {
 	    })()`,
   }).then((result: any) => result.result.value)
 
-  const expandedOnlyClipCheck = await evaluateWithNavigationRetry(session, {
+  const expandedOnlyClipCheck = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const expandedEntry = Array.from(document.querySelectorAll('.history-entry-expanded'))
@@ -4310,23 +4236,23 @@ async function measureHistoryEntryExpansionWheelScroll(session: CdpSession) {
     })()`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: expandedOnlyPoint.x,
     y: expandedOnlyPoint.y,
   })
-  await waitForNoHistoryEntryExpansion(session)
+  await waitForNoHistoryEntryExpansion(harness)
   const afterOriginalSlotLeave = null
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  const reopened = await waitForHistoryEntryExpansionRect(session, 'Low score history item with enough tooltip text')
+  const reopened = await waitForHistoryEntryExpansionRect(harness, 'Low score history item with enough tooltip text')
   assert.ok(reopened, `history entry should reopen before wheel check: ${JSON.stringify({ target, first, afterOriginalSlotLeave })}`)
 
-  const beforeScrollTop = await evaluateWithNavigationRetry(session, {
+  const beforeScrollTop = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       return {
@@ -4338,7 +4264,7 @@ async function measureHistoryEntryExpansionWheelScroll(session: CdpSession) {
 
   const wheelDeltaY = beforeScrollTop.historyScrollTop >= target.listMaxScrollTop - 1 ? -18 : 18
   for (let index = 0; index < 4; index += 1) {
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseWheel',
       deltaX: 0,
       deltaY: wheelDeltaY,
@@ -4347,9 +4273,9 @@ async function measureHistoryEntryExpansionWheelScroll(session: CdpSession) {
     })
     await wait(60)
   }
-  await waitForNoHistoryEntryExpansion(session)
+  await waitForNoHistoryEntryExpansion(harness)
 
-  const after = await evaluateWithNavigationRetry(session, {
+  const after = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const historyList = document.querySelector('.history-entry-list')
@@ -4363,14 +4289,14 @@ async function measureHistoryEntryExpansionWheelScroll(session: CdpSession) {
     })()`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoTitleExpansion(session)
+  await waitForNoTitleExpansion(harness)
 
-  const afterLeaveExpansionState = await evaluateWithNavigationRetry(session, {
+  const afterLeaveExpansionState = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => ({
       expansionCount: document.querySelectorAll('.history-entry-expanded').length,
@@ -4451,25 +4377,25 @@ function assertHistoryScrollbarLayering(result: Awaited<ReturnType<typeof measur
   )
 }
 
-async function measureHistoryLeftGutterWheelScroll(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureHistoryLeftGutterWheelScroll(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1800,
     height: 260,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `(() => {
       document.querySelector('.history-entry-list')?.scrollTo(0, 0)
       document.querySelector('.scroll-region')?.scrollTo(0, 0)
     })()`,
   })
   await Promise.all([
-    waitForDashboardSettled(session),
-    waitForScrollTop(session, '.history-entry-list'),
+    waitForDashboardSettled(harness),
+    waitForScrollTop(harness, '.history-entry-list'),
   ])
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const shell = document.querySelector('[data-tabout="dashboard-shell"]')
@@ -4507,7 +4433,7 @@ async function measureHistoryLeftGutterWheelScroll(session: CdpSession) {
 
   assert.ok(target, 'expected history left gutter target to be measurable')
 
-  const beforeScrollTop = await evaluateWithNavigationRetry(session, {
+  const beforeScrollTop = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => ({
       dashboardScrollTop: document.querySelector('.scroll-region')?.scrollTop ?? 0,
@@ -4515,7 +4441,7 @@ async function measureHistoryLeftGutterWheelScroll(session: CdpSession) {
     }))()`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
@@ -4523,7 +4449,7 @@ async function measureHistoryLeftGutterWheelScroll(session: CdpSession) {
   await wait(80)
 
   for (let index = 0; index < 4; index += 1) {
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseWheel',
       deltaX: 0,
       deltaY: 36,
@@ -4534,7 +4460,7 @@ async function measureHistoryLeftGutterWheelScroll(session: CdpSession) {
   }
   await wait(160)
 
-  const after = await evaluateWithNavigationRetry(session, {
+  const after = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => ({
       dashboardScrollTop: document.querySelector('.scroll-region')?.scrollTop ?? 0,
@@ -4545,14 +4471,14 @@ async function measureHistoryLeftGutterWheelScroll(session: CdpSession) {
   return { target, beforeScrollTop, after }
 }
 
-async function measureNarrowViewportScrollbarEdges(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureNarrowViewportScrollbarEdges(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 760,
     height: 620,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `(() => {
       document.querySelector('.history-entry-list')?.scrollTo(0, 0)
       document.querySelector('.scroll-region')?.scrollTo(0, 0)
@@ -4560,12 +4486,12 @@ async function measureNarrowViewportScrollbarEdges(session: CdpSession) {
     })()`,
   })
   await Promise.all([
-    waitForDashboardSettled(session),
-    waitForScrollTop(session, '.history-entry-list'),
+    waitForDashboardSettled(harness),
+    waitForScrollTop(harness, '.history-entry-list'),
   ])
 
   async function readSnapshot() {
-    return evaluateWithNavigationRetry(session, {
+    return evaluateExpression(harness, {
       returnByValue: true,
       expression: `(() => {
         const round = (value) => Math.round(value * 100) / 100
@@ -4701,7 +4627,7 @@ async function measureNarrowViewportScrollbarEdges(session: CdpSession) {
   const initial = await readSnapshot()
   assert.ok(initial, 'expected narrow viewport scrollbar geometry to be measurable')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: initial.historyRailTargetX,
     y: initial.historyRailTargetY,
@@ -4712,7 +4638,7 @@ async function measureNarrowViewportScrollbarEdges(session: CdpSession) {
   // Hover the visible thumb itself: this is what widens the rail (mirrors the
   // native ::-webkit-scrollbar-thumb:hover), so target the thumb center, not
   // the empty track gutter the rail-hover step above lands in.
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: initial.historyThumbCenterX,
     y: initial.historyThumbCenterY,
@@ -4725,27 +4651,27 @@ async function measureNarrowViewportScrollbarEdges(session: CdpSession) {
   // width here even though the pointer is no longer over it.
   const dragOffRailX = Math.max(20, initial.historyThumbCenterX - 220)
   const dragOffRailY = initial.historyThumbCenterY + 40
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mousePressed', x: initial.historyThumbCenterX, y: initial.historyThumbCenterY, button: 'left', buttons: 1, clickCount: 1,
   })
   await wait(60)
-  await session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: dragOffRailX, y: dragOffRailY, button: 'left', buttons: 1 })
+  await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: dragOffRailX, y: dragOffRailY, button: 'left', buttons: 1 })
   await wait(220)
   const duringHistoryThumbDrag = await readSnapshot()
-  await session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: dragOffRailX, y: dragOffRailY, button: 'left' })
+  await harness.session.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: dragOffRailX, y: dragOffRailY, button: 'left' })
   await wait(120)
   // Reset scroll so the drag doesn't perturb the independent-scroll checks below.
-  await evaluateWithNavigationRetry(session, { expression: `document.querySelector('.history-entry-list')?.scrollTo(0, 0)` })
-  await waitForScrollTop(session, '.history-entry-list')
+  await evaluateExpression(harness, { expression: `document.querySelector('.history-entry-list')?.scrollTo(0, 0)` })
+  await waitForScrollTop(harness, '.history-entry-list')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: initial.historyTargetX,
     y: initial.historyTargetY,
   })
   await wait(80)
   for (let index = 0; index < 5; index += 1) {
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseWheel',
       deltaX: 0,
       deltaY: 48,
@@ -4757,14 +4683,14 @@ async function measureNarrowViewportScrollbarEdges(session: CdpSession) {
   await wait(180)
   const afterHistoryWheel = await readSnapshot()
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: initial.dashboardTargetX,
     y: initial.dashboardTargetY,
   })
   await wait(80)
   for (let index = 0; index < 5; index += 1) {
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseWheel',
       deltaX: 0,
       deltaY: 48,
@@ -4779,19 +4705,19 @@ async function measureNarrowViewportScrollbarEdges(session: CdpSession) {
   return { initial, afterHistoryRailHover, afterHistoryThumbHover, duringHistoryThumbDrag, afterHistoryWheel, afterDashboardWheel }
 }
 
-async function measureTooltipWindowBlurClose(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureTooltipWindowBlurClose(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -4819,19 +4745,19 @@ async function measureTooltipWindowBlurClose(session: CdpSession) {
 
   assert.ok(target, 'expected a page chip for expansion window-blur smoke test')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  const first = await waitForPageChipExpansionRect(session, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
+  const first = await waitForPageChipExpansionRect(harness, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
 
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `window.dispatchEvent(new Event('blur'))`,
   })
-  await waitForNoTitleExpansion(session)
+  await waitForNoTitleExpansion(harness)
 
-  const afterBlurTooltips = await evaluateWithNavigationRetry(session, {
+  const afterBlurTooltips = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `Array.from(document.querySelectorAll('.page-chip-expanded'))
       .map((chip) => chip.textContent || '')`,
@@ -4840,19 +4766,19 @@ async function measureTooltipWindowBlurClose(session: CdpSession) {
   return { target, first, afterBlurTooltips }
 }
 
-async function measureTooltipVisibilityChangeClose(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureTooltipVisibilityChangeClose(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -4880,20 +4806,20 @@ async function measureTooltipVisibilityChangeClose(session: CdpSession) {
 
   assert.ok(target, 'expected a page chip for expansion visibility-change smoke test')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
   await wait(180)
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  const first = await waitForPageChipExpansionRect(session, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
+  const first = await waitForPageChipExpansionRect(harness, PAGE_CHIP_EXPANSION_SMOKE_LABEL)
 
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `(() => {
       const stateDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'visibilityState')
       const hiddenDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'hidden')
@@ -4917,9 +4843,9 @@ async function measureTooltipVisibilityChangeClose(session: CdpSession) {
       }
     })()`,
   })
-  await waitForNoTitleExpansion(session)
+  await waitForNoTitleExpansion(harness)
 
-  const afterVisibilityChangeTooltips = await evaluateWithNavigationRetry(session, {
+  const afterVisibilityChangeTooltips = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `Array.from(document.querySelectorAll('.page-chip-expanded'))
       .map((chip) => chip.textContent || '')`,
@@ -4928,19 +4854,19 @@ async function measureTooltipVisibilityChangeClose(session: CdpSession) {
   return { target, first, afterVisibilityChangeTooltips }
 }
 
-async function measureActionTooltipClickClose(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureActionTooltipClickClose(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -4966,14 +4892,14 @@ async function measureActionTooltipClickClose(session: CdpSession) {
 
   assert.ok(target, 'expected a pin button for tooltip click-close smoke test')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  const first = await waitForTooltipRect(session)
+  const first = await waitForTooltipRect(harness)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
     button: 'left',
     buttons: 1,
@@ -4981,7 +4907,7 @@ async function measureActionTooltipClickClose(session: CdpSession) {
     x: target.x,
     y: target.y,
   })
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseReleased',
     button: 'left',
     buttons: 0,
@@ -4991,16 +4917,16 @@ async function measureActionTooltipClickClose(session: CdpSession) {
   })
   await wait(120)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoVisibleTooltip(session)
+  await waitForNoVisibleTooltip(harness)
 
-  const afterLeaveTooltips = await getVisibleTooltipTexts(session)
+  const afterLeaveTooltips = await getVisibleTooltipTexts(harness)
 
-  const focusedAfterLeave = await evaluateWithNavigationRetry(session, {
+  const focusedAfterLeave = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `document.activeElement?.matches('[data-tabout-part="section-pin-button"]') || false`,
   }).then((result: any) => result.result.value)
@@ -5008,19 +4934,19 @@ async function measureActionTooltipClickClose(session: CdpSession) {
   return { target, first, afterLeaveTooltips, focusedAfterLeave }
 }
 
-async function measureMarkerToChipTooltipHandoff(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureMarkerToChipTooltipHandoff(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -5055,42 +4981,42 @@ async function measureMarkerToChipTooltipHandoff(session: CdpSession) {
 
   assert.ok(target, 'expected a chip with a strip indicator for expansion handoff smoke test')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.markerX,
     y: target.y,
   })
-  const markerTooltipExpansion = await waitForPageChipExpansionRect(session, 'Hover Handoff Title')
+  const markerTooltipExpansion = await waitForPageChipExpansionRect(harness, 'Hover Handoff Title')
   const markerTooltip = {
     found: !!markerTooltipExpansion,
     expansion: markerTooltipExpansion,
-    tooltips: await getVisibleTooltipTexts(session),
+    tooltips: await getVisibleTooltipTexts(harness),
   }
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.textX,
     y: target.y,
   })
-  const chipTooltipExpansion = await waitForPageChipExpansionRect(session, 'Hover Handoff Title')
+  const chipTooltipExpansion = await waitForPageChipExpansionRect(harness, 'Hover Handoff Title')
   const chipTooltip = {
     found: !!chipTooltipExpansion,
     expansion: chipTooltipExpansion,
-    tooltips: await getVisibleTooltipTexts(session),
+    tooltips: await getVisibleTooltipTexts(harness),
   }
 
   return { target, markerTooltip, chipTooltip }
 }
 
-async function measureShortChipTooltipAbsence(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureShortChipTooltipAbsence(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -5118,14 +5044,14 @@ async function measureShortChipTooltipAbsence(session: CdpSession) {
 
   assert.ok(target, 'expected a short page chip to hover for tooltip absence smoke test')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.startX,
     y: target.y,
   })
   await wait(650)
 
-  const tooltipCount = await evaluateWithNavigationRetry(session, {
+  const tooltipCount = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `document.querySelectorAll('[data-slot="tooltip-content"]').length`,
   }).then((result: any) => result.result.value)
@@ -5133,19 +5059,19 @@ async function measureShortChipTooltipAbsence(session: CdpSession) {
   return { target, tooltipCount }
 }
 
-async function measureTooltipEdgeFlip(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureTooltipEdgeFlip(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -5182,34 +5108,34 @@ async function measureTooltipEdgeFlip(session: CdpSession) {
 
   assert.ok(target, 'expected a right-edge page chip to hover for expansion smoke test')
 
-  await waitForDashboardSettled(session)
-  await session.send('Input.dispatchMouseEvent', {
+  await waitForDashboardSettled(harness)
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.startX,
     y: target.y,
   })
-  const first = await waitForPageChipExpansionRect(session, 'viewport-edge')
+  const first = await waitForPageChipExpansionRect(harness, 'viewport-edge')
 
   return { target, first }
 }
 
-async function measureCompactTitleVariantExpansion(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureCompactTitleVariantExpansion(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     awaitPromise: true,
     expression: `window.__tabOutSmokeAddCompactTitleVariantTabs?.()`,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -5264,13 +5190,13 @@ async function measureCompactTitleVariantExpansion(session: CdpSession) {
 
   assert.ok(target, 'expected compact same-title URL variant chip for expansion width smoke')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  const expansion = await waitForPageChipExpansionRect(session, 'Order Page')
-  const expandedVariantLabels = await evaluateWithNavigationRetry(session, {
+  const expansion = await waitForPageChipExpansionRect(harness, 'Order Page')
+  const expandedVariantLabels = await evaluateExpression(harness, {
     returnByValue: true,
     expression: `(() => {
       const chip = Array.from(document.querySelectorAll('.page-chip-expanded'))
@@ -5287,33 +5213,33 @@ async function measureCompactTitleVariantExpansion(session: CdpSession) {
     })()`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoPageChipExpansion(session)
+  await waitForNoPageChipExpansion(harness)
 
   return { target, expansion, expandedVariantLabels }
 }
 
-async function measurePlainTitleVariantEdgeExpansion(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measurePlainTitleVariantEdgeExpansion(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     awaitPromise: true,
     expression: `window.__tabOutSmokeAddPlainTitleVariantTabs?.()`,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -5431,7 +5357,7 @@ async function measurePlainTitleVariantEdgeExpansion(session: CdpSession) {
 
   const surfaceResults = []
   for (const [surface, point] of Object.entries(target.surfaces)) {
-    const preHoverState = await evaluateWithNavigationRetry(session, {
+    const preHoverState = await evaluateExpression(harness, {
       returnByValue: true,
       expression: `(() => {
         const point = ${JSON.stringify(point)}
@@ -5450,13 +5376,13 @@ async function measurePlainTitleVariantEdgeExpansion(session: CdpSession) {
       })()`,
     }).then((result: any) => result.result.value)
 
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x: (point as { x: number, y: number }).x,
       y: (point as { x: number, y: number }).y,
     })
-    const expansion = await waitForPageChipExpansionRect(session, 'Plain Title Variant')
-    const expandedVariantLabels = await evaluateWithNavigationRetry(session, {
+    const expansion = await waitForPageChipExpansionRect(harness, 'Plain Title Variant')
+    const expandedVariantLabels = await evaluateExpression(harness, {
       returnByValue: true,
       expression: `(() => {
         const chip = Array.from(document.querySelectorAll('.page-chip-expanded'))
@@ -5468,7 +5394,7 @@ async function measurePlainTitleVariantEdgeExpansion(session: CdpSession) {
         }))
       })()`,
     }).then((result: any) => result.result.value)
-    const hoverState = await evaluateWithNavigationRetry(session, {
+    const hoverState = await evaluateExpression(harness, {
       returnByValue: true,
       expression: `(() => {
         const point = ${JSON.stringify(point)}
@@ -5495,34 +5421,34 @@ async function measurePlainTitleVariantEdgeExpansion(session: CdpSession) {
 
     surfaceResults.push({ expandedVariantLabels, expansion, hoverState, point, preHoverState, surface })
 
-    await session.send('Input.dispatchMouseEvent', {
+    await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
       x: 8,
       y: 8,
     })
-    await waitForNoPageChipExpansion(session)
+    await waitForNoPageChipExpansion(harness)
   }
 
   return { target, surfaceResults }
 }
 
-async function measureWrappedTitleVariantExpansion(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureWrappedTitleVariantExpansion(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     awaitPromise: true,
     expression: `window.__tabOutSmokeAddWrappedTitleVariantTabs?.()`,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     expression: `document.querySelector('.scroll-region')?.scrollTo(0, 0)`,
   })
-  await waitForDashboardSettled(session)
+  await waitForDashboardSettled(harness)
 
-  const target = await evaluateWithNavigationRetry(session, {
+  const target = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -5576,12 +5502,12 @@ async function measureWrappedTitleVariantExpansion(session: CdpSession) {
 
   assert.ok(target, 'expected wrapped same-title URL variant chip for expansion width smoke')
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: target.x,
     y: target.y,
   })
-  const expansion = await evaluateWithNavigationRetry(session, {
+  const expansion = await evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -5617,29 +5543,29 @@ async function measureWrappedTitleVariantExpansion(session: CdpSession) {
     })`,
   }).then((result: any) => result.result.value)
 
-  await session.send('Input.dispatchMouseEvent', {
+  await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: 8,
     y: 8,
   })
-  await waitForNoPageChipExpansion(session)
+  await waitForNoPageChipExpansion(harness)
 
   return { target, expansion }
 }
 
-async function measureDuplicateStackGeometry(session: CdpSession) {
-  await session.send('Emulation.setDeviceMetricsOverride', {
+async function measureDuplicateStackGeometry(harness: DashboardHarness) {
+  await harness.session.send('Emulation.setDeviceMetricsOverride', {
     width: 1000,
     height: 900,
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     awaitPromise: true,
     expression: `window.__tabOutSmokeAddDuplicateStackTabs?.()`,
   })
 
-  return evaluateWithNavigationRetry(session, {
+  return evaluateExpression(harness, {
     awaitPromise: true,
     returnByValue: true,
     expression: `new Promise((resolve) => {
@@ -5676,23 +5602,23 @@ async function measureDuplicateStackGeometry(session: CdpSession) {
   }).then((result: any) => result.result.value)
 }
 
-test('dashboard cards repack when the viewport resizes', async ({ page, context }) => {
+test('dashboard cards repack when the viewport resizes', async ({ page }) => {
   test.setTimeout(180_000)
   await page.goto('/tests/fixtures/dashboard-resize.html')
-  const session = cdpSessionAdapter(await context.newCDPSession(page))
+  const harness = await createDashboardHarness(page)
 
   if (RUN_HISTORY_SCROLLBAR_OVERLAP_ONLY) {
-    const historyScrollbarOverlap = await measureHistoryEntryExpansionWheelScroll(session)
+    const historyScrollbarOverlap = await measureHistoryEntryExpansionWheelScroll(harness)
     assertHistoryScrollbarLayering(historyScrollbarOverlap)
     return
   }
 
-  const wide = await measureDashboard(session, 1420)
-  const tailFill = await measureTruncatedTitleTailFill(session)
-  const besideFloor = await measureDashboard(session, 1000)
-  const constrained = await measureDashboard(session, 920)
-  const narrow = await measureDashboard(session, 760)
-  const initialTooltipMeasureNodes = await measureInitialTooltipMeasureNodes(session)
+  const wide = await measureDashboard(harness, 1420)
+  const tailFill = await measureTruncatedTitleTailFill(harness)
+  const besideFloor = await measureDashboard(harness, 1000)
+  const constrained = await measureDashboard(harness, 920)
+  const narrow = await measureDashboard(harness, 760)
+  const initialTooltipMeasureNodes = await measureInitialTooltipMeasureNodes(harness)
 
   assert.ok(wide.cardCount >= 12, `dashboard should render enough cards for a column smoke test: ${JSON.stringify(wide)}`)
   assert.ok(wide.columns > narrow.columns, `expected columns to shrink after resize, got ${wide.columns} -> ${narrow.columns}`)
@@ -5719,14 +5645,14 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
   assert.ok(tailFill.clampedPillsKeepGlyph, `suppression pills inside clamped rows should keep their live glyph: ${JSON.stringify(tailFill)}`)
   assert.equal(tailFill.untruncatedWithClamp, 0, `titles that fit should keep their natural rendering: ${JSON.stringify(tailFill)}`)
 
-  const horizontalScroll = await measureHorizontalScrollLock(session)
+  const horizontalScroll = await measureHorizontalScrollLock(harness)
   assert.equal(horizontalScroll.overflowX, 'hidden', `scroll region should hide horizontal overflow: ${JSON.stringify(horizontalScroll)}`)
   assert.equal(horizontalScroll.overscrollBehaviorX, 'none', `scroll region should suppress x-axis overscroll: ${JSON.stringify(horizontalScroll)}`)
   assert.ok(horizontalScroll.scrollWidth > horizontalScroll.clientWidth, `smoke probe should create horizontal overflow: ${JSON.stringify(horizontalScroll)}`)
   assert.equal(horizontalScroll.initialScrollLeft, 0, `scroll region should start at the left edge: ${JSON.stringify(horizontalScroll)}`)
   assert.equal(horizontalScroll.afterScrollLeft, 0, `horizontal wheel input should not move the scroll region sideways: ${JSON.stringify(horizontalScroll)}`)
 
-  const historyLeftGutterScroll = await measureHistoryLeftGutterWheelScroll(session)
+  const historyLeftGutterScroll = await measureHistoryLeftGutterWheelScroll(harness)
   assert.ok(historyLeftGutterScroll.target.shellLeft > 40, `wide smoke viewport should create a left dashboard gutter: ${JSON.stringify(historyLeftGutterScroll)}`)
   assert.equal(historyLeftGutterScroll.target.listLeft, 0, `history scrollbox should bleed to the viewport edge on wide screens: ${JSON.stringify(historyLeftGutterScroll)}`)
   assert.ok(
@@ -5745,7 +5671,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `left gutter history scroll should not scroll the domain cards pane: ${JSON.stringify(historyLeftGutterScroll)}`,
   )
 
-  const narrowScrollbarEdges = await measureNarrowViewportScrollbarEdges(session)
+  const narrowScrollbarEdges = await measureNarrowViewportScrollbarEdges(harness)
   assert.ok(narrowScrollbarEdges.afterHistoryRailHover, `expected narrow history rail hover geometry: ${JSON.stringify(narrowScrollbarEdges)}`)
   assert.ok(narrowScrollbarEdges.afterHistoryWheel, `expected narrow history wheel geometry: ${JSON.stringify(narrowScrollbarEdges)}`)
   assert.ok(narrowScrollbarEdges.afterDashboardWheel, `expected narrow dashboard wheel geometry: ${JSON.stringify(narrowScrollbarEdges)}`)
@@ -5879,11 +5805,11 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `narrow dashboard native rail and activation history rail must occupy the same width: ${JSON.stringify(narrowScrollbarEdges)}`,
   )
 
-  const shortTooltip = await measureShortChipTooltipAbsence(session)
+  const shortTooltip = await measureShortChipTooltipAbsence(harness)
   assert.equal(shortTooltip.target.isTruncated, false, `short chip text should fit for tooltip absence smoke test: ${JSON.stringify(shortTooltip)}`)
   assert.equal(shortTooltip.tooltipCount, 0, `page chip should not show a tooltip when its text fits: ${JSON.stringify(shortTooltip)}`)
 
-  const contextMenuSave = await measurePageChipContextMenuSave(session)
+  const contextMenuSave = await measurePageChipContextMenuSave(harness)
   assert.ok(contextMenuSave.firstOpenState.itemTexts.includes('Reload'), `right-clicking a live page chip should show Reload: ${JSON.stringify(contextMenuSave)}`)
   assert.ok(contextMenuSave.firstOpenState.itemTexts.includes('Duplicate'), `right-clicking a live page chip should show Duplicate: ${JSON.stringify(contextMenuSave)}`)
   assert.deepEqual(
@@ -5917,7 +5843,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
   assert.equal(contextMenuSave.outsideClickResult.activeAfter, 'All Tabs', `clicking outside an open context menu should dismiss it without activating the underlying Dashboard View option: ${JSON.stringify(contextMenuSave)}`)
   assert.equal(contextMenuSave.outsideClickResult.menuOpen, false, `outside click should dismiss the context menu: ${JSON.stringify(contextMenuSave)}`)
 
-  const expansion = await measureTooltipFreeze(session)
+  const expansion = await measureTooltipFreeze(harness)
   assert.ok(expansion.first, `page chip should expand in place on hover: ${JSON.stringify(expansion)}`)
   assert.ok(expansion.second, `page chip should stay expanded during an in-chip pointer move: ${JSON.stringify(expansion)}`)
   assert.ok((expansion.first.width || 0) > expansion.target.textRight - expansion.target.textLeft + 8, `page chip expansion should grow wider than the resting text: ${JSON.stringify(expansion)}`)
@@ -5928,7 +5854,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
   assert.ok(Math.abs(expansion.first.top - expansion.second.top) <= 1, `page chip expansion top should freeze after open: ${JSON.stringify(expansion)}`)
   assert.equal(expansion.afterScrollExpandedCount, 0, `page chip expansion should close when the dashboard scrolls: ${JSON.stringify(expansion)}`)
 
-  const tooltipHitArea = await measureTooltipTextPaddingHitArea(session)
+  const tooltipHitArea = await measureTooltipTextPaddingHitArea(harness)
   assert.ok(tooltipHitArea.target.hitTop < tooltipHitArea.target.textTop, `expansion hit area should include space above chip text: ${JSON.stringify(tooltipHitArea)}`)
   assert.ok(tooltipHitArea.target.hitBottom > tooltipHitArea.target.textBottom, `expansion hit area should include space below chip text: ${JSON.stringify(tooltipHitArea)}`)
   assert.ok(tooltipHitArea.target.chipSurfaceX < tooltipHitArea.target.hitLeft, `surface-hover smoke should target chip space outside the text hit area: ${JSON.stringify(tooltipHitArea)}`)
@@ -5940,7 +5866,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
   assert.ok(Math.abs((tooltipHitArea.above.textLeft || 0) - tooltipHitArea.target.textLeftExact) <= 0.1, `expanded chip text x-origin should stay precise from the padding hit area: ${JSON.stringify(tooltipHitArea)}`)
   assert.ok(Math.abs((tooltipHitArea.above.textTop || 0) - tooltipHitArea.target.textTopExact) <= 0.1, `expanded chip text y-origin should stay precise from the padding hit area: ${JSON.stringify(tooltipHitArea)}`)
 
-  const internalPointerMoveExpansion = await measurePageChipInternalPointerMoveExpansion(session)
+  const internalPointerMoveExpansion = await measurePageChipInternalPointerMoveExpansion(harness)
   assert.equal(internalPointerMoveExpansion.before, 0, `internal pointer-move smoke should start without an expanded chip: ${JSON.stringify(internalPointerMoveExpansion)}`)
   assert.ok(
     internalPointerMoveExpansion.expansion?.text.includes('enough tooltip text'),
@@ -5952,7 +5878,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `internal pointer-move expansion should not create a tooltip popup: ${JSON.stringify(internalPointerMoveExpansion)}`,
   )
 
-  const activeStateTooltip = await measureTooltipAfterActiveStateChanges(session)
+  const activeStateTooltip = await measureTooltipAfterActiveStateChanges(harness)
   assert.equal(activeStateTooltip.activeTarget.activeFrame, true, `active-state smoke target should start with an active chip frame: ${JSON.stringify(activeStateTooltip)}`)
   assert.equal(activeStateTooltip.inactiveTarget.activeFrame, false, `active-state smoke target should lose the active chip frame: ${JSON.stringify(activeStateTooltip)}`)
   assert.ok(activeStateTooltip.activeTooltip, `page chip should expand after the chip becomes active: ${JSON.stringify(activeStateTooltip)}`)
@@ -5976,7 +5902,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
 
   const suppressionMarkerLines = []
   for (const markerLabel of ['Marker line one', 'Marker line two', 'Marker line three']) {
-    suppressionMarkerLines.push(await measureSuppressionMarkerTooltipLine(session, markerLabel))
+    suppressionMarkerLines.push(await measureSuppressionMarkerTooltipLine(harness, markerLabel))
   }
   const suppressionMarkerLineNumbers = suppressionMarkerLines.map(({ result }) => result?.markerLine)
   assert.deepEqual(
@@ -5992,7 +5918,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
   }
   const compactSuppressionMarkerLines = []
   for (const markerLabel of ['Marker line one', 'Marker line two', 'Marker line three']) {
-    compactSuppressionMarkerLines.push(await measureSuppressionMarkerChipLine(session, markerLabel))
+    compactSuppressionMarkerLines.push(await measureSuppressionMarkerChipLine(harness, markerLabel))
   }
   for (const line of compactSuppressionMarkerLines) {
     assert.ok(line.result, `compact suppression marker should expose marker geometry: ${JSON.stringify(line)}`)
@@ -6003,9 +5929,9 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
   }
 
   const tooltipLineCounts = [
-    await measurePageChipTooltipLineCount(session, 'Marker line one'),
-    await measurePageChipTooltipLineCount(session, 'Marker line two'),
-    await measurePageChipTooltipLineCount(session, 'Marker line three', {
+    await measurePageChipTooltipLineCount(harness, 'Marker line one'),
+    await measurePageChipTooltipLineCount(harness, 'Marker line two'),
+    await measurePageChipTooltipLineCount(harness, 'Marker line three', {
       forcedTextWidth: 168,
       forcedMaxLines: 3,
     }),
@@ -6068,7 +5994,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
       `regular page chip expansion tail row should start with the same visible text before revealing more: ${JSON.stringify(lineCount)}`,
     )
   }
-  const structuralTailTooltip = await measurePageChipTooltipLineCount(session, 'Tooltip Boundary Alpha', {
+  const structuralTailTooltip = await measurePageChipTooltipLineCount(harness, 'Tooltip Boundary Alpha', {
     forcedTextWidth: 170,
     forcedMaxLines: 2,
   })
@@ -6096,7 +6022,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     structuralTailTooltip.tooltip.width > structuralTailTooltip.target.chipWidth + 20,
     `structural-tail tooltip should grow wider than the compact chip when non-tail markers expand: ${JSON.stringify(structuralTailTooltip)}`,
   )
-  const oneLineStructuralTailTooltip = await measurePageChipTooltipLineCount(session, 'Tooltip Boundary Alpha', {
+  const oneLineStructuralTailTooltip = await measurePageChipTooltipLineCount(harness, 'Tooltip Boundary Alpha', {
     forcedTextWidth: 130,
     forcedMaxLines: 1,
     viewportWidth: 1600,
@@ -6112,7 +6038,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     1,
     `one-line structural-tail tooltip should widen enough to stay on one line: ${JSON.stringify(oneLineStructuralTailTooltip)}`,
   )
-  const wrappedContentfulScreenshotTooltip = await measurePageChipTooltipLineCount(session, 'Tooltip Screenshot Alpha', {
+  const wrappedContentfulScreenshotTooltip = await measurePageChipTooltipLineCount(harness, 'Tooltip Screenshot Alpha', {
     forcedTextWidth: 280,
     forcedMaxLines: 2,
     viewportWidth: 1600,
@@ -6134,7 +6060,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     wrappedContentfulScreenshotTooltip.tooltip.tooltipLineTexts[1]?.includes('Contentful'),
     `wrapped Contentful tooltip should keep dev2 on row 1 and Contentful on row 2: ${JSON.stringify(wrappedContentfulScreenshotTooltip)}`,
   )
-  const wrappedTrailingMarkerTooltip = await measurePageChipTooltipLineCount(session, 'Wrap Trailing Marker Alpha', {
+  const wrappedTrailingMarkerTooltip = await measurePageChipTooltipLineCount(harness, 'Wrap Trailing Marker Alpha', {
     forcedTextWidth: 230,
     forcedMaxLines: 2,
     viewportWidth: 1600,
@@ -6160,7 +6086,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     wrappedTrailingMarkerTooltip.tooltip.tooltipLineOverflows.every((overflows: boolean) => !overflows),
     `wrapped trailing-marker tooltip lines should not visually overflow: ${JSON.stringify(wrappedTrailingMarkerTooltip)}`,
   )
-  const splitStructuralTailTooltip = await measurePageChipTooltipLineCount(session, 'Tooltip Line Alpha', {
+  const splitStructuralTailTooltip = await measurePageChipTooltipLineCount(harness, 'Tooltip Line Alpha', {
     forcedTextWidth: 310,
     forcedMaxLines: 2,
   })
@@ -6191,7 +6117,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     splitStructuralTailTooltip.tooltip.tooltipLineOverflows.every((overflows: boolean) => !overflows),
     `split structural-tail tooltip lines should not visually overflow: ${JSON.stringify(splitStructuralTailTooltip)}`,
   )
-  const edgeConstrainedTooltip = await measurePageChipTooltipLineCount(session, 'Tooltip Edge Alpha', {
+  const edgeConstrainedTooltip = await measurePageChipTooltipLineCount(harness, 'Tooltip Edge Alpha', {
     forcedTextWidth: 310,
     forcedMaxLines: 2,
   })
@@ -6212,7 +6138,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     edgeConstrainedTooltip.tooltip.tooltipLineOverflows.every((overflows: boolean) => !overflows),
     `edge-constrained tooltip lines should wrap instead of overflowing: ${JSON.stringify(edgeConstrainedTooltip)}`,
   )
-  const foldedTooltip = await measureFoldedPageChipTooltipTitleLineCount(session, 'Folded Tooltip Lenses', {
+  const foldedTooltip = await measureFoldedPageChipTooltipTitleLineCount(harness, 'Folded Tooltip Lenses', {
     forcedTextWidth: 270,
   })
   assert.ok(foldedTooltip.tooltip, `folded chip should expand in place: ${JSON.stringify(foldedTooltip)}`)
@@ -6243,7 +6169,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     foldedTooltip.tooltip.textWidth > foldedTooltip.target.chipTextWidth,
     `folded chip expansion should grow wider than the compact folded chip when hidden title text expands: ${JSON.stringify(foldedTooltip)}`,
   )
-  const foldedWrappedTooltip = await measureFoldedPageChipTooltipTitleLineCount(session, 'Folded Tooltip Lenses', {
+  const foldedWrappedTooltip = await measureFoldedPageChipTooltipTitleLineCount(harness, 'Folded Tooltip Lenses', {
     forcedTextWidth: 160,
   })
   assert.ok(foldedWrappedTooltip.tooltip, `wrapped folded chip should expand in place: ${JSON.stringify(foldedWrappedTooltip)}`)
@@ -6269,14 +6195,14 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     foldedWrappedTooltip.tooltip.envCount > 0,
     `wrapped folded chip expansion should keep the existing env buttons in the chip: ${JSON.stringify(foldedWrappedTooltip)}`,
   )
-  const foldedEnvHover = await measureFoldedEnvHoverTooltips(session, 'Folded Tooltip Lenses')
+  const foldedEnvHover = await measureFoldedEnvHoverTooltips(harness, 'Folded Tooltip Lenses')
   assert.deepEqual(
     foldedEnvHover.tooltipTexts,
     [],
     `hovering a folded env button should not open a tooltip: ${JSON.stringify(foldedEnvHover)}`,
   )
 
-  const originalSlotLeave = await measurePageChipOriginalSlotLeave(session)
+  const originalSlotLeave = await measurePageChipOriginalSlotLeave(harness)
   assert.equal(
     originalSlotLeave.first.visibleTooltipCount,
     0,
@@ -6291,7 +6217,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `page chip expansion should collapse once the pointer leaves the expanded chip entirely: ${JSON.stringify(originalSlotLeave)}`,
   )
 
-  const popupClickFocus = await measureTooltipPopupClickFocus(session)
+  const popupClickFocus = await measureTooltipPopupClickFocus(harness)
   assert.equal(popupClickFocus.popupStyle?.cursor, 'default', `expanded page chip should keep the default cursor: ${JSON.stringify(popupClickFocus)}`)
   assert.equal(popupClickFocus.first.visibleTooltipCount, 0, `clickable expanded page chip should not create a tooltip popup: ${JSON.stringify(popupClickFocus)}`)
   assert.ok(
@@ -6306,7 +6232,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     )),
     `clicking the expanded page chip should focus the matching window: ${JSON.stringify(popupClickFocus)}`,
   )
-  const historyPopupClickFocus = await measureHistoryEntryExpansionClickFocus(session)
+  const historyPopupClickFocus = await measureHistoryEntryExpansionClickFocus(harness)
   assert.equal(historyPopupClickFocus.expandedStyle?.cursor, 'default', `expanded history entry should keep the default cursor: ${JSON.stringify(historyPopupClickFocus)}`)
   assert.equal(historyPopupClickFocus.expandedStyle?.pointerEvents, 'none', `expanded history entry should let native pointer and wheel input reach the original row underneath: ${JSON.stringify(historyPopupClickFocus)}`)
   assert.equal(historyPopupClickFocus.first.visibleTooltipCount, 0, `expanded history entry should not create a tooltip popup: ${JSON.stringify(historyPopupClickFocus)}`)
@@ -6323,7 +6249,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `clicking the expanded history entry should focus the matching window: ${JSON.stringify(historyPopupClickFocus)}`,
   )
 
-  const popupWheelScroll = await measureTooltipPopupWheelScroll(session)
+  const popupWheelScroll = await measureTooltipPopupWheelScroll(harness)
   assert.ok(popupWheelScroll.first, `page chip should expand before wheel check: ${JSON.stringify(popupWheelScroll)}`)
   assert.equal(popupWheelScroll.first.visibleTooltipCount, 0, `expanded page chip wheel target should not create a tooltip popup: ${JSON.stringify(popupWheelScroll)}`)
   assert.ok(
@@ -6344,7 +6270,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `page chip expansion should stay closed after the pointer leaves the chip's slot area: ${JSON.stringify(popupWheelScroll)}`,
   )
 
-  const historyPopupWheelScroll = await measureHistoryEntryExpansionWheelScroll(session)
+  const historyPopupWheelScroll = await measureHistoryEntryExpansionWheelScroll(harness)
   assertHistoryScrollbarLayering(historyPopupWheelScroll)
   assert.ok(
     Math.abs(historyPopupWheelScroll.first.titleLeft - historyPopupWheelScroll.target.titleLeftExact) <= 0.1,
@@ -6433,7 +6359,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     historyPopupWheelScroll.target.titleHeight > historyPopupWheelScroll.target.titleLineHeight * 1.5,
     `long history entry title should render as two visible lines: ${JSON.stringify(historyPopupWheelScroll)}`,
   )
-  const historyFaviconHitArea = await measureHistoryEntryExpansionSurfaceHitArea(session)
+  const historyFaviconHitArea = await measureHistoryEntryExpansionSurfaceHitArea(harness)
   assert.ok(historyFaviconHitArea.above?.text.includes('Low score history item'), `hovering the vertical space above the history favicon should expand the entry: ${JSON.stringify(historyFaviconHitArea)}`)
   assert.ok(historyFaviconHitArea.below?.text.includes('Low score history item'), `hovering the vertical space below the history favicon should expand the entry: ${JSON.stringify(historyFaviconHitArea)}`)
   assert.deepEqual(historyFaviconHitArea.aboveTooltipTexts, [], `history entry expansion from favicon padding should not create a tooltip popup: ${JSON.stringify(historyFaviconHitArea)}`)
@@ -6543,11 +6469,11 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `history expansion should not leave a tooltip popup after pointer leave: ${JSON.stringify(historyPopupWheelScroll)}`,
   )
 
-  const windowBlurTooltip = await measureTooltipWindowBlurClose(session)
+  const windowBlurTooltip = await measureTooltipWindowBlurClose(harness)
   assert.ok(windowBlurTooltip.first, `page chip should expand before window-blur check: ${JSON.stringify(windowBlurTooltip)}`)
   assert.deepEqual(windowBlurTooltip.afterBlurTooltips, [], `page chip expansion should close when the window loses focus: ${JSON.stringify(windowBlurTooltip)}`)
 
-  const visibilityTooltip = await measureTooltipVisibilityChangeClose(session)
+  const visibilityTooltip = await measureTooltipVisibilityChangeClose(harness)
   assert.ok(visibilityTooltip.first, `page chip should expand before visibility-change check: ${JSON.stringify(visibilityTooltip)}`)
   assert.deepEqual(
     visibilityTooltip.afterVisibilityChangeTooltips,
@@ -6555,13 +6481,13 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `page chip expansion should close synchronously when the page becomes hidden: ${JSON.stringify(visibilityTooltip)}`,
   )
 
-  const actionTooltip = await measureActionTooltipClickClose(session)
+  const actionTooltip = await measureActionTooltipClickClose(harness)
   assert.ok(actionTooltip.first, `pin tooltip should open before click-close check: ${JSON.stringify(actionTooltip)}`)
   assert.equal(actionTooltip.focusedAfterLeave, true, `pin button should keep focus after click so this smoke covers pointer-focus behavior: ${JSON.stringify(actionTooltip)}`)
   assert.deepEqual(actionTooltip.afterLeaveTooltips, [], `pin tooltip should close after click when the pointer leaves the focused button: ${JSON.stringify(actionTooltip)}`)
 
   const pageChipReturnTooltip = await measureInteractiveTooltipClickReturnFocus(
-    session,
+    harness,
     '.page-chip .chip-text',
     PAGE_CHIP_EXPANSION_SMOKE_LABEL,
     'page-chip',
@@ -6572,7 +6498,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
   assert.equal(pageChipReturnTooltip.afterReturnFocus?.focusVisible, false, `page chip click-return focus should not be keyboard-visible focus: ${JSON.stringify(pageChipReturnTooltip)}`)
   assert.deepEqual(pageChipReturnTooltip.afterReturnTooltips, [], `page chip expansion should not leave a tooltip popup after pointer-click return focus: ${JSON.stringify(pageChipReturnTooltip)}`)
 
-  const markerHandoff = await measureMarkerToChipTooltipHandoff(session)
+  const markerHandoff = await measureMarkerToChipTooltipHandoff(harness)
   assert.ok(markerHandoff.target.markerText.startsWith('/'), `strip indicator should render compact path marker text in the chip: ${JSON.stringify(markerHandoff)}`)
   assert.ok(markerHandoff.markerTooltip.found, `strip indicator hover should expand the page chip first: ${JSON.stringify(markerHandoff)}`)
   assert.ok(
@@ -6583,13 +6509,13 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
   assert.deepEqual(markerHandoff.markerTooltip.tooltips, [], `strip indicator hover should not create a tooltip popup: ${JSON.stringify(markerHandoff)}`)
   assert.ok(markerHandoff.chipTooltip.found, `page chip should remain expanded after moving from the strip indicator to chip text: ${JSON.stringify(markerHandoff)}`)
 
-  const edgeTooltip = await measureTooltipEdgeFlip(session)
+  const edgeTooltip = await measureTooltipEdgeFlip(harness)
   assert.ok(edgeTooltip.first, `page chip should expand near the viewport edge: ${JSON.stringify(edgeTooltip)}`)
   assert.equal(edgeTooltip.first.visibleTooltipCount, 0, `viewport-edge page chip expansion should not create a tooltip popup: ${JSON.stringify(edgeTooltip)}`)
   assert.ok(edgeTooltip.first.right <= edgeTooltip.target.viewportRight - 12, `expanded page chip should keep viewport collision padding near the text edge: ${JSON.stringify(edgeTooltip)}`)
   assert.ok(Math.abs(edgeTooltip.first.textLeft - edgeTooltip.target.textLeft) <= 1, `expanded page chip should preserve the original text origin near the viewport edge: ${JSON.stringify(edgeTooltip)}`)
 
-  const compactTitleVariantExpansion = await measureCompactTitleVariantExpansion(session)
+  const compactTitleVariantExpansion = await measureCompactTitleVariantExpansion(harness)
   assert.ok(compactTitleVariantExpansion.expansion, `compact same-title variant chip should expand in place: ${JSON.stringify(compactTitleVariantExpansion)}`)
   assert.ok(
     compactTitleVariantExpansion.expansion.width <= Math.max(
@@ -6606,7 +6532,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     compactTitleVariantExpansion.expandedVariantLabels.every((label: { clientWidth: number, scrollWidth: number }) => label.scrollWidth - label.clientWidth <= 1),
     `compact same-title variant chip expansion should keep its URL variant labels untruncated when viewport room allows: ${JSON.stringify(compactTitleVariantExpansion)}`,
   )
-  const plainTitleVariantEdgeExpansion = await measurePlainTitleVariantEdgeExpansion(session)
+  const plainTitleVariantEdgeExpansion = await measurePlainTitleVariantEdgeExpansion(harness)
   assert.ok(
     plainTitleVariantEdgeExpansion.target.surfaces.slotOnlyDefaultSurface,
     `plain same-title variant smoke should find a slot-only default surface outside the rounded chip: ${JSON.stringify(plainTitleVariantEdgeExpansion)}`,
@@ -6632,7 +6558,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     ),
     `plain same-title variant chip should clamp to right-side room instead of growing left: ${JSON.stringify(plainTitleVariantEdgeExpansion)}`,
   )
-  const wrappedTitleVariantExpansion = await measureWrappedTitleVariantExpansion(session)
+  const wrappedTitleVariantExpansion = await measureWrappedTitleVariantExpansion(harness)
   assert.equal(
     wrappedTitleVariantExpansion.target.titleLineCount,
     2,
@@ -6657,7 +6583,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `wrapped same-title variant expansion should reveal the suppressed title text: ${JSON.stringify(wrappedTitleVariantExpansion)}`,
   )
 
-  const duplicateStackGeometry = await measureDuplicateStackGeometry(session)
+  const duplicateStackGeometry = await measureDuplicateStackGeometry(harness)
   assert.ok(duplicateStackGeometry, `duplicate page chip stack should render in the browser smoke harness: ${JSON.stringify(duplicateStackGeometry)}`)
   assert.ok(
     duplicateStackGeometry.frame.width <= 18 && duplicateStackGeometry.frame.height <= 18,
@@ -6669,11 +6595,11 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `duplicate page chip stack layers should not stretch into a tall overlay: ${JSON.stringify(duplicateStackGeometry)}`,
   )
 
-  await evaluateWithNavigationRetry(session, {
+  await evaluateExpression(harness, {
     awaitPromise: true,
     expression: `window.__tabOutSmokeAddPathGroupPlaceholderTabs?.()`,
   })
-  const oneLinePathGroupPlaceholderTooltip = await measurePageChipTooltipLineCount(session, 'at story/ABC-123_2', {
+  const oneLinePathGroupPlaceholderTooltip = await measurePageChipTooltipLineCount(harness, 'at story/ABC-123_2', {
     forcedTextWidth: 130,
     forcedMaxLines: 1,
     hoverWaitMs: 40,
@@ -6693,7 +6619,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
 
   // Runs near the end (before the bookmark-source switch) so its hover/right-click
   // interactions cannot perturb the timing-sensitive tabs-source measurements above.
-  const suppressionTokenClose = await measureSuppressionTokenCloseHighlight(session)
+  const suppressionTokenClose = await measureSuppressionTokenCloseHighlight(harness)
   assert.equal(suppressionTokenClose.baseline, 0, `suppression chips should not be highlighted before hover: ${JSON.stringify(suppressionTokenClose)}`)
   assert.equal(suppressionTokenClose.onHover, 3, `hovering the "— Shared Workspace" token should highlight its 3 chips: ${JSON.stringify(suppressionTokenClose)}`)
   assert.equal(suppressionTokenClose.onRightClick.highlightedChips, 3, `right-clicking the token must keep its 3 chips highlighted while the close menu is open: ${JSON.stringify(suppressionTokenClose)}`)
@@ -6706,7 +6632,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
   // Multi-line resting chips reveal in place: every pill hydrates on the
   // visible line it occupied at rest, whatever mix of text and pills shares
   // that line — the expansion widens lines, it does not re-deal them.
-  const markerWrapStability = await measureMarkerWrapExpansionReflow(session, { forcedTextWidth: 205 })
+  const markerWrapStability = await measureMarkerWrapExpansionReflow(harness, { forcedTextWidth: 205 })
   assert.ok(markerWrapStability.target, `marker-wrap stability smoke should find its path-group chip: ${JSON.stringify(markerWrapStability)}`)
   assert.ok(
     markerWrapStability.target.chipLineCount >= 2,
@@ -6733,7 +6659,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
   // and wrap" rule for that shape re-strands pills at the narrow resting
   // width; with hydrating pills the reveal must take the packed allowance
   // instead, so pills drop down only when genuinely out of room.
-  const markerWrapConstrainedReflow = await measureMarkerWrapExpansionReflow(session, { viewportWidth: 430 })
+  const markerWrapConstrainedReflow = await measureMarkerWrapExpansionReflow(harness, { viewportWidth: 430 })
   assert.ok(markerWrapConstrainedReflow.target, `constrained marker-wrap smoke should find its path-group chip: ${JSON.stringify(markerWrapConstrainedReflow)}`)
   assert.equal(
     markerWrapConstrainedReflow.target.chipLineCount,
@@ -6751,7 +6677,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `expanded suppression pills must not start a continuation line while the previous line has viewport room for them (resting-width wrap): ${JSON.stringify(markerWrapConstrainedReflow.expansion)}`,
   )
 
-  const markerOnlyLine = await measureMarkerOnlyLineExpansion(session)
+  const markerOnlyLine = await measureMarkerOnlyLineExpansion(harness)
   assert.ok(markerOnlyLine.target, `marker-only-line smoke should find its suffixed chip: ${JSON.stringify(markerOnlyLine)}`)
   assert.ok(
     (markerOnlyLine.target.markerLine ?? 0) >= 1 && (markerOnlyLine.target.markerLeftOffset ?? 99) <= 8,
@@ -6770,7 +6696,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `marker-only-line expansion should reveal the fingerprinted URL suffixes: ${JSON.stringify(markerOnlyLine.expansion)}`,
   )
 
-  const variantTitleRow = await measureVariantTitleRowStability(session)
+  const variantTitleRow = await measureVariantTitleRowStability(harness)
   assert.ok(variantTitleRow.target, `variant title-row smoke should find its merged chip: ${JSON.stringify(variantTitleRow)}`)
   assert.equal(
     variantTitleRow.target.titleRowLines,
@@ -6797,7 +6723,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page, context 
     `the hydrated indicator should stay on the first title line: ${JSON.stringify(variantTitleRow.expansion)}`,
   )
 
-  const largeBookmarks = await measureLargeBookmarkProgressiveRender(session)
+  const largeBookmarks = await measureLargeBookmarkProgressiveRender(harness)
   assert.ok(largeBookmarks.initial, `bookmark source should render an initial progressive chunk: ${JSON.stringify(largeBookmarks)}`)
   assert.ok(largeBookmarks.initial.count <= 24, `bookmark source should not mount all large-list cards in the first chunk: ${JSON.stringify(largeBookmarks)}`)
   assert.equal(largeBookmarks.initial.measureNodeCount, 0, `large bookmark switch should not create hidden page-chip measure nodes initially: ${JSON.stringify(largeBookmarks)}`)
