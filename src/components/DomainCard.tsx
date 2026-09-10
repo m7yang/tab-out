@@ -25,6 +25,9 @@ interface DomainCardProps {
 }
 
 const DOMAIN_REORDER_DRAG_THRESHOLD_PX = 4
+// Holds the emptied card in its `.closing` fade until the post-close refresh
+// unmounts it; the fade itself is 200ms.
+const DOMAIN_CARD_CLOSE_SETTLE_MS = 250
 const DOMAIN_CARD_SELECTOR = '[data-tabout="domain-card"][data-tabout-domain]'
 const PINNED_DOMAIN_CARD_SELECTOR = `${DOMAIN_CARD_SELECTOR}[data-tabout-domain-pinned="true"]`
 
@@ -199,6 +202,10 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
   const { onReorderPinnedDomain, onTogglePinnedDomain, onTogglePinnedSection } = useDashboardActions()
   const [activeSuppressedTitle, setActiveSuppressedTitle] = useState('')
   const [dedupeBadgesClosing, setDedupeBadgesClosing] = useState(false)
+  // Set once the close removed every item this card shows. The card stays in
+  // its fade until the refresh unmounts it, so no reset is scheduled here: a
+  // timed reset could pop the card back before that refresh lands.
+  const [cardClosing, setCardClosing] = useState(false)
   const blockRef = useRef<HTMLDivElement>(null)
   const cardContext = {
     activeSuppressedTitle,
@@ -236,24 +243,18 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
   // section/cluster arrives carrying its scope and merged tone map.
   const cardSuppressionToneScope = vm.cardSuppressionToneScope ?? emptyTitleSuppressionToneScope()
 
-  async function onCloseDomain() {
-    const block = blockRef.current
+  async function settleEmptiedCardClose(scopedClosableCount: number, removedCount: number) {
+    if (!domainCardCloseRemovesAllItems({ closableCount: scopedClosableCount, filter, group, removedCount })) return
+    setCardClosing(true)
+    await new Promise((resolve) => setTimeout(resolve, DOMAIN_CARD_CLOSE_SETTLE_MS))
+  }
 
+  async function onCloseDomain() {
     await closeDomainTabs({
       group,
       filter,
       displayName,
-      onAfterClose: async ({ snapshot }) => {
-        if (block && domainCardCloseRemovesAllItems({
-          closableCount,
-          filter,
-          group,
-          removedCount: snapshot.length,
-        })) {
-          block.classList.add('closing')
-          await new Promise((resolve) => setTimeout(resolve, 250))
-        }
-      },
+      onAfterClose: ({ snapshot }) => settleEmptiedCardClose(closableCount, snapshot.length),
     })
   }
 
@@ -265,23 +266,11 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
   }
 
   async function onCloseSuspendedDomain() {
-    const block = blockRef.current
-
     await closeSuspendedDomainTabs({
       group,
       filter,
       displayName,
-      onAfterClose: async ({ snapshot }) => {
-        if (block && domainCardCloseRemovesAllItems({
-          closableCount: closableSuspendedCount,
-          filter,
-          group,
-          removedCount: snapshot.length,
-        })) {
-          block.classList.add('closing')
-          await new Promise((resolve) => setTimeout(resolve, 250))
-        }
-      },
+      onAfterClose: ({ snapshot }) => settleEmptiedCardClose(closableSuspendedCount, snapshot.length),
     })
   }
 
@@ -428,6 +417,7 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
           "data-[tabout-reorder-target=true]:before:pointer-events-none data-[tabout-reorder-target=true]:before:absolute data-[tabout-reorder-target=true]:before:inset-x-0 data-[tabout-reorder-target=true]:before:z-5 data-[tabout-reorder-target=true]:before:h-0.5 data-[tabout-reorder-target=true]:before:rounded-full data-[tabout-reorder-target=true]:before:content-[''] [&[data-tabout-reorder-target=true]:not([data-tabout-reorder-noop=true])]:before:bg-(--accent-amber) [&[data-tabout-reorder-target=true]:not([data-tabout-reorder-noop=true])]:before:shadow-[0_1px_2px_rgba(10,10,10,0.1)] data-[tabout-reorder-noop=true]:before:bg-[color-mix(in_srgb,var(--accent-amber)_36%,var(--warm-gray))] data-[tabout-reorder-noop=true]:before:shadow-[0_1px_1px_rgba(10,10,10,0.05)] data-[tabout-reorder-placement=before]:before:-top-1.5 data-[tabout-reorder-placement=after]:before:-bottom-1.5",
           isAppsCard && 'domain-block-apps',
           group.pinned && 'domain-block-pinned',
+          cardClosing && 'closing',
         )}
         data-domain-id={vm.stableId}
       >
