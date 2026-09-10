@@ -322,3 +322,25 @@ export function readSuppressionHighlightAfterClickAway() {
     activeIsToken: !!(document.activeElement && document.activeElement.classList.contains('title-suppression-token')),
   }
 }
+
+export function findPageChipHoverPoint(params: { label: string }): Promise<{ x: number, y: number } | null> {
+  return new Promise((resolve) => {
+    const start = Date.now()
+    const poll = () => {
+      const chipText = Array.from(document.querySelectorAll('.page-chip .chip-text'))
+        .find((candidate) => candidate.closest('.page-chip')?.textContent?.includes(params.label))
+      const rect = chipText?.getBoundingClientRect()
+      if (rect && rect.width > 120 && rect.height > 8) {
+        resolve({
+          x: Math.round(rect.left + Math.min(24, rect.width / 2)),
+          y: Math.round(rect.top + rect.height / 2),
+        })
+      } else if (Date.now() - start > 5000) {
+        resolve(null)
+      } else {
+        setTimeout(poll, 50)
+      }
+    }
+    poll()
+  })
+}

@@ -5,6 +5,9 @@ import * as dashboardPage from './page-realm/dashboard.js'
 import type { ClassRetentionProbeTarget } from './page-realm/dashboard.js'
 import { createDashboardHarness, evaluateExpression, evaluateInPage, wait, waitForBrowserCondition } from './page-realm/harness.js'
 import type { DashboardHarness } from './page-realm/harness.js'
+import * as focusUpdatesPage from './page-realm/focus-updates.js'
+import * as historyEntryPage from './page-realm/history-entry.js'
+import * as pageChipExpansionPage from './page-realm/page-chip-expansion.js'
 import * as titleExpansionPage from './page-realm/title-expansion.js'
 import * as tooltipPage from './page-realm/tooltip.js'
 
@@ -1143,97 +1146,11 @@ async function measurePageChipTooltipLineCount(
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      let forceSettled = false
-      const wait = () => {
-        const chipText = Array.from(document.querySelectorAll('.page-chip .chip-text'))
-          .find((candidate) =>
-            !candidate.closest('[data-slot="tooltip-content"]') &&
-            candidate.textContent?.includes(${JSON.stringify(label)})
-          )
-        if (${JSON.stringify(!!options.forcedTextWidth)} && chipText instanceof HTMLElement) {
-          chipText.style.flex = '0 0 ${options.forcedTextWidth || 0}px'
-          chipText.style.maxWidth = '${options.forcedTextWidth || 0}px'
-        }
-        if (${JSON.stringify(!!options.forcedMaxLines)} && chipText instanceof HTMLElement) {
-          chipText.style.maxHeight = 'calc(${options.forcedMaxLines || 1}lh)'
-        }
-        if (${JSON.stringify(!!(options.forcedTextWidth || options.forcedMaxLines))} && !forceSettled) {
-          // Forced geometry changes re-run the clamped-title capture (observer
-          // -> invalidate -> re-capture); give it a couple frames to settle
-          // before reading line counts.
-          forceSettled = true
-          setTimeout(wait, 160)
-          return
-        }
-        const rect = chipText?.getBoundingClientRect()
-        if (
-          chipText instanceof HTMLElement &&
-          rect &&
-          (rect.top < 24 || rect.bottom > window.innerHeight - 24)
-        ) {
-          chipText.scrollIntoView({ block: 'center', inline: 'nearest' })
-          setTimeout(wait, 120)
-          return
-        }
-        if (chipText && rect && rect.width > 80 && rect.height > 8) {
-          const styles = window.getComputedStyle(chipText)
-          const lineHeight = Number.parseFloat(styles.lineHeight) || 16.25
-          const chipLineCount = Math.max(1, Math.round(rect.height / lineHeight))
-          const collectLineTexts = (root, limit) => {
-            const rootRect = root.getBoundingClientRect()
-            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-              acceptNode(node) {
-                return node.textContent ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
-              }
-            })
-            const range = document.createRange()
-            const lines = Array.from({ length: limit }, () => '')
-            while (true) {
-              const node = walker.nextNode()
-              if (!node) break
-              const text = node.textContent || ''
-              for (let offset = 0; offset < text.length; offset += 1) {
-                range.setStart(node, offset)
-                range.setEnd(node, offset + 1)
-                const rects = Array.from(range.getClientRects())
-                const paintedRects = rects.filter((candidate) => candidate.width > 0 || candidate.height > 0)
-                const charRect = paintedRects.at(-1)
-                if (!charRect) continue
-                const lineIndex = Math.max(0, Math.round((charRect.top - rootRect.top) / lineHeight))
-                if (lineIndex >= limit) return lines
-                lines[lineIndex] += text[offset]
-              }
-            }
-            return lines
-          }
-          resolve({
-            x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + Math.min(rect.height / 2, 10)),
-            chipText: chipText.textContent || '',
-            chipLineTexts: collectLineTexts(chipText, chipLineCount),
-            chipLeft: Math.round(rect.left),
-            chipLeftExact: Math.round(rect.left * 100) / 100,
-            chipTop: Math.round(rect.top),
-            chipTopExact: Math.round(rect.top * 100) / 100,
-            chipWidth: Math.round(rect.width),
-            chipHeight: Math.round(rect.height),
-            chipLineHeight: Math.round(lineHeight * 100) / 100,
-            chipLineCount
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, pageChipExpansionPage.findPageChipLineCountTarget, {
+    label,
+    forcedTextWidth: options.forcedTextWidth || 0,
+    forcedMaxLines: options.forcedMaxLines || 0,
+  })
 
   assert.ok(target, `expected a page chip for tooltip line-count check: ${label}`)
 
@@ -1248,66 +1165,7 @@ async function measurePageChipTooltipLineCount(
     await wait(options.hoverWaitMs)
   }
 
-  const tooltip = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const tooltip = Array.from(document.querySelectorAll('.page-chip-expanded'))
-        .find((candidate) => candidate.textContent?.includes(${JSON.stringify(label)}))
-      const tooltipText = tooltip?.querySelector('.chip-text')
-      const tooltipRect = tooltip?.getBoundingClientRect()
-      const textRect = tooltipText?.getBoundingClientRect()
-      if (!(tooltip instanceof HTMLElement) || !(tooltipText instanceof HTMLElement) || !tooltipRect || !textRect) return null
-      const styles = window.getComputedStyle(tooltipText)
-      const lineHeight = Number.parseFloat(styles.lineHeight) || 16.25
-      const lineNodes = Array.from(tooltipText.querySelectorAll('.page-chip-expanded-line'))
-      const tooltipLineTexts = lineNodes.length > 0
-        ? lineNodes.map((node) => node.textContent || '')
-        : [tooltipText.textContent || '']
-      const tooltipLineOverflows = lineNodes.map((node) => {
-        const nodeRect = node.getBoundingClientRect()
-        const range = document.createRange()
-        const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, {
-          acceptNode(textNode) {
-            return textNode.textContent ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
-          }
-        })
-        try {
-          if (node.scrollWidth - node.clientWidth > 1) return true
-          while (true) {
-            const textNode = walker.nextNode()
-            if (!textNode) break
-            range.selectNodeContents(textNode)
-            for (const rect of range.getClientRects()) {
-              if (rect.width > 0 && rect.right - nodeRect.right > 1) return true
-            }
-          }
-          return false
-        } finally {
-          range.detach()
-        }
-      })
-      return {
-        text: tooltip.textContent || '',
-        tooltipLineTexts,
-        tooltipLineOverflows,
-        visibleTooltipCount: Array.from(document.querySelectorAll('[data-slot="tooltip-content"]')).filter((candidate) => {
-          const rect = candidate.getBoundingClientRect()
-          return rect.width > 0 && rect.height > 0
-        }).length,
-        left: Math.round(tooltipRect.left),
-        right: Math.round(tooltipRect.right),
-        top: Math.round(tooltipRect.top),
-        width: Math.round(tooltipRect.width),
-        textWidth: Math.round(textRect.width),
-        textHeight: Math.round(textRect.height),
-        textLeft: Math.round(textRect.left * 100) / 100,
-        textTop: Math.round(textRect.top * 100) / 100,
-        textLineHeight: Math.round(lineHeight * 100) / 100,
-        tooltipLineCount: Math.max(1, Math.round(textRect.height / lineHeight)),
-        viewportRight: window.innerWidth
-      }
-    })()`,
-  }).then((measurement: any) => measurement.result.value)
+  const tooltip = await evaluateInPage(harness, pageChipExpansionPage.readPageChipExpansionLines, { label })
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -1333,45 +1191,7 @@ async function measureFoldedPageChipTooltipTitleLineCount(
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chip = Array.from(document.querySelectorAll('.page-chip-folded'))
-          .find((candidate) => candidate.textContent?.includes(${JSON.stringify(label)}))
-        const chipText = chip?.querySelector('.chip-text')
-        if (${JSON.stringify(!!options.forcedTextWidth)} && chipText instanceof HTMLElement) {
-          chipText.style.flex = '0 0 ${options.forcedTextWidth || 0}px'
-          chipText.style.maxWidth = '${options.forcedTextWidth || 0}px'
-        }
-        const titleRow = chip?.querySelector('.chip-title-row')
-        const envRow = chip?.querySelector('.chip-env-row')
-        const chipTextRect = chipText?.getBoundingClientRect()
-        const titleRect = titleRow?.getBoundingClientRect()
-        const envRect = envRow?.getBoundingClientRect()
-        if (chipText && titleRow && envRow && chipTextRect && titleRect && envRect && chipTextRect.width > 80 && chipTextRect.height > 8) {
-          const styles = window.getComputedStyle(titleRow)
-          const lineHeight = Number.parseFloat(styles.lineHeight) || 16.25
-          resolve({
-            x: Math.round(chipTextRect.left + Math.min(24, chipTextRect.width / 2)),
-            y: Math.round(chipTextRect.top + Math.min(titleRect.height / 2, 10)),
-            titleText: titleRow.textContent || '',
-            envText: envRow.textContent || '',
-            titleLineCount: Math.max(1, Math.round(titleRect.height / lineHeight)),
-            titleWidth: Math.round(titleRect.width),
-            chipTextWidth: Math.round(chipTextRect.width)
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, pageChipExpansionPage.findFoldedChipTarget, { label, forcedTextWidth: options.forcedTextWidth || 0 })
 
   assert.ok(target, `expected a folded page chip for tooltip check: ${label}`)
 
@@ -1382,35 +1202,7 @@ async function measureFoldedPageChipTooltipTitleLineCount(
   })
   await waitForPageChipExpansionRect(harness, label)
 
-  const tooltip = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const tooltip = Array.from(document.querySelectorAll('.page-chip-expanded.page-chip-folded'))
-        .find((candidate) => candidate.textContent?.includes(${JSON.stringify(label)}))
-      const tooltipText = tooltip?.querySelector('.chip-text')
-      const titleRow = tooltip?.querySelector('.chip-title-row')
-      const tooltipRect = tooltip?.getBoundingClientRect()
-      const titleRect = titleRow?.getBoundingClientRect()
-      if (!(tooltip instanceof HTMLElement) || !(tooltipText instanceof HTMLElement) || !(titleRow instanceof HTMLElement) || !tooltipRect || !titleRect) return null
-      const styles = window.getComputedStyle(titleRow)
-      const lineHeight = Number.parseFloat(styles.lineHeight) || 16.25
-      return {
-        text: tooltip.textContent || '',
-        titleText: titleRow.textContent || '',
-        envCount: tooltip.querySelectorAll('.chip-env').length,
-        visibleTooltipCount: Array.from(document.querySelectorAll('[data-slot="tooltip-content"]')).filter((candidate) => {
-          const rect = candidate.getBoundingClientRect()
-          return rect.width > 0 && rect.height > 0
-        }).length,
-        titleLineCount: Math.max(1, Math.round(titleRect.height / lineHeight)),
-        titleWidth: Math.round(titleRect.width),
-        textWidth: Math.round(tooltipText.getBoundingClientRect().width),
-        width: Math.round(tooltipRect.width),
-        right: Math.round(tooltipRect.right),
-        viewportRight: window.innerWidth
-      }
-    })()`,
-  }).then((measurement: any) => measurement.result.value)
+  const tooltip = await evaluateInPage(harness, pageChipExpansionPage.readFoldedChipExpansion, { label })
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -1443,31 +1235,7 @@ async function measureFoldedEnvHoverTooltips(
     waitForNoTitleExpansion(harness),
   ])
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chip = Array.from(document.querySelectorAll('.page-chip-folded'))
-          .find((candidate) => candidate.textContent?.includes(${JSON.stringify(label)}))
-        const envButton = chip?.querySelector('.chip-env')
-        const rect = envButton?.getBoundingClientRect()
-        if (envButton && rect && rect.width > 10 && rect.height > 10) {
-          resolve({
-            x: Math.round(rect.left + rect.width / 2),
-            y: Math.round(rect.top + rect.height / 2),
-            text: envButton.textContent || ''
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, pageChipExpansionPage.findFoldedEnvButtonTarget, { label })
 
   assert.ok(target, `expected a folded env button for tooltip check: ${label}`)
 
@@ -1506,36 +1274,7 @@ async function measureInteractiveTooltipClickReturnFocus(
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const trigger = Array.from(document.querySelectorAll(${JSON.stringify(selector)}))
-          .find((candidate) => {
-            const hasRequiredDescendant =
-              candidate.matches(${JSON.stringify(requiredDescendantSelector)}) ||
-              !!candidate.querySelector(${JSON.stringify(requiredDescendantSelector)})
-            return candidate.textContent?.includes(${JSON.stringify(marker)}) && hasRequiredDescendant
-          })
-        const rect = trigger?.getBoundingClientRect()
-        if (trigger && rect && rect.width > 120 && rect.height > 8) {
-          const focusTarget = trigger.closest('.page-chip') || trigger
-          focusTarget.setAttribute('data-smoke-click-return-target', ${JSON.stringify(targetLabel)})
-          resolve({
-            x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + rect.height / 2)
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, pageChipExpansionPage.findClickReturnTrigger, { selector, requiredDescendantSelector, marker, targetLabel })
 
   assert.ok(target, `expected a ${targetLabel} tooltip trigger for click-return smoke test`)
 
@@ -1572,21 +1311,7 @@ async function measureInteractiveTooltipClickReturnFocus(
   })
   await waitForNoPageChipExpansion(harness)
 
-  const afterReturnFocus = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const trigger = document.querySelector(${JSON.stringify(`[data-smoke-click-return-target="${targetLabel}"]`)})
-      if (!(trigger instanceof HTMLElement)) return null
-      trigger.blur()
-      window.dispatchEvent(new Event('blur'))
-      trigger.focus()
-      window.dispatchEvent(new Event('focus'))
-      return {
-        active: document.activeElement === trigger,
-        focusVisible: trigger.matches(':focus-visible')
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const afterReturnFocus = await evaluateInPage(harness, pageChipExpansionPage.refocusClickReturnTarget, { targetLabel })
   await wait(240)
 
   return {
@@ -1608,58 +1333,7 @@ async function measurePageChipOriginalSlotLeave(harness: DashboardHarness) {
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chipText = Array.from(document.querySelectorAll('.page-chip .chip-text'))
-          .find((candidate) =>
-            !candidate.closest('[data-slot="tooltip-content"]') &&
-            candidate.textContent?.includes(${JSON.stringify(label)})
-          )
-        if (chipText instanceof HTMLElement) {
-          chipText.style.flex = '0 0 130px'
-          chipText.style.maxWidth = '130px'
-          chipText.style.maxHeight = 'calc(1lh)'
-        }
-        const chip = chipText?.closest('.page-chip')
-        const slot = chip?.closest('[data-tabout-part="slot"]') || chip
-        const rect = chipText?.getBoundingClientRect()
-        const slotRect = slot?.getBoundingClientRect()
-        if (
-          chipText instanceof HTMLElement &&
-          chip instanceof HTMLElement &&
-          slot instanceof HTMLElement &&
-          rect &&
-          slotRect &&
-          slotRect.width > 80 &&
-          slotRect.height > 8
-        ) {
-          resolve({
-            startX: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + Math.min(rect.height / 2, 10)),
-            slotLeft: Math.round(slotRect.left),
-            slotRight: Math.round(slotRect.right),
-            slotTop: Math.round(slotRect.top),
-            slotBottom: Math.round(slotRect.bottom),
-            slotWidth: Math.round(slotRect.width),
-            slotHeight: Math.round(slotRect.height),
-            textLeft: Math.round(rect.left),
-            textTop: Math.round(rect.top),
-            chipText: chipText.textContent || '',
-            chipTextWidth: Math.round(rect.width)
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, pageChipExpansionPage.findOriginalSlotLeaveTarget, { label })
 
   assert.ok(target, 'expected a page chip to hover for original-slot leave smoke test')
 
@@ -1705,11 +1379,7 @@ async function measurePageChipOriginalSlotLeave(harness: DashboardHarness) {
     })
     await wait(80)
   }
-  const afterLeaveTooltips = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `Array.from(document.querySelectorAll('.page-chip-expanded'))
-      .map((chip) => chip.textContent || '')`,
-  }).then((result: any) => result.result.value)
+  const afterLeaveTooltips = await evaluateInPage(harness, dashboardPage.readExpandedPageChipTexts)
 
   return { target, first, expandedOnlyPoint, afterOriginalSlotLeave, afterLeaveTooltips }
 }
@@ -1721,49 +1391,10 @@ async function measureTooltipPopupClickFocus(harness: DashboardHarness) {
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `(() => {
-      document.querySelector('.scroll-region')?.scrollTo(0, 0)
-      window.__tabOutSmokeFocusUpdates = []
-      window.__tabOutSmokeOriginalTabsUpdate ||= chrome.tabs.update
-      window.__tabOutSmokeOriginalWindowsUpdate ||= chrome.windows.update
-      chrome.tabs.update = async (...args) => {
-        window.__tabOutSmokeFocusUpdates.push({ kind: 'tab', args })
-        return window.__tabOutSmokeOriginalTabsUpdate(...args)
-      }
-      chrome.windows.update = async (...args) => {
-        window.__tabOutSmokeFocusUpdates.push({ kind: 'window', args })
-        return window.__tabOutSmokeOriginalWindowsUpdate(...args)
-      }
-    })()`,
-  })
+  await evaluateInPage(harness, focusUpdatesPage.installFocusUpdateStubs, { scrollSelector: '.scroll-region' })
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chipText = Array.from(document.querySelectorAll('.page-chip .chip-text'))
-          .find((candidate) =>
-            candidate.closest('.page-chip')?.textContent?.includes(${JSON.stringify(PAGE_CHIP_EXPANSION_SMOKE_LABEL)})
-          )
-        const rect = chipText?.getBoundingClientRect()
-        if (rect && rect.width > 120 && rect.height > 8) {
-          resolve({
-            x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + rect.height / 2)
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findPageChipHoverPoint, { label: PAGE_CHIP_EXPANSION_SMOKE_LABEL })
 
   assert.ok(target, 'expected a page chip to hover for popup click smoke test')
 
@@ -1779,19 +1410,7 @@ async function measureTooltipPopupClickFocus(harness: DashboardHarness) {
     x: Math.round(first.left + first.width / 2),
     y: Math.round(first.top + first.height / 2),
   }
-  const popupStyle = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const chip = Array.from(document.querySelectorAll('.page-chip-expanded'))
-        .find((candidate) => candidate.textContent?.includes(${JSON.stringify(PAGE_CHIP_EXPANSION_SMOKE_LABEL)}))
-      if (!(chip instanceof HTMLElement)) return null
-      const styles = window.getComputedStyle(chip)
-      return {
-        cursor: styles.cursor,
-        userSelect: styles.userSelect
-      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const popupStyle = await evaluateInPage(harness, pageChipExpansionPage.readExpandedChipStyle, { label: PAGE_CHIP_EXPANSION_SMOKE_LABEL })
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -1817,15 +1436,7 @@ async function measureTooltipPopupClickFocus(harness: DashboardHarness) {
   })
   await waitForFocusUpdates(harness)
 
-  const updates = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const focusUpdates = window.__tabOutSmokeFocusUpdates || []
-      chrome.tabs.update = window.__tabOutSmokeOriginalTabsUpdate
-      chrome.windows.update = window.__tabOutSmokeOriginalWindowsUpdate
-      return focusUpdates
-    })()`,
-  }).then((result: any) => result.result.value)
+  const updates = await evaluateInPage(harness, focusUpdatesPage.collectFocusUpdates)
 
   return { target, first, popupPoint, popupStyle, updates }
 }
@@ -1837,57 +1448,13 @@ async function measureHistoryEntryExpansionClickFocus(harness: DashboardHarness)
     deviceScaleFactor: 1,
     mobile: false,
   })
-  await evaluateExpression(harness, {
-    expression: `(() => {
-      document.querySelector('.history-entry-list')?.scrollTo(0, 0)
-      window.__tabOutSmokeFocusUpdates = []
-      window.__tabOutSmokeOriginalTabsUpdate ||= chrome.tabs.update
-      window.__tabOutSmokeOriginalWindowsUpdate ||= chrome.windows.update
-      chrome.tabs.update = async (...args) => {
-        window.__tabOutSmokeFocusUpdates.push({ kind: 'tab', args })
-        return window.__tabOutSmokeOriginalTabsUpdate(...args)
-      }
-      chrome.windows.update = async (...args) => {
-        window.__tabOutSmokeFocusUpdates.push({ kind: 'window', args })
-        return window.__tabOutSmokeOriginalWindowsUpdate(...args)
-      }
-    })()`,
-  })
+  await evaluateInPage(harness, focusUpdatesPage.installFocusUpdateStubs, { scrollSelector: '.history-entry-list' })
   await Promise.all([
     waitForDashboardSettled(harness),
     waitForScrollTop(harness, '.history-entry-list'),
   ])
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const title = Array.from(document.querySelectorAll('.history-entry-title-truncated'))
-          .find((candidate) =>
-            candidate.closest('.history-entry-row')?.textContent?.includes('Low score history item with enough tooltip text')
-          )
-        const row = title?.closest('.history-entry-row')
-        const entry = title?.closest('.history-entry')
-        row?.scrollIntoView({ block: 'center', inline: 'nearest' })
-        const rect = title?.getBoundingClientRect()
-        const entryRect = entry?.getBoundingClientRect()
-        if (rect && rect.width > 120 && rect.height > 8 && entryRect && entryRect.width > 40) {
-          resolve({
-            dismissX: Math.round(entryRect.left + 20),
-            x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + rect.height / 2)
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, historyEntryPage.findHistoryEntryHoverTarget, { label: 'Low score history item with enough tooltip text' })
 
   assert.ok(target, 'expected a history-panel entry to hover for expansion click smoke test')
   await wait(180)
@@ -1904,19 +1471,7 @@ async function measureHistoryEntryExpansionClickFocus(harness: DashboardHarness)
     x: Math.round(first.left + first.width / 2),
     y: Math.round(first.top + first.height / 2),
   }
-  const expandedStyle = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const entry = document.querySelector('.history-entry-expanded')
-      if (!entry) return null
-	      const styles = window.getComputedStyle(entry)
-	      return {
-	        cursor: styles.cursor,
-	        pointerEvents: styles.pointerEvents,
-	        userSelect: styles.userSelect
-	      }
-    })()`,
-  }).then((result: any) => result.result.value)
+  const expandedStyle = await evaluateInPage(harness, historyEntryPage.readExpandedHistoryEntryStyle)
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mousePressed',
@@ -1991,15 +1546,7 @@ async function measureHistoryEntryExpansionClickFocus(harness: DashboardHarness)
   })
   await waitForFocusUpdates(harness)
 
-  const updates = await evaluateExpression(harness, {
-    returnByValue: true,
-    expression: `(() => {
-      const focusUpdates = window.__tabOutSmokeFocusUpdates || []
-      chrome.tabs.update = window.__tabOutSmokeOriginalTabsUpdate
-      chrome.windows.update = window.__tabOutSmokeOriginalWindowsUpdate
-      return focusUpdates
-    })()`,
-  }).then((result: any) => result.result.value)
+  const updates = await evaluateInPage(harness, focusUpdatesPage.collectFocusUpdates)
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -2386,31 +1933,7 @@ async function measureTooltipPopupWheelScroll(harness: DashboardHarness) {
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chipText = Array.from(document.querySelectorAll('.page-chip .chip-text'))
-          .find((candidate) =>
-            candidate.closest('.page-chip')?.textContent?.includes(${JSON.stringify(PAGE_CHIP_EXPANSION_SMOKE_LABEL)})
-          )
-        const rect = chipText?.getBoundingClientRect()
-        if (rect && rect.width > 120 && rect.height > 8) {
-          resolve({
-            x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + rect.height / 2)
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findPageChipHoverPoint, { label: PAGE_CHIP_EXPANSION_SMOKE_LABEL })
 
   assert.ok(target, 'expected a page chip to hover for popup wheel smoke test')
 
@@ -3388,31 +2911,7 @@ async function measureTooltipWindowBlurClose(harness: DashboardHarness) {
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chipText = Array.from(document.querySelectorAll('.page-chip .chip-text'))
-          .find((candidate) =>
-            candidate.closest('.page-chip')?.textContent?.includes(${JSON.stringify(PAGE_CHIP_EXPANSION_SMOKE_LABEL)})
-          )
-        const rect = chipText?.getBoundingClientRect()
-        if (rect && rect.width > 120 && rect.height > 8) {
-          resolve({
-            x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + rect.height / 2)
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findPageChipHoverPoint, { label: PAGE_CHIP_EXPANSION_SMOKE_LABEL })
 
   assert.ok(target, 'expected a page chip for expansion window-blur smoke test')
 
@@ -3447,31 +2946,7 @@ async function measureTooltipVisibilityChangeClose(harness: DashboardHarness) {
   await evaluateInPage(harness, dashboardPage.scrollDashboardToTop)
   await waitForDashboardSettled(harness)
 
-  const target = await evaluateExpression(harness, {
-    awaitPromise: true,
-    returnByValue: true,
-    expression: `new Promise((resolve) => {
-      const start = Date.now()
-      const wait = () => {
-        const chipText = Array.from(document.querySelectorAll('.page-chip .chip-text'))
-          .find((candidate) =>
-            candidate.closest('.page-chip')?.textContent?.includes(${JSON.stringify(PAGE_CHIP_EXPANSION_SMOKE_LABEL)})
-          )
-        const rect = chipText?.getBoundingClientRect()
-        if (rect && rect.width > 120 && rect.height > 8) {
-          resolve({
-            x: Math.round(rect.left + Math.min(24, rect.width / 2)),
-            y: Math.round(rect.top + rect.height / 2)
-          })
-        } else if (Date.now() - start > 5000) {
-          resolve(null)
-        } else {
-          setTimeout(wait, 50)
-        }
-      }
-      wait()
-    })`,
-  }).then((result: any) => result.result.value)
+  const target = await evaluateInPage(harness, tooltipPage.findPageChipHoverPoint, { label: PAGE_CHIP_EXPANSION_SMOKE_LABEL })
 
   assert.ok(target, 'expected a page chip for expansion visibility-change smoke test')
 
@@ -4259,6 +3734,22 @@ async function measureDuplicateStackGeometry(harness: DashboardHarness) {
   }).then((result: any) => result.result.value)
 }
 
+// Recorded Chrome focus calls carry their raw arguments; the update
+// properties object is the second argument.
+function focusUpdateTargets(
+  updates: readonly focusUpdatesPage.FocusUpdate[],
+  kind: focusUpdatesPage.FocusUpdate['kind'],
+  flag: 'active' | 'focused',
+): boolean {
+  return updates.some((update) => {
+    const properties = update.args[1]
+    return update.kind === kind &&
+      typeof properties === 'object' &&
+      properties !== null &&
+      (properties as Record<string, unknown>)[flag] === true
+  })
+}
+
 // Missing geometry reads as misaligned, matching the NaN comparison the
 // untyped measurements relied on.
 function alignedWithin(left: number | null, right: number | null): boolean {
@@ -4653,7 +4144,7 @@ test('dashboard cards repack when the viewport resizes', async ({ page }) => {
     const lastChipLine = chipLines.at(-1)
     const lastTooltipLine = tooltipLines[chipLines.length - 1]
     assert.ok(
-      lastTooltipLine?.startsWith(lastChipLine),
+      lastChipLine !== undefined && lastTooltipLine?.startsWith(lastChipLine),
       `regular page chip expansion tail row should start with the same visible text before revealing more: ${JSON.stringify(lineCount)}`,
     )
   }
@@ -4884,15 +4375,11 @@ test('dashboard cards repack when the viewport resizes', async ({ page }) => {
   assert.equal(popupClickFocus.popupStyle?.cursor, 'default', `expanded page chip should keep the default cursor: ${JSON.stringify(popupClickFocus)}`)
   assert.equal(popupClickFocus.first.visibleTooltipCount, 0, `clickable expanded page chip should not create a tooltip popup: ${JSON.stringify(popupClickFocus)}`)
   assert.ok(
-    popupClickFocus.updates.some((update: { kind: string, args: [number, { active?: boolean }] }) => (
-      update.kind === 'tab' && update.args[1]?.active === true
-    )),
+    focusUpdateTargets(popupClickFocus.updates, 'tab', 'active'),
     `clicking the expanded page chip should focus the matching tab: ${JSON.stringify(popupClickFocus)}`,
   )
   assert.ok(
-    popupClickFocus.updates.some((update: { kind: string, args: [number, { focused?: boolean }] }) => (
-      update.kind === 'window' && update.args[1]?.focused === true
-    )),
+    focusUpdateTargets(popupClickFocus.updates, 'window', 'focused'),
     `clicking the expanded page chip should focus the matching window: ${JSON.stringify(popupClickFocus)}`,
   )
   const historyPopupClickFocus = await measureHistoryEntryExpansionClickFocus(harness)
@@ -4900,15 +4387,11 @@ test('dashboard cards repack when the viewport resizes', async ({ page }) => {
   assert.equal(historyPopupClickFocus.expandedStyle?.pointerEvents, 'none', `expanded history entry should let native pointer and wheel input reach the original row underneath: ${JSON.stringify(historyPopupClickFocus)}`)
   assert.equal(historyPopupClickFocus.first.visibleTooltipCount, 0, `expanded history entry should not create a tooltip popup: ${JSON.stringify(historyPopupClickFocus)}`)
   assert.ok(
-    historyPopupClickFocus.updates.some((update: { kind: string, args: [number, { active?: boolean }] }) => (
-      update.kind === 'tab' && update.args[1]?.active === true
-    )),
+    focusUpdateTargets(historyPopupClickFocus.updates, 'tab', 'active'),
     `clicking the expanded history entry should focus the matching tab: ${JSON.stringify(historyPopupClickFocus)}`,
   )
   assert.ok(
-    historyPopupClickFocus.updates.some((update: { kind: string, args: [number, { focused?: boolean }] }) => (
-      update.kind === 'window' && update.args[1]?.focused === true
-    )),
+    focusUpdateTargets(historyPopupClickFocus.updates, 'window', 'focused'),
     `clicking the expanded history entry should focus the matching window: ${JSON.stringify(historyPopupClickFocus)}`,
   )
 

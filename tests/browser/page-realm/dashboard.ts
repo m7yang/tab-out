@@ -381,3 +381,7 @@ export function scrollDashboardBy(params: { top: number }): void {
 export function countExpandedPageChips(): number {
   return document.querySelectorAll('.page-chip-expanded').length
 }
+
+export function readExpandedPageChipTexts(): string[] {
+  return Array.from(document.querySelectorAll('.page-chip-expanded')).map((chip) => chip.textContent || '')
+}
