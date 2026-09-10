@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { it, vi } from '@effect/vitest'
-import { FastCheck } from 'effect/testing'
+import { Schema } from 'effect'
 
 import { canonicalDedupeKey } from '../../src/extension/url-canonical.js'
 
@@ -9,16 +9,15 @@ const longForm =
 const shortForm = 'https://example.atlassian.net/browse/ABC-123?focusedCommentId=100&sourceType=mention'
 const canonical = 'https://example.atlassian.net/browse/ABC-123?focusedCommentId=100'
 
-const uppercaseLetterArbitrary = FastCheck.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-const projectKeyArbitrary = FastCheck
-  .tuple(
-    uppercaseLetterArbitrary,
-    FastCheck.array(FastCheck.constantFrom(...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), {
-      minLength: 1,
-      maxLength: 8,
-    }),
-  )
-  .map(([first, rest]) => `${first}${rest.join('')}`)
+const naturalNumber = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
+// encodeURIComponent rejects lone surrogates, which the generator may produce.
+const wellFormedString = Schema.String.check(Schema.makeFilter((value: string) => value.isWellFormed()))
+const uppercaseLetter = Schema.Literals([...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'])
+const projectKeyParts = Schema.Tuple([
+  uppercaseLetter,
+  Schema.Array(Schema.Literals([...'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789']))
+    .check(Schema.isLengthBetween(1, 8)),
+])
 
 it('the two Jira URL forms of the same comment produce the same key', () => {
   assert.equal(canonicalDedupeKey(longForm), canonical)
@@ -28,11 +27,12 @@ it('the two Jira URL forms of the same comment produce the same key', () => {
 it.prop(
   'Jira comment canonicalization holds across generated issue and comment ids',
   [
-    projectKeyArbitrary,
-    FastCheck.integer({ min: 0, max: 1_000_000 }),
-    FastCheck.integer({ min: 0, max: 1_000_000 }),
+    projectKeyParts,
+    Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1_000_000 })),
+    Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1_000_000 })),
   ],
-  ([projectKey, issueId, commentId]) => {
+  ([[first, rest], issueId, commentId]) => {
+    const projectKey = `${first}${rest.join('')}`
     const issue = `https://example.atlassian.net/browse/${projectKey}-${issueId}`
     const expected = `${issue}?focusedCommentId=${commentId}`
 
@@ -75,7 +75,7 @@ it('GitHub repository root trailing slashes collapse to the no-slash key', () =>
 
 it.prop(
   'GitHub repository root canonicalization holds across generated identities',
-  [FastCheck.nat(), FastCheck.nat(), FastCheck.string(), FastCheck.string()],
+  [naturalNumber, naturalNumber, wellFormedString, wellFormedString],
   ([ownerId, repositoryId, query, fragment]) => {
     const repository = `https://github.com/user-${ownerId}/repo-${repositoryId}`
     const suffix = `?q=${encodeURIComponent(query)}#section-${encodeURIComponent(fragment)}`
@@ -118,7 +118,7 @@ it('malformed URLs are returned unchanged without throwing', () => {
 
 it.prop(
   'canonical URL keys are idempotent for arbitrary input',
-  [FastCheck.string()],
+  [Schema.String],
   ([url]) => {
     const canonicalUrl = canonicalDedupeKey(url)
     assert.equal(canonicalDedupeKey(canonicalUrl), canonicalUrl)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { it } from '@effect/vitest'
-import { FastCheck } from 'effect/testing'
+import { Schema } from 'effect'
 
 import {
   applyPinnedDomainMutation,
@@ -10,13 +10,13 @@ import {
   reorderPinnedDomainInList,
 } from '../../src/extension/domain-pins.js'
 
-const pinnedDomainsArbitrary = (minimumLength: number) =>
-  FastCheck
-    .uniqueArray(FastCheck.integer({ min: 0, max: 100_000 }), {
-      minLength: minimumLength,
-      maxLength: 20,
-    })
-    .map((ids) => ids.map((id) => `domain-${id}.test`))
+const naturalNumber = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
+
+const pinnedDomainIds = (minimumLength: number) =>
+  Schema.UniqueArray(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 100_000 })))
+    .check(Schema.isLengthBetween(minimumLength, 20))
+
+const pinnedDomains = (ids: ReadonlyArray<number>) => ids.map((id) => `domain-${id}.test`)
 
 it('normalizePinnedDomains preserves order, removes invalid entries, and allows pinnable utility cards', () => {
   assert.deepEqual(
@@ -27,7 +27,7 @@ it('normalizePinnedDomains preserves order, removes invalid entries, and allows 
 
 it.prop(
   'normalizePinnedDomains satisfies its invariants for arbitrary stored values',
-  [FastCheck.oneof(FastCheck.jsonValue(), FastCheck.constant(undefined))],
+  [Schema.UndefinedOr(Schema.Json)],
   ([storedValue]) => {
     const normalized = normalizePinnedDomains(storedValue)
     const expected = Array.isArray(storedValue)
@@ -49,8 +49,9 @@ it('applyPinnedDomainMutation removes existing domains and appends new domains',
 
 it.prop(
   'applyPinnedDomainMutation changes only the selected generated domain',
-  [pinnedDomainsArbitrary(0), FastCheck.nat(), FastCheck.boolean()],
-  ([domains, seed, selectExisting]) => {
+  [pinnedDomainIds(0), naturalNumber, Schema.Boolean],
+  ([ids, seed, selectExisting]) => {
+    const domains = pinnedDomains(ids)
     const domain = selectExisting && domains.length > 0
       ? domains[seed % domains.length]
       : `extra-${seed}.test`
@@ -100,12 +101,13 @@ it('reorderPinnedDomainInList preserves order for adjacent equivalent placements
 it.prop(
   'reorderPinnedDomainInList preserves generated membership and requested adjacency',
   [
-    pinnedDomainsArbitrary(2),
-    FastCheck.nat(),
-    FastCheck.nat(),
-    FastCheck.constantFrom('before' as const, 'after' as const),
+    pinnedDomainIds(2),
+    naturalNumber,
+    naturalNumber,
+    Schema.Literals(['before', 'after']),
   ],
-  ([domains, domainSeed, targetSeed, position]) => {
+  ([ids, domainSeed, targetSeed, position]) => {
+    const domains = pinnedDomains(ids)
     const domainIndex = domainSeed % domains.length
     const targetCandidateIndex = targetSeed % (domains.length - 1)
     const targetIndex = targetCandidateIndex >= domainIndex
@@ -143,8 +145,9 @@ it('movePinnedDomainInList ignores edge and unknown domains', () => {
 
 it.prop(
   'moving an interior generated domain and reversing the move restores the list',
-  [pinnedDomainsArbitrary(3), FastCheck.nat()],
-  ([domains, seed]) => {
+  [pinnedDomainIds(3), naturalNumber],
+  ([ids, seed]) => {
+    const domains = pinnedDomains(ids)
     const domain = domains[1 + (seed % (domains.length - 2))]
 
     assert.deepEqual(

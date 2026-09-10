@@ -134,7 +134,9 @@ const runDashboardDebugServerScoped = Effect.fn('debugServer.run')(function* (
     Effect.mapError((cause) => DebugServerError.make({ port: options.port, cause })),
   )
   yield* server.serve(makeRequestHandler(fileSystem, httpPlatform))
-  const boundPort = server.address._tag === 'TcpAddress' ? server.address.port : options.port
+  const boundPort = server.address._tag === 'InetAddressV4' || server.address._tag === 'InetAddressV6'
+    ? server.address.port
+    : options.port
   yield* Effect.sync(() => options.onListening?.(boundPort))
   yield* options.awaitShutdown
 })

@@ -4,8 +4,6 @@ packages:
 allowBuilds:
   # Verifies the platform executable used by Vite and tsx.
   esbuild: true
-  # Preserves Effect's optional native MessagePack fast path.
-  msgpackr-extract: true
 
 overrides:
   # Rolldown 1.2.7 folds a deliberately lazy geometry chunk into the app entry.
@@ -18,6 +16,12 @@ minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@typescript-eslint/types@8.67.0'
   - dependency-cruiser@18.2.0
+  # Effect 4.0.0-rc.113 was selected by the authorized 2026-09-10 upgrade while it was
+  # inside the 24-hour quarantine window.
+  - 'effect@4.0.0-rc.113'
+  - '@effect/platform-node@4.0.0-rc.113'
+  - '@effect/platform-node-shared@4.0.0-rc.113'
+  - '@effect/vitest@4.0.0-rc.113'
   # React 19.3.0 and its companions were selected by the authorized 2026-09-10 upgrade
   # while they were inside the 24-hour quarantine window.
   - 'react@19.3.0'
