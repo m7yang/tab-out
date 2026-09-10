@@ -76,7 +76,7 @@
     "@iconify-json/ooui": "^1.2.23",
     "@iconify-json/weui": "^1.2.4",
     "@iconify/tailwind4": "^1.2.3",
-    "@playwright/test": "1.62.1",
+    "@playwright/test": "1.63.0",
     "@rolldown/plugin-babel": "^0.2.3",
     "@stylistic/eslint-plugin": "5.10.0",
     "@tailwindcss/language-server": "0.16.0",
