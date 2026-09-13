@@ -841,7 +841,7 @@ test('header stats keep counts and actions compact and accessible', async ({ pag
 
   await page.evaluate(() => Reflect.get(window, '__tabOutSmokeAddDuplicateStackTabs')?.())
   await expect(headerStats).not.toContainText('·')
-  await expect(headerStats.locator('[data-tabout-part="dedupe-button"]')).toHaveAccessibleName(/Dedupe \d+/)
+  await expect(headerStats.locator('[data-tabout-part="dedupe-button"]')).toHaveCount(0)
   const closeButton = headerStats.locator('[data-tabout-part="close-filtered-button"]')
   await expect(closeButton).toHaveAccessibleName(/Close \d+ matching open tabs/)
   await expect(closeButton.locator('svg')).toHaveCount(0)
@@ -849,31 +849,24 @@ test('header stats keep counts and actions compact and accessible', async ({ pag
   const geometry = await headerStats.evaluate((element) => {
     const find = (part: string) => element.querySelector<HTMLElement>(`[data-tabout-part="${part}"]`)
     const tabCount = find('tab-count')
-    const dedupeButton = find('dedupe-button')
     const secondaryCounts = find('secondary-counts')
     const closeButton = find('close-filtered-button')
     const count = find('window-count-value')
-    const dedupeCount = find('dedupe-count')
     const icon = find('window-icon')
     const windowCount = find('window-count')
     const domainCount = find('domain-count')
     if (
-      !tabCount || !dedupeButton || !secondaryCounts || !closeButton ||
-      !count || !dedupeCount || !icon || !windowCount || !domainCount
+      !tabCount || !secondaryCounts || !closeButton ||
+      !count || !icon || !windowCount || !domainCount
     ) return null
 
     const tabRect = tabCount.getBoundingClientRect()
-    const dedupeRect = dedupeButton.getBoundingClientRect()
     const secondaryRect = secondaryCounts.getBoundingClientRect()
     const closeRect = closeButton.getBoundingClientRect()
     const countRect = count.getBoundingClientRect()
     const iconRect = icon.getBoundingClientRect()
     const windowRect = windowCount.getBoundingClientRect()
     const domainRect = domainCount.getBoundingClientRect()
-    const dedupeRange = document.createRange()
-    dedupeRange.selectNodeContents(dedupeCount)
-    const windowRange = document.createRange()
-    windowRange.selectNodeContents(count)
     const baselineProbe = document.createElement('span')
     baselineProbe.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:baseline'
     windowCount.append(baselineProbe)
@@ -881,11 +874,9 @@ test('header stats keep counts and actions compact and accessible', async ({ pag
     baselineProbe.remove()
     const rowCenter = element.getBoundingClientRect().y + element.getBoundingClientRect().height / 2
     return {
-      centers: [tabRect, dedupeRect, secondaryRect, closeRect]
+      centers: [tabRect, secondaryRect, closeRect]
         .map((rect) => rect.y + rect.height / 2 - rowCenter),
-      gaps: [dedupeRect.left - tabRect.right, secondaryRect.left - dedupeRect.right],
-      countBaselineDelta: dedupeRange.getBoundingClientRect().bottom -
-        windowRange.getBoundingClientRect().bottom,
+      gap: secondaryRect.left - tabRect.right,
       iconAfterCount: Boolean(count.compareDocumentPosition(icon) & Node.DOCUMENT_POSITION_FOLLOWING),
       iconBaselineOffsetRatio: (iconRect.bottom - baselineBottom) /
         Number.parseFloat(getComputedStyle(windowCount).fontSize),
@@ -897,9 +888,8 @@ test('header stats keep counts and actions compact and accessible', async ({ pag
 
   expect(geometry).not.toBeNull()
   if (!geometry) return
-  expect(geometry.gaps).toEqual([8, 8])
+  expect(geometry.gap).toBeCloseTo(10, 1)
   expect(geometry.secondaryGap).toBeCloseTo(10, 1)
-  expect(geometry.countBaselineDelta).toBeCloseTo(0, 3)
   expect(geometry.iconAfterCount).toBe(true)
   expect(geometry.iconBaselineOffsetRatio).toBeCloseTo(0.125, 3)
   expect(geometry.iconGap).toBeCloseTo(4, 1)

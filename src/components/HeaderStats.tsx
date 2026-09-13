@@ -1,11 +1,9 @@
 import { dashboardSourceAllowsTabActions, dashboardSourceItemName } from '../extension/dashboard-source.js'
-import { cn } from '@/lib/utils'
 import type { DashboardSource, DashboardStats } from './types'
 
 interface HeaderStatsProps extends DashboardStats {
   ready?: boolean
   source?: DashboardSource
-  onDedupAll: () => void
   onCloseFiltered: () => void
 }
 
@@ -23,11 +21,9 @@ export function HeaderStats({
   visibleWindows,
   totalDomains,
   visibleDomains,
-  dedupCount,
   filteredCloseCount,
   hasCards,
   filtering,
-  onDedupAll,
   onCloseFiltered,
 }: HeaderStatsProps) {
   if (!ready) {
@@ -35,7 +31,7 @@ export function HeaderStats({
   }
 
   const canUseTabActions = dashboardSourceAllowsTabActions(source)
-  const hasDedupeAction = canUseTabActions && dedupCount > 0
+  const showActiveCount = canUseTabActions && activeTabs < totalTabs
   const itemName = dashboardSourceItemName(source)
   const itemLabel = pluralize(totalTabs, itemName)
   const tabsLabel = filtering ? `${visibleTabs}/${totalTabs} ${itemLabel}` : `${totalTabs} ${itemLabel}`
@@ -48,26 +44,22 @@ export function HeaderStats({
   return (
     <div data-tabout="header-stats" className="inline-flex min-h-(--header-control-height) min-w-0 overflow-hidden items-center gap-2 text-[13px] leading-(--header-control-line-height) font-normal tabular-nums text-muted-foreground">
       <span data-tabout-part="tab-count" className="font-medium text-foreground">
-        {tabsLabel}
-        {activeTabs < totalTabs && <span className="font-normal text-muted-foreground"> ({activeTabs} active)</span>}
+        {showActiveCount && !filtering ? (
+          <>
+            {activeTabs}
+            <span className="font-normal text-muted-foreground"> of {totalTabs} {itemLabel} active</span>
+          </>
+        ) : (
+          <>
+            {tabsLabel}
+            {showActiveCount && <span className="font-normal text-muted-foreground"> ({activeTabs} active)</span>}
+          </>
+        )}
       </span>
-      {hasDedupeAction && (
-        <button
-          type="button"
-          data-tabout="tab-action"
-          data-tabout-part="dedupe-button"
-          className="action-btn inline-flex h-(--header-control-height) box-border cursor-pointer items-center gap-1.25 rounded-(--header-control-radius) border border-(--warm-gray) bg-tab-card px-3 py-1.25 font-[inherit] [font-size:var(--header-control-font-size)] leading-(--header-control-line-height) font-medium text-muted-foreground transition-[color,border-color] duration-200 [corner-shape:squircle] hover:border-foreground hover:text-foreground"
-          onClick={onDedupAll}
-        >
-          <span data-tabout-part="dedupe-label">
-            Dedupe <span data-tabout-part="dedupe-count">{dedupCount}</span>
-          </span>
-        </button>
-      )}
       {(canUseTabActions || hasCards) && (
         <span
           data-tabout-part="secondary-counts"
-          className={cn('inline-flex items-center gap-2.5', !hasDedupeAction && 'ml-0.5')}
+          className="ml-0.5 inline-flex items-center gap-2.5"
         >
           <span className="sr-only">, </span>
           {canUseTabActions && (

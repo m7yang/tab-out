@@ -10,7 +10,7 @@ import { saveHistoryRangePreference } from '../extension/history-range-storage.j
 import { animateDomainCardMoves, prepareDomainCardMoveAnimation } from '../extension/card-move-animation'
 import { animateQueuedPageChipRefreshMoves } from '../extension/intra-card-move-animation.js'
 import { createDashboardMoveChoreography, type DashboardMoveChoreography } from '../extension/card-move-choreography.js'
-import { closeFilteredTabs, dedupeTabs } from '../extension/tab-actions'
+import { closeFilteredTabs } from '../extension/tab-actions'
 import { buildFilterResultCandidates, type FilterResultCandidate } from '../extension/filter-result-navigation.js'
 import { dashboardNeedsFilterSearchRefresh } from '../extension/filter-search.js'
 import { appDashboardStore, settleDashboardRefresh, type MissionOrderMap } from '../extension/dashboard-intake.js'
@@ -265,7 +265,6 @@ type DashboardShellProps = {
   isReady: boolean
   missionSections: DashboardMissionSection[]
   onCloseFiltered: () => void
-  onDedupAll: () => void
   onRetryHistorySearch: () => void
   onDashboardViewChange: (nextView: DashboardView) => void
   onTabsChange: () => void
@@ -296,7 +295,6 @@ function DashboardShell({
   isReady,
   missionSections,
   onCloseFiltered,
-  onDedupAll,
   onRetryHistorySearch,
   onDashboardViewChange,
   onTabsChange,
@@ -403,7 +401,6 @@ function DashboardShell({
               onFilterChange={setFilterInput}
               onDashboardViewChange={onDashboardViewChange}
               onCloseFiltered={onCloseFiltered}
-              onDedupAll={onDedupAll}
             />
           </DashboardPinnedTop>
 
@@ -706,10 +703,6 @@ export function App() {
     }
   }, [dashboardVm.filteredCloseTargets])
 
-  const onDedupAll = useCallback(async function onDedupAll() {
-    await dedupeTabs({ urls: dashboardVm.globalDedupeUrls, preservePinnedTabOut: true })
-  }, [dashboardVm.globalDedupeUrls])
-
   const onTabsChange = useCallback(function onTabsChange() {
     void settleDashboardRefresh(refreshDashboard({ animateCards: true }))
   }, [refreshDashboard])
@@ -825,7 +818,6 @@ export function App() {
           isReady={isReady}
           missionSections={missionSections}
           onCloseFiltered={onCloseFiltered}
-          onDedupAll={onDedupAll}
           onRetryHistorySearch={retryHistorySearch}
           onDashboardViewChange={onDashboardViewChange}
           onTabsChange={onTabsChange}

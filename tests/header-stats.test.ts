@@ -27,7 +27,6 @@ function renderHeaderStats(stats: DashboardStats): string {
   return renderToStaticMarkup(
     React.createElement(HeaderStats, {
       ...stats,
-      onDedupAll: () => {},
       onCloseFiltered: () => {},
     }),
   )
@@ -36,8 +35,7 @@ function renderHeaderStats(stats: DashboardStats): string {
 test('HeaderStats shows the active count when some tabs are suspended', () => {
   const html = renderHeaderStats(makeStats({ totalTabs: 200, activeTabs: 30 }))
 
-  assert.match(html, /200 tabs/)
-  assert.match(html, /\(30 active\)/)
+  assert.match(html, />30<span class="font-normal text-muted-foreground"> of 200 tabs active<\/span>/)
 })
 
 test('HeaderStats hides the active count when no tabs are suspended', () => {
@@ -65,8 +63,7 @@ test('HeaderStats renders accessible counts and text-only actions', () => {
   assert.match(html, />2\/3 tabs<\/span>/)
   assert.match(html, />2\/3<\/span><span class="sr-only"> windows<\/span>/)
   assert.match(html, />2 domains<\/span>/)
-  assert.match(html, /data-tabout-part="dedupe-button"/)
-  assert.match(html, />Dedupe <span data-tabout-part="dedupe-count">1<\/span>/)
+  assert.doesNotMatch(html, /data-tabout-part="dedupe-button"|Dedupe/)
   assert.match(html, /aria-label="Close 2 matching open tabs"/)
   assert.match(html, />Close 2 open tabs<\/button>/)
   assert.doesNotMatch(html, /·|<svg/)

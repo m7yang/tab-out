@@ -47,7 +47,6 @@ interface HeaderBarProps {
   historyRange: string
   onFilterChange: (filter: string) => void
   onCloseFiltered: () => void | Promise<void>
-  onDedupAll: () => void | Promise<void>
   dashboardView: DashboardView
   onDashboardViewChange: (dashboardView: DashboardView) => void | Promise<void>
   source?: DashboardSource
@@ -210,7 +209,6 @@ export function HeaderBar({
   onFilterChange,
   onCloseFiltered,
   onDashboardViewChange,
-  onDedupAll,
   source = 'tabs',
   sourceSelection = source,
   ready = true,
@@ -480,7 +478,6 @@ export function HeaderBar({
             source={source}
             ready={ready}
             {...stats}
-            onDedupAll={onDedupAll}
             onCloseFiltered={onCloseFiltered}
           />
         </div>
