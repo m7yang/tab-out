@@ -33,6 +33,7 @@ import { AppErrorBoundary } from './AppErrorBoundary'
 import { DesktopWindowMergeHost } from './DesktopWindowMergeHost'
 import { DashboardActionsProvider, HoverStateProvider } from './DashboardInteractionContext'
 import { DashboardPinnedTop } from './DashboardPinnedTop'
+import { DashboardScrollBottom } from './DashboardScrollBottom'
 import { useStartupOrderDebug } from './use-startup-order-debug'
 import { cn } from '@/lib/utils'
 import type {
@@ -415,7 +416,7 @@ function DashboardShell({
             aria-busy={(source !== sourceSelection && sourceSelection === 'bookmarks') || undefined}
             aria-labelledby={dashboardViewOptionId(dashboardViewSelection)}
             className={cn(
-              'scroll-region group/dashboard-panel relative z-1 flex-auto min-h-0 overflow-x-hidden overflow-y-auto overscroll-x-none overscroll-y-contain mr-[calc(0px-var(--dashboard-edge-bleed))] pt-1.5 pr-[calc(var(--dashboard-edge-bleed)+var(--dashboard-scroll-gutter))] pb-12.5 scrollbar-gutter-stable focus-visible:outline-none max-[980px]:[.dashboard-main_>&]:mr-[calc(var(--dashboard-scrollbar-size)-var(--dashboard-scrollbar-thumb-size)-var(--dashboard-edge-bleed))] max-[980px]:[.dashboard-main_>&]:pr-[calc(var(--dashboard-edge-bleed)-var(--dashboard-scrollbar-size)+var(--dashboard-scrollbar-thumb-size))]',
+              'scroll-region group/dashboard-panel relative z-1 flex-auto min-h-0 overflow-x-hidden overflow-y-auto overscroll-x-none overscroll-y-contain mr-[calc(0px-var(--dashboard-edge-bleed))] pt-1.5 pr-[calc(var(--dashboard-edge-bleed)+var(--dashboard-scroll-gutter))] [--dashboard-scroll-edge-height:56px] scroll-pb-[calc(var(--dashboard-scroll-edge-height)+4px)] scrollbar-gutter-stable focus-visible:outline-none max-[980px]:[.dashboard-main_>&]:mr-[calc(var(--dashboard-scrollbar-size)-var(--dashboard-scrollbar-thumb-size)-var(--dashboard-edge-bleed))] max-[980px]:[.dashboard-main_>&]:pr-[calc(var(--dashboard-edge-bleed)-var(--dashboard-scrollbar-size)+var(--dashboard-scrollbar-thumb-size))]',
               source === 'bookmarks'
                 ? 'ml-[calc(0px-var(--dashboard-edge-bleed)-var(--dashboard-card-shadow-bleed))] pl-[calc(var(--dashboard-edge-bleed)+var(--dashboard-scroll-gutter)+var(--dashboard-card-shadow-bleed))]'
                 : 'ml-[calc(0px-var(--dashboard-card-shadow-bleed))] pl-(--dashboard-card-shadow-bleed)',
@@ -445,6 +446,7 @@ function DashboardShell({
               onRetryHistorySearch={onRetryHistorySearch}
               sections={missionSections}
             />
+            <DashboardScrollBottom scrollRegionRef={scrollRegionRef} />
           </div>
         </main>
       </div>

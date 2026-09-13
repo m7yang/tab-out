@@ -12,6 +12,8 @@ interface HistoryScrollbarMetrics {
   thumbHeight: number
   thumbTop: number
   visible: boolean
+  canScrollUp: boolean
+  canScrollDown: boolean
 }
 
 export interface HistoryScrollbar {
@@ -37,6 +39,8 @@ const DEFAULT_HISTORY_SCROLLBAR_METRICS: HistoryScrollbarMetrics = {
   thumbHeight: 0,
   thumbTop: 0,
   visible: false,
+  canScrollUp: false,
+  canScrollDown: false,
 }
 
 function roundedCssPixel(value: number): number {
@@ -68,12 +72,17 @@ function getHistoryScrollbarMetrics(listEl: HTMLElement | null): HistoryScrollba
     thumbHeight: roundedCssPixel(thumbHeight),
     thumbTop: roundedCssPixel(thumbTop),
     visible: true,
+    // Match the dashboard cue's one-pixel tolerance for fractional offsets.
+    canScrollUp: scrollTop > 1,
+    canScrollDown: maxScrollTop - scrollTop > 1,
   }
 }
 
 function historyScrollbarMetricsEqual(left: HistoryScrollbarMetrics, right: HistoryScrollbarMetrics): boolean {
   return (
     left.visible === right.visible &&
+    left.canScrollUp === right.canScrollUp &&
+    left.canScrollDown === right.canScrollDown &&
     Math.abs(left.thumbHeight - right.thumbHeight) < 0.1 &&
     Math.abs(left.thumbTop - right.thumbTop) < 0.1
   )

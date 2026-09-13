@@ -106,6 +106,25 @@ function HistoryEntryScrollbar({ scrollbar }: { scrollbar: HistoryScrollbar }) {
   )
 }
 
+function HistoryScrollEdges({ scrollbar }: { scrollbar: HistoryScrollbar }) {
+  return (
+    // The list extends across the dashboard for title expansion. Keep the cues
+    // within the history column, below expanded titles and the scrollbar.
+    <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 right-(--dashboard-scrollbar-size) z-3 max-[980px]:left-(--dashboard-history-edge-gutter) max-[980px]:right-[calc(var(--dashboard-edge-bleed)-var(--dashboard-scrollbar-inset))]">
+      <div
+        data-tabout-part="history-scroll-top-blur"
+        data-visible={scrollbar.metrics.canScrollUp ? '' : undefined}
+        className="absolute inset-x-0 top-0 h-(--dashboard-scroll-edge-height) bg-linear-to-t from-transparent to-(--paper) opacity-0 backdrop-blur-xs transition-opacity duration-160 ease-out mask-[linear-gradient(to_top,transparent,#000)] data-visible:opacity-100"
+      />
+      <div
+        data-tabout-part="history-scroll-bottom-blur"
+        data-visible={scrollbar.metrics.canScrollDown ? '' : undefined}
+        className="absolute inset-x-0 bottom-0 h-(--dashboard-scroll-edge-height) bg-linear-to-b from-transparent to-(--paper) opacity-0 backdrop-blur-xs transition-opacity duration-160 ease-out mask-[linear-gradient(to_bottom,transparent,#000)] data-visible:opacity-100"
+      />
+    </div>
+  )
+}
+
 export function TabHistoryPanel({
   snapshot,
   workingSet = null,
@@ -214,12 +233,12 @@ export function TabHistoryPanel({
   return (
     <section
       data-tabout="activation-history"
-      className="tab-history-panel sticky top-0 z-30 col-start-1 flex h-screen max-h-screen min-w-0 flex-col overflow-visible pl-(--dashboard-history-edge-gutter) max-[980px]:relative max-[980px]:ml-0 max-[980px]:mr-(--dashboard-scrollbar-inset) max-[980px]:h-auto max-[980px]:max-h-65 max-[980px]:border-b max-[980px]:border-(--warm-gray) max-[980px]:pr-0 max-[980px]:pb-0 max-[980px]:[.dashboard-shell.has-history_&]:col-1"
+      className="tab-history-panel sticky top-0 z-30 col-start-1 flex h-screen max-h-screen min-w-0 flex-col overflow-visible pl-(--dashboard-history-edge-gutter) [--dashboard-scroll-edge-height:56px] max-[980px]:relative max-[980px]:ml-0 max-[980px]:mr-(--dashboard-scrollbar-inset) max-[980px]:h-auto max-[980px]:max-h-65 max-[980px]:border-b max-[980px]:border-(--warm-gray) max-[980px]:pr-0 max-[980px]:pb-0 max-[980px]:[.dashboard-shell.has-history_&]:col-1"
       aria-label="Activation history"
     >
       <div
         ref={historyListRef}
-        className="history-entry-list pointer-events-none relative flex min-h-0 w-[calc(100vw-var(--dashboard-history-edge-gutter))] min-w-0 flex-auto overflow-x-hidden overflow-y-auto scrollbar-gutter-stable scrollbar-none min-[981px]:ml-[calc(var(--dashboard-page-gutter)-var(--dashboard-edge-bleed)-var(--dashboard-history-edge-gutter))] min-[981px]:pl-[calc(var(--dashboard-edge-bleed)-var(--dashboard-page-gutter)+var(--dashboard-history-edge-gutter))] max-[980px]:w-auto max-[980px]:mr-[calc(var(--dashboard-edge-bleed)-var(--dashboard-scrollbar-inset))]"
+        className="history-entry-list pointer-events-none relative flex min-h-0 w-[calc(100vw-var(--dashboard-history-edge-gutter))] min-w-0 flex-auto overflow-x-hidden overflow-y-auto scroll-py-[calc(var(--dashboard-scroll-edge-height)+4px)] scrollbar-gutter-stable scrollbar-none min-[981px]:ml-[calc(var(--dashboard-page-gutter)-var(--dashboard-edge-bleed)-var(--dashboard-history-edge-gutter))] min-[981px]:pl-[calc(var(--dashboard-edge-bleed)-var(--dashboard-page-gutter)+var(--dashboard-history-edge-gutter))] max-[980px]:w-auto max-[980px]:mr-[calc(var(--dashboard-edge-bleed)-var(--dashboard-scrollbar-inset))]"
       >
         <div className="history-entry-scroll-hit-area-frame pointer-events-none sticky top-0 z-0 ml-[calc(var(--dashboard-page-gutter)-var(--dashboard-edge-bleed)-var(--dashboard-history-edge-gutter))] h-0 w-[calc(var(--dashboard-edge-bleed)-var(--dashboard-page-gutter)+var(--dashboard-history-edge-gutter))] flex-none max-[980px]:hidden" aria-hidden="true">
           <div
@@ -249,6 +268,7 @@ export function TabHistoryPanel({
           })}
         </div>
       </div>
+      <HistoryScrollEdges scrollbar={scrollbar} />
       <HistoryEntryScrollbar scrollbar={scrollbar} />
     </section>
   )
