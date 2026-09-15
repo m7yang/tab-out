@@ -2628,7 +2628,7 @@ test('TabHistoryPanel borrows current PageChip surface styling for the current e
   assert.ok(defaultEntry, 'default history entry should render')
   assert.match(defaultEntry, /\bborder-0\b/)
   assert.match(defaultEntry, /\bbg-transparent\b/)
-  assert.match(defaultEntry, /rounded-\[10px\]/)
+  assert.match(defaultEntry, /rounded-\[13px\]/)
   assert.match(defaultEntry, /hover:bg-\(--history-entry-interaction-bg\)/)
   assert.match(defaultEntry, /hover:after:opacity-100/)
   assert.doesNotMatch(defaultEntry, /hover:border-\(--accent-amber\)/)

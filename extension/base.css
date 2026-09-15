@@ -306,7 +306,7 @@ body[data-tabout-domain-reorder-active='true'] {
 
    Keyed off the rectangular `.chip-slot` (a `.chip-title-variant-list`
    uniquely marks a group's slot), NOT the `.page-chip` itself: the chip is
-   `rounded-[10px] [corner-shape:squircle]`, so hit-testing at its corners
+   `rounded-[13px] [corner-shape:squircle]`, so hit-testing at its corners
    falls THROUGH the rounded chip to the rectangular slot underneath, leaving
    the corner pixels of "hover anywhere on the chip" dead when this keyed off
    `.page-chip:hover`. The slot is the chip's 1:1 full-bleed parent (radius 0),
