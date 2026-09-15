@@ -1451,10 +1451,10 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
         data-tabout-removal-key={row.removalKey}
         data-tabout-default-variant={row.id === sameTitlePageChipView?.defaultRowId ? 'true' : undefined}
         className={cn(
-          'chip-title-variant clickable flex w-full max-w-full min-w-0 cursor-default items-center gap-1 rounded-none border-0 bg-transparent px-1.5 py-0.75 [font-size:inherit] leading-tight font-normal text-neutral-600 hover:bg-(--chip-target-interaction-bg) hover:text-tab-live focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-target-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-1 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
+          'chip-title-variant clickable flex w-full max-w-full min-w-0 cursor-default items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-0.75 [font-size:inherit] leading-tight font-normal text-neutral-600 [corner-shape:squircle] hover:bg-(--chip-target-interaction-bg) hover:text-tab-live focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-target-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-1 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
           '[&.page-chip-context-menu-open]:bg-(--chip-target-interaction-bg) [&.page-chip-context-menu-open]:text-tab-live',
           row.active && 'bg-neutral-600/7.5 text-tab-live',
-          row.current && 'bg-neutral-100 text-tab-live shadow-[inset_2px_0_0_0_var(--accent-amber)]',
+          row.current && 'bg-neutral-600/10 text-tab-live',
           variantHoverMatched && 'bg-(--chip-target-interaction-bg) text-tab-live',
         )}
         aria-label={row.ariaLabel}
@@ -1570,7 +1570,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   function titleVariantListNode(mode: ChipTextRenderMode) {
     if (!isTitleVariantGroup) return null
     return (
-      <span className="chip-title-variant-list flex w-full max-w-full flex-col items-stretch pr-1.25 pb-1 divide-y divide-neutral-500/15">
+      <span className="chip-title-variant-list flex w-full max-w-full flex-col items-stretch pr-1.25 pb-1">
         {sameTitleRows.map((row, index) => titleVariantNode(row, index, mode))}
       </span>
     )
