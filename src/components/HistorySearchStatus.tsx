@@ -15,10 +15,10 @@ export function HistorySearchStatus({ onRetry, summary }: HistorySearchStatusPro
     <div
       data-tabout="history-search-status"
       data-tabout-history-phase={summary.phase}
-      className="history-search-status relative h-9.5 w-70 max-w-full min-w-0 text-[13px] leading-4 font-normal normal-case tracking-normal"
+      className="history-search-status flex h-9.5 max-w-full min-w-0 text-[13px] leading-4 font-normal normal-case tracking-normal"
     >
       <output
-        className="absolute inset-y-0 right-10.5 left-0 grid min-w-0 grid-rows-2 text-right"
+        className="grid min-w-0 flex-auto grid-rows-2 text-right"
         aria-atomic="true"
         aria-busy={busy}
         aria-live="polite"
@@ -40,26 +40,28 @@ export function HistorySearchStatus({ onRetry, summary }: HistorySearchStatusPro
           </span>
         </div>
       </output>
-      <div className="absolute inset-y-0 right-0 z-1 flex w-10.5 items-center justify-end" aria-hidden={!busy && summary.phase !== 'error'}>
-        {busy && (
-          <LoaderCircle
-            data-tabout-part="loading-indicator"
-            className="size-3.5 animate-spin rounded-full bg-background ring-4 ring-background motion-reduce:animate-none"
-            strokeWidth={1.8}
-            aria-hidden="true"
-          />
-        )}
-        {summary.phase === 'error' && (
-          <button
-            type="button"
-            data-tabout-part="retry-button"
-            className="h-6 rounded-full bg-background px-2 text-[13px] leading-6 font-medium text-foreground ring-1 ring-foreground/10 transition-colors hover:bg-[rgba(82,82,82,0.06)] focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber)"
-            onClick={onRetry}
-          >
-            Retry
-          </button>
-        )}
-      </div>
+      {(busy || summary.phase === 'error') && (
+        <div className="z-1 flex w-10.5 shrink-0 items-center justify-end">
+          {busy && (
+            <LoaderCircle
+              data-tabout-part="loading-indicator"
+              className="size-3.5 animate-spin rounded-full bg-background ring-4 ring-background motion-reduce:animate-none"
+              strokeWidth={1.8}
+              aria-hidden="true"
+            />
+          )}
+          {summary.phase === 'error' && (
+            <button
+              type="button"
+              data-tabout-part="retry-button"
+              className="h-6 rounded-full bg-background px-2 text-[13px] leading-6 font-medium text-foreground ring-1 ring-foreground/10 transition-colors hover:bg-[rgba(82,82,82,0.06)] focus-visible:outline-1 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber)"
+              onClick={onRetry}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

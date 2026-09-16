@@ -121,7 +121,7 @@ function MissionsDivider({ action, label, status }: { action?: ReactNode, label:
       {action && <div className="missions-divider-action shrink-0 text-foreground normal-case tracking-normal font-normal">{action}</div>}
       <div className={cn('missions-divider-rail relative min-w-0 flex-1', status ? 'h-9.5' : 'h-px')}>
         <hr className="missions-divider-rule absolute inset-x-0 top-1/2 h-px -translate-y-1/2 border-0 bg-(--warm-gray)" />
-        {status && <div className="missions-divider-status absolute inset-y-0 right-0 z-1 w-70 max-w-full normal-case tracking-normal">{status}</div>}
+        {status && <div className="missions-divider-status absolute inset-y-0 right-0 z-1 w-max max-w-full normal-case tracking-normal">{status}</div>}
       </div>
     </div>
   )
