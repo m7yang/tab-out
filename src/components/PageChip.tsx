@@ -397,10 +397,6 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     if (activationResult === 'unhandled') await focusChipUrl(targetUrl, target)
   }
 
-  function previewDefaultTitleVariant() {
-    previewTitleVariant()
-  }
-
   function titleVariantEventTargetsExactVariant(target: EventTarget | null) {
     return target instanceof Element && !!target.closest('.chip-title-variant, .chip-title-variant-actions, .chip-title-variant-action')
   }
@@ -413,17 +409,11 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     return !!faviconFrame?.querySelector('.chip-close-favicon')
   }
 
-  function setDefaultVariantSurfaceHover(active: boolean) {
-    chipSlotRef.current?.toggleAttribute('data-tabout-default-surface-hover', active)
-  }
-
   function previewDefaultTitleVariantSurface(target: EventTarget | null) {
     if (titleVariantEventTargetsDefaultSurfaceBlocker(target)) {
-      setDefaultVariantSurfaceHover(false)
       return false
     }
-    setDefaultVariantSurfaceHover(true)
-    previewDefaultTitleVariant()
+    previewTitleVariant()
     return true
   }
 
@@ -483,7 +473,6 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   function onVariantGroupChipMouseLeave(e: MouseEvent<HTMLDivElement>) {
     if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return
     if (contextMenuOpenRef.current) return
-    setDefaultVariantSurfaceHover(false)
     setPreview('')
   }
 
@@ -531,7 +520,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       captureContextMenuFocusRecovery()
       openChipExpansion()
       if (isTitleVariantGroup) {
-        previewDefaultTitleVariant()
+        previewTitleVariant()
       } else {
         setPreview(primaryPreviewUrl, previewUrlsForChip(chip), chip)
       }
@@ -832,35 +821,19 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     await activateChipTarget(e, target.tabUrl, target.sourceType, target, e.currentTarget)
   }
 
-  function onTitleVariantMouseEnter(row: SameTitlePageChipRowView) {
-    setDefaultVariantSurfaceHover(false)
-    previewTitleVariant(row.id)
-  }
-
   function onTitleVariantMouseLeave(e: MouseEvent<HTMLElement>) {
     const chipEl = e.currentTarget.closest('.page-chip')
     if (chipEl && e.relatedTarget instanceof Node && chipEl.contains(e.relatedTarget)) {
-      if (!titleVariantEventTargetsDefaultSurfaceBlocker(e.relatedTarget)) {
-        previewDefaultTitleVariantSurface(e.relatedTarget)
-      } else {
-        setDefaultVariantSurfaceHover(false)
-      }
+      previewDefaultTitleVariantSurface(e.relatedTarget)
       return
     }
     if (contextMenuOpenRef.current) return
-    setDefaultVariantSurfaceHover(false)
     setPreview('')
-  }
-
-  function onTitleVariantFocusIn(row: SameTitlePageChipRowView) {
-    setDefaultVariantSurfaceHover(false)
-    previewTitleVariant(row.id)
   }
 
   function onTitleVariantBlur(e: FocusEvent<HTMLElement>) {
     const chipEl = e.currentTarget.closest('.page-chip')
     if (chipEl && e.relatedTarget instanceof Node && chipEl.contains(e.relatedTarget)) return
-    setDefaultVariantSurfaceHover(false)
     setPreview('')
   }
 
@@ -1459,9 +1432,9 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
         )}
         aria-label={row.ariaLabel}
         onClick={(e) => onTitleVariantFocus(e, row)}
-        onMouseEnter={() => onTitleVariantMouseEnter(row)}
+        onMouseEnter={() => previewTitleVariant(row.id)}
         onMouseLeave={onTitleVariantMouseLeave}
-        onFocus={() => onTitleVariantFocusIn(row)}
+        onFocus={() => previewTitleVariant(row.id)}
         onBlur={onTitleVariantBlur}
       >
         {labelContent}
@@ -1536,9 +1509,9 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
                   )}
                   aria-label={row.actions.close?.label}
                   onClick={(e) => onCloseTitleVariant(e, row)}
-                  onMouseEnter={() => onTitleVariantMouseEnter(row)}
+                  onMouseEnter={() => previewTitleVariant(row.id)}
                   onMouseLeave={onTitleVariantMouseLeave}
-                  onFocus={() => onTitleVariantFocusIn(row)}
+                  onFocus={() => previewTitleVariant(row.id)}
                   onBlur={onTitleVariantBlur}
                 >
                   <svg className="size-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2.5" stroke="currentColor">
@@ -1764,8 +1737,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   // default variant. These live on the rectangular `.chip-slot`, NOT the
   // `.page-chip`: the chip is rounded (`rounded-[13px] [corner-shape:squircle]`)
   // so clicks at its corners fall through to the slot underneath; owning them
-  // on the slot makes the corner gutter activate the default variant too (the
-  // base.css hover highlight is keyed off the slot for the same reason). The
+  // on the slot makes the corner gutter activate the default variant too. The
   // exact pills, their action rails, the favicon close, and the audio toggle
   // each stop propagation, so only title/blank-surface clicks reach here.
   const variantGroupInteractionProps = isTitleVariantGroup

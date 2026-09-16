@@ -298,58 +298,6 @@ body[data-tabout-domain-reorder-active='true'] {
   user-select: none;
 }
 
-/* Hovering ANY non-URL surface of a same-title group chip (title row, blank
-   padding, favicon gutter, edge strips, AND the rounded-corner gutter)
-   highlights the default URL variant — the pill a click on that surface
-   activates. PageChip marks that pill with the static
-   `data-tabout-default-variant` attribute.
-
-   Keyed off the rectangular `.chip-slot` (a `.chip-title-variant-list`
-   uniquely marks a group's slot), NOT the `.page-chip` itself: the chip is
-   `rounded-[13px] [corner-shape:squircle]`, so hit-testing at its corners
-   falls THROUGH the rounded chip to the rectangular slot underneath, leaving
-   the corner pixels of "hover anywhere on the chip" dead when this keyed off
-   `.page-chip:hover`. The slot is the chip's 1:1 full-bleed parent (radius 0),
-   so :hover here covers those corners, and :hover propagates up from the chip
-   in every state — including while the chip is expanded `position:absolute`
-   (the pills stay DOM descendants of the slot). The slot also owns the click
-   (see `variantGroupInteractionProps` on the slot in PageChip) so hover
-   highlight and click activation stay in lockstep at the corners too.
-
-   The slot also carries a synchronous data marker while the pointer is on a
-   default-variant surface. That bridges expansion/layout handoff frames where
-   :hover can temporarily land on newly revealed children before the user's
-   pointer intent has changed. Exact variant/action mouse handlers clear it.
-
-   The declarations mirror the pill's own hover utilities through
-   `--chip-target-interaction-bg`; the selector outranks
-   the rest/active background utilities the same way tailwind-merge dropped
-   them for the old state-driven class. The :not(:has(…)) arms keep the
-   default pill quiet while the pointer is on a surface that owns its own
-   click instead of activating the default variant: an exact pill, its
-   floating action rail (a DOM descendant of the group even though it renders
-   outside the pill's box), a favicon frame whose hover swaps in the
-   close-all action (`.chip-close-favicon` only renders when closable, and it
-   covers the whole frame), or the audio toggle. Each of those also stops
-   click propagation, keeping hover highlight and click activation in
-   lockstep. */
-.chip-slot[data-tabout-default-surface-hover] .chip-title-variant[data-tabout-default-variant],
-.chip-slot:has(.chip-title-variant-list):hover:not(
-  :has(
-    .chip-title-variant:hover,
-    .chip-title-variant-actions:hover,
-    .chip-favicon-frame:hover .chip-close-favicon,
-    [data-tabout-part='audio-toggle']:hover
-  )
-) .chip-title-variant[data-tabout-default-variant] {
-  background-color: #52525224;
-  background-color: var(
-    --chip-target-interaction-bg,
-    color-mix(in oklab, var(--color-neutral-600) 14%, transparent)
-  );
-  color: var(--color-tab-live);
-}
-
 /* ── Toolbar Tab Actions Menu popup ─────────────────────────────────────
    popup.html hosts the Tab Actions Menu behind the extension toolbar
    action. Chrome sizes the popup window from the page's rendered size,

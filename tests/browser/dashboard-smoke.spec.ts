@@ -2643,6 +2643,13 @@ async function measurePlainTitleVariantEdgeExpansion(harness: DashboardHarness) 
     const expandedVariantLabels = await evaluateInPage(harness, titleVariantsPage.readExpandedVariantLabels, { label: 'Plain Title Variant' })
     const hoverState = await evaluateInPage(harness, titleVariantsPage.readPlainVariantHoverState, { point })
 
+    if (surface !== 'labelRightEdge') {
+      assert.equal(hoverState.defaultVariantBackground, preHoverState.defaultVariantBackground,
+        `hovering ${surface} should leave the default URL row background at rest`)
+      assert.equal(hoverState.defaultVariantColor, preHoverState.defaultVariantColor,
+        `hovering ${surface} should leave the default URL row text at rest`)
+    }
+
     surfaceResults.push({ expandedVariantLabels, expansion, hoverState, point, preHoverState, surface })
 
     await harness.session.send('Input.dispatchMouseEvent', {

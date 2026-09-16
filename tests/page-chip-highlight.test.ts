@@ -1175,9 +1175,9 @@ test('PageChip renders same-title URL variants below one visible title', () => {
   const pageChipSource = readFileSync(new URL('../src/components/PageChip.tsx', import.meta.url), 'utf8')
   assert.match(pageChipSource, /function onVariantGroupChipClick\(e: MouseEvent<HTMLDivElement>\)[\s\S]*?titleVariantEventTargetsExactVariant\(e\.target\)[\s\S]*?resolveSameTitlePageChip\(sameTitlePageChipPlan, \{ kind: 'activate' \}\)[\s\S]*?activateChipTarget\(e, target\.tabUrl, target\.sourceType, target, e\.currentTarget\)/)
   assert.match(pageChipSource, /function onVariantGroupChipMouseEnter\(e: MouseEvent<HTMLDivElement>\)[\s\S]*?previewDefaultTitleVariantSurface\(e\.target\)[\s\S]*?openChipExpansion\(\)/)
-  assert.match(pageChipSource, /function onVariantGroupChipMouseLeave\(e: MouseEvent<HTMLDivElement>\)[\s\S]*?contextMenuOpenRef\.current[\s\S]*?setDefaultVariantSurfaceHover\(false\)[\s\S]*?setPreview\(''\)/)
-  assert.match(pageChipSource, /function onTitleVariantMouseLeave\(e: MouseEvent<HTMLElement>\)[\s\S]*?closest\('\.page-chip'\)[\s\S]*?!titleVariantEventTargetsDefaultSurfaceBlocker\(e\.relatedTarget\)[\s\S]*?previewDefaultTitleVariantSurface\(e\.relatedTarget\)/)
-  assert.match(pageChipSource, /function previewDefaultTitleVariant\(\) \{[\s\S]*?previewTitleVariant\(\)[\s\S]*?\}/)
+  assert.match(pageChipSource, /function onVariantGroupChipMouseLeave\(e: MouseEvent<HTMLDivElement>\)[\s\S]*?contextMenuOpenRef\.current[\s\S]*?setPreview\(''\)/)
+  assert.match(pageChipSource, /function onTitleVariantMouseLeave\(e: MouseEvent<HTMLElement>\)[\s\S]*?closest\('\.page-chip'\)[\s\S]*?previewDefaultTitleVariantSurface\(e\.relatedTarget\)/)
+  assert.match(pageChipSource, /function previewDefaultTitleVariantSurface\(target: EventTarget \| null\)[\s\S]*?titleVariantEventTargetsDefaultSurfaceBlocker\(target\)[\s\S]*?return false[\s\S]*?previewTitleVariant\(\)/)
   assert.match(pageChipSource, /const variantGroupInteractionProps = isTitleVariantGroup[\s\S]*?onClick: onVariantGroupChipClick[\s\S]*?onMouseDown: onVariantGroupChipMouseDown[\s\S]*?onMouseEnter: onVariantGroupChipMouseEnter[\s\S]*?onMouseMove: onVariantGroupChipMouseMove[\s\S]*?onMouseLeave: onVariantGroupChipMouseLeave/)
   assert.match(pageChipSource, /className="chip-title-variant-content flex w-full min-w-0 flex-col items-start gap-0\.5">/)
   assert.doesNotMatch(pageChipSource, /onTitleVariantGroupMouseEnter|onTitleVariantGroupMouseLeave/)
@@ -1331,12 +1331,7 @@ function titleVariantPillTags(html: string): string[] {
     .filter((tag) => /class="chip-title-variant clickable\b/.test(tag))
 }
 
-// The default-variant hover highlight must be pure CSS keyed off a static
-// data marker. The exact pill's own :hover turns off synchronously with the
-// pointer, so a React-state highlight commits one painted frame later and
-// flashes the rest background on every pill→title crossing. A base.css rule
-// turns the group-surface highlight on in the same style recalculation instead.
-test('PageChip highlights the default variant pill via static CSS marker, not React hover state', () => {
+test('PageChip marks the default activation variant without indirect hover styling', () => {
   const restHtml = renderWithDomainCardContext(React.createElement(PageChip, { chip: makeVariantGroupChip() }))
   const restPills = titleVariantPillTags(restHtml)
   assert.equal(restPills.length, 2)
@@ -1411,32 +1406,14 @@ test('PageChip highlights the default variant pill via static CSS marker, not Re
   assert.match(requiredAt(savedPriorityPills, 1), /data-tabout-default-variant="true"/)
 
   const baseCss = readFileSync(new URL('../extension/base.css', import.meta.url), 'utf8')
-  // Keyed off the rectangular `.chip-slot` (scoped to a group via its
-  // `.chip-title-variant-list`), NOT `.page-chip` — the chip's rounded squircle
-  // corners drop hit-testing through to the slot, so a `.page-chip:hover` rule
-  // left the corner gutter dead. The slot is the chip's 1:1 full-bleed parent.
-  const highlightRuleStart = baseCss.indexOf('.chip-slot:has(.chip-title-variant-list):hover:not(')
-  assert.notEqual(highlightRuleStart, -1, 'base.css should key the default-variant highlight off the rectangular slot, not the rounded chip')
-  const highlightRule = baseCss.slice(highlightRuleStart, baseCss.indexOf('}', highlightRuleStart) + 1)
-  // The whole chip surface highlights the default pill, except over the
-  // interactive islands that own their own click: exact pills, their action
-  // rails, a close-capable favicon frame, and the audio toggle.
-  assert.match(highlightRule, /\.chip-title-variant:hover,/)
-  assert.match(highlightRule, /\.chip-title-variant-actions:hover,/)
-  assert.match(highlightRule, /\.chip-favicon-frame:hover \.chip-close-favicon,/)
-  assert.match(highlightRule, /\[data-tabout-part='audio-toggle'\]:hover/)
-  assert.match(highlightRule, /\)\s*\.chip-title-variant\[data-tabout-default-variant\]/)
-  assert.match(highlightRule, /background-color: #52525224;/)
-  assert.match(highlightRule, /background-color: var\(\s*--chip-target-interaction-bg,\s*color-mix\(in oklab, var\(--color-neutral-600\) 14%, transparent\)\s*\);/)
-  assert.match(highlightRule, /color: var\(--color-tab-live\);/)
-  assert.doesNotMatch(baseCss, /\.chip-title-variant-content:hover/)
+  assert.doesNotMatch(baseCss, /data-tabout-default-variant|data-tabout-default-surface-hover/)
 
   const pageChipSource = readFileSync(new URL('../src/components/PageChip.tsx', import.meta.url), 'utf8')
   assert.match(pageChipSource, /data-tabout-default-variant=\{row\.id === sameTitlePageChipView\?\.defaultRowId \? 'true' : undefined\}/)
   assert.doesNotMatch(pageChipSource, /defaultTitleVariantHoverUrl/)
   // The variant-group click/preview handlers own the rectangular `.chip-slot`
   // (which covers the chip's rounded-corner gutter), not the rounded chip, so
-  // clicking/hovering the very edge still activates the default variant.
+  // clicking the very edge still activates the default variant.
   assert.match(pageChipSource, /data-tabout-part="slot"[\s\S]*?\{\.\.\.variantGroupInteractionProps\}/)
 })
 
