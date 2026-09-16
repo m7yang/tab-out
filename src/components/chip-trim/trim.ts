@@ -7,12 +7,12 @@
    candidates never emit. Marker names (no CSS of their own) may ride
    through CHIP_TRIM_TOKENS. */
 
-const FADE_INTERACTION_CLASSES = '[&:has(.chip-actions):hover::after]:opacity-100 [&.page-chip-expanded:has(.chip-actions)::after]:opacity-100 [&.page-chip-context-menu-open:has(.chip-actions)::after]:opacity-100 [&.page-chip-tooltip-open:has(.chip-actions)::after]:opacity-100'
-const SURFACE_INTERACTION_CLASSES = 'hover:bg-(--chip-interaction-bg) [&.page-chip-expanded]:bg-(--chip-interaction-bg) [&.page-chip-context-menu-open]:bg-(--chip-interaction-bg) [&.page-chip-tooltip-open]:bg-(--chip-interaction-bg)'
+const FADE_INTERACTION_CLASSES = 'title-interaction:[&:has(.chip-actions):hover::after]:opacity-100 [&.page-chip-expanded:has(.chip-actions)::after]:opacity-100 title-interaction:[&.page-chip-context-menu-open:has(.chip-actions)::after]:opacity-100 title-interaction:[&.page-chip-tooltip-open:has(.chip-actions)::after]:opacity-100'
+const SURFACE_INTERACTION_CLASSES = 'title-interaction:hover:bg-(--chip-interaction-bg) [&.page-chip-expanded]:bg-(--chip-interaction-bg) title-interaction:[&.page-chip-context-menu-open]:bg-(--chip-interaction-bg) title-interaction:[&.page-chip-tooltip-open]:bg-(--chip-interaction-bg)'
 // The 1px interaction line, across the same states the fill responds to.
 // The color rides --chip-hover-border (per-kind value via styleVars) — an
 // interpolated color-mix() class would not survive Tailwind's extractor.
-const HOVER_OUTLINE_CLASSES = 'hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-(--chip-hover-border) [&.page-chip-expanded:not(:focus-visible):not([data-tabout-filter-result-selected=true])]:outline [&.page-chip-expanded:not(:focus-visible):not([data-tabout-filter-result-selected=true])]:outline-1 [&.page-chip-expanded:not(:focus-visible):not([data-tabout-filter-result-selected=true])]:-outline-offset-1 [&.page-chip-expanded:not(:focus-visible):not([data-tabout-filter-result-selected=true])]:outline-(--chip-hover-border) [&.page-chip-context-menu-open]:outline [&.page-chip-context-menu-open]:outline-1 [&.page-chip-context-menu-open]:-outline-offset-1 [&.page-chip-context-menu-open]:outline-(--chip-hover-border) [&.page-chip-tooltip-open]:outline [&.page-chip-tooltip-open]:outline-1 [&.page-chip-tooltip-open]:-outline-offset-1 [&.page-chip-tooltip-open]:outline-(--chip-hover-border)'
+const HOVER_OUTLINE_CLASSES = 'title-interaction:hover:not-focus-visible:not-data-[tabout-filter-result-selected=true]:outline title-interaction:hover:not-focus-visible:not-data-[tabout-filter-result-selected=true]:outline-1 title-interaction:hover:not-focus-visible:not-data-[tabout-filter-result-selected=true]:-outline-offset-1 title-interaction:hover:not-focus-visible:not-data-[tabout-filter-result-selected=true]:outline-(--chip-hover-border) [&.page-chip-expanded:not(:focus-visible):not([data-tabout-filter-result-selected=true])]:outline [&.page-chip-expanded:not(:focus-visible):not([data-tabout-filter-result-selected=true])]:outline-1 [&.page-chip-expanded:not(:focus-visible):not([data-tabout-filter-result-selected=true])]:-outline-offset-1 [&.page-chip-expanded:not(:focus-visible):not([data-tabout-filter-result-selected=true])]:outline-(--chip-hover-border) title-interaction:[&.page-chip-context-menu-open]:outline title-interaction:[&.page-chip-context-menu-open]:outline-1 title-interaction:[&.page-chip-context-menu-open]:-outline-offset-1 title-interaction:[&.page-chip-context-menu-open]:outline-(--chip-hover-border) title-interaction:[&.page-chip-tooltip-open]:outline title-interaction:[&.page-chip-tooltip-open]:outline-1 title-interaction:[&.page-chip-tooltip-open]:-outline-offset-1 title-interaction:[&.page-chip-tooltip-open]:outline-(--chip-hover-border)'
 const CLICKABLE_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 90%, var(--color-neutral-600) 10%)'
 // Translucent equivalent of the clickable fill (10% neutral composited on the
 // card bg renders identically to the 90/10 opaque mix). In-flow plain chips
@@ -95,7 +95,7 @@ export type ChipTrim = {
   expandedFill: null | { classes: string, top: string, bottom: string, background: string }
 }
 
-const EXPANDED_FILL_CLASSES = 'page-chip-expanded-fill pointer-events-none absolute inset-x-0 -z-1 rounded-[9px] opacity-0 [corner-shape:squircle] group-hover/page-chip:opacity-100 group-focus-visible/page-chip:opacity-100 group-[.page-chip-expanded]/page-chip:opacity-100 group-[.page-chip-context-menu-open]/page-chip:opacity-100 group-[.page-chip-tooltip-open]/page-chip:opacity-100'
+const EXPANDED_FILL_CLASSES = 'page-chip-expanded-fill pointer-events-none absolute inset-x-0 -z-1 rounded-[9px] opacity-0 [corner-shape:squircle] title-interaction:group-hover/page-chip:opacity-100 group-focus-visible/page-chip:opacity-100 group-[.page-chip-expanded]/page-chip:opacity-100 title-interaction:group-[.page-chip-context-menu-open]/page-chip:opacity-100 title-interaction:group-[.page-chip-tooltip-open]/page-chip:opacity-100'
 
 export function chipTrim(facts: ChipTrimFacts): ChipTrim {
   const hasActiveChipFrame = facts.activeChipFrame || facts.activeInOtherWindow
@@ -136,7 +136,7 @@ export function chipTrim(facts: ChipTrimFacts): ChipTrim {
     ? {
         classes: [
           `${CHIP_TRIM_TOKENS.frame} pointer-events-none absolute inset-0 z-2 rounded-[inherit] [corner-shape:squircle]`,
-          'group-hover/page-chip:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] group-[.page-chip-expanded]/page-chip:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] group-[.page-chip-context-menu-open]/page-chip:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] group-[.page-chip-tooltip-open]/page-chip:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)]',
+          'title-interaction:group-hover/page-chip:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] group-[.page-chip-expanded]/page-chip:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] title-interaction:group-[.page-chip-context-menu-open]/page-chip:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] title-interaction:group-[.page-chip-tooltip-open]/page-chip:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)]',
           isCurrentTabOutFrame
             ? 'active-history-entry-frame current-tab-out-chip-frame shadow-[inset_0_0_0_1px_rgba(82,82,82,0.48)]'
             : isCurrentActiveFrame
@@ -194,7 +194,7 @@ export function chipTrim(facts: ChipTrimFacts): ChipTrim {
   // marker, no lift.
   const slotClasses = facts.iconOnly
     ? ''
-    : 'chip-slot-row [.chip-slot-row+&]:-mt-px has-[.page-chip:hover]:z-4 has-[.page-chip-expanded]:z-4 has-[.page-chip-context-menu-open]:z-4 has-[.page-chip-tooltip-open]:z-4'
+    : 'chip-slot-row [.chip-slot-row+&]:-mt-px has-[.page-chip:hover:not([data-title-collapsed])]:z-4 has-[.page-chip-expanded]:z-4 has-[.page-chip-context-menu-open]:z-4 has-[.page-chip-tooltip-open]:z-4'
 
   return {
     chipClasses,

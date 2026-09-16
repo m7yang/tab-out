@@ -23,7 +23,7 @@ function facts(overrides: Partial<ChipTrimFacts> = {}): ChipTrimFacts {
   }
 }
 
-const OUTLINE_TRIO = /hover:outline-1.*-outline-offset-1.*outline-\(--chip-hover-border\)/
+const OUTLINE_TRIO = /hover:not-focus-visible:not-data-\[tabout-filter-result-selected=true\]:outline-1.*-outline-offset-1.*outline-\(--chip-hover-border\)/
 const EXPANDED_OUTLINE_TRIO = /\[&\.page-chip-expanded:not\(:focus-visible\):not\(\[data-tabout-filter-result-selected=true\]\)\]:outline-1.*\[&\.page-chip-expanded:not\(:focus-visible\):not\(\[data-tabout-filter-result-selected=true\]\)\]:-outline-offset-1.*\[&\.page-chip-expanded:not\(:focus-visible\):not\(\[data-tabout-filter-result-selected=true\]\)\]:outline-\(--chip-hover-border\)/
 const OPAQUE_CLICKABLE = 'color-mix(in srgb, var(--card-bg) 90%, var(--color-neutral-600) 10%)'
 const TRANSLUCENT_CLICKABLE = 'color-mix(in srgb, var(--color-neutral-600) 10%, transparent)'
@@ -240,7 +240,7 @@ test('chip-trim: full-width slots carry the seam overlap and interaction lift', 
   assert.match(slot, new RegExp(`\\b${RegExp.escape(CHIP_TRIM_TOKENS.slotRow)}\\b`))
   // The interacting slot lifts above neighbours so its strengthened frame
   // paints on top at the shared seam — for hover, expansion, menu, and tooltip.
-  assert.match(slot, /has-\[\.page-chip:hover\]:z-4/)
+  assert.match(slot, /has-\[\.page-chip:hover:not\(\[data-title-collapsed\]\)\]:z-4/)
   assert.match(slot, /has-\[\.page-chip-expanded\]:z-4/)
   assert.match(slot, /has-\[\.page-chip-context-menu-open\]:z-4/)
   assert.match(slot, /has-\[\.page-chip-tooltip-open\]:z-4/)

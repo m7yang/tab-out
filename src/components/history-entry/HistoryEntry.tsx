@@ -41,7 +41,7 @@ const HISTORY_ENTRY_CLICKABLE_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg
 const HISTORY_ENTRY_NON_CLICKABLE_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 96.5%, var(--color-neutral-600) 3.5%)'
 const HISTORY_ENTRY_ACTIVE_OTHER_REST_BG = 'color-mix(in srgb, var(--card-bg) 92.5%, var(--color-neutral-600) 7.5%)'
 const HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 84%, var(--color-neutral-600) 16%)'
-const HISTORY_ENTRY_INTERACTION_CLASSES = 'hover:bg-(--history-entry-interaction-bg) focus-within:bg-(--history-entry-interaction-bg) [&.history-entry-expanded-open]:bg-(--history-entry-interaction-bg) [&[data-context-menu-open]]:bg-(--history-entry-interaction-bg) hover:after:opacity-100 [&.history-entry-expanded-open]:after:opacity-100 [&[data-context-menu-open]]:after:opacity-100'
+const HISTORY_ENTRY_INTERACTION_CLASSES = 'title-interaction:hover:bg-(--history-entry-interaction-bg) title-interaction:focus-within:bg-(--history-entry-interaction-bg) [&.history-entry-expanded-open]:bg-(--history-entry-interaction-bg) title-interaction:[&[data-context-menu-open]]:bg-(--history-entry-interaction-bg) title-interaction:hover:after:opacity-100 [&.history-entry-expanded-open]:after:opacity-100 title-interaction:[&[data-context-menu-open]]:after:opacity-100'
 // Every hoverable entry surface answers interaction with a 1px outline beside the
 // fill (chip-trim's hover-line recipe), across the same interaction states
 // the fill responds to. Focus keeps the amber ring instead. The outline
@@ -53,7 +53,7 @@ const HISTORY_ENTRY_INTERACTION_CLASSES = 'hover:bg-(--history-entry-interaction
 // interaction-fill rim instead — the same 10% mix as their clickable fill, laid
 // once more at the edge — because the darkened fill already carries the
 // open-hover emphasis.
-const HISTORY_ENTRY_HOVER_OUTLINE_CLASSES = 'hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-(--history-entry-hover-border) [&.history-entry-expanded-open]:outline [&.history-entry-expanded-open]:outline-1 [&.history-entry-expanded-open]:-outline-offset-1 [&.history-entry-expanded-open]:outline-(--history-entry-hover-border) [&[data-context-menu-open]]:outline [&[data-context-menu-open]]:outline-1 [&[data-context-menu-open]]:-outline-offset-1 [&[data-context-menu-open]]:outline-(--history-entry-hover-border)'
+const HISTORY_ENTRY_HOVER_OUTLINE_CLASSES = 'title-interaction:hover:outline title-interaction:hover:outline-1 title-interaction:hover:-outline-offset-1 title-interaction:hover:outline-(--history-entry-hover-border) [&.history-entry-expanded-open]:outline [&.history-entry-expanded-open]:outline-1 [&.history-entry-expanded-open]:-outline-offset-1 [&.history-entry-expanded-open]:outline-(--history-entry-hover-border) title-interaction:[&[data-context-menu-open]]:outline title-interaction:[&[data-context-menu-open]]:outline-1 title-interaction:[&[data-context-menu-open]]:-outline-offset-1 title-interaction:[&[data-context-menu-open]]:outline-(--history-entry-hover-border)'
 const HISTORY_ENTRY_CLOSED_HOVER_BORDER = 'color-mix(in srgb, var(--color-neutral-600) 22%, transparent)'
 const HISTORY_ENTRY_OPEN_HOVER_BORDER = 'color-mix(in srgb, var(--color-neutral-600) 10%, transparent)'
 const HISTORY_ENTRY_CLICKABLE_INTERACTION_CLASSES = `${HISTORY_ENTRY_INTERACTION_CLASSES} ${HISTORY_ENTRY_HOVER_OUTLINE_CLASSES}`
@@ -105,8 +105,8 @@ function HistoryEntryMarkerCell({ indexLabel, isIndexHighlighted }: HistoryEntry
     <span
       data-tabout-part="history-entry-marker"
       className={cn(
-        'mt-1.25 inline-flex h-4 w-5.5 flex-none items-center justify-end gap-px bg-transparent text-xs font-medium tabular-nums text-muted-foreground group-has-[.history-entry:hover]/history-row:text-[rgba(64,64,64,0.76)] group-focus-within/history-row:text-[rgba(64,64,64,0.76)]',
-        isIndexHighlighted && 'font-semibold text-tab-live group-has-[.history-entry:hover]/history-row:text-tab-live group-focus-within/history-row:text-tab-live',
+        'mt-1.25 inline-flex h-4 w-5.5 flex-none items-center justify-end gap-px bg-transparent text-xs font-medium tabular-nums text-muted-foreground group-has-[.history-entry:hover:not([data-title-collapsed])]/history-row:text-[rgba(64,64,64,0.76)] group-focus-within/history-row:text-[rgba(64,64,64,0.76)]',
+        isIndexHighlighted && 'font-semibold text-tab-live group-has-[.history-entry:hover:not([data-title-collapsed])]/history-row:text-tab-live group-focus-within/history-row:text-tab-live',
       )}
     >
       {marker}
@@ -208,7 +208,7 @@ function HistoryEntryFaviconFrame({ expanded, faviconUrl, faviconDimmed, loading
           isApp
             ? 'history-entry-app-favicon -mx-0.5 -my-0.5 size-5 place-content-center overflow-hidden rounded-lg border border-[rgba(115,115,115,0.32)] p-0.5 [corner-shape:squircle]'
             : 'h-full w-full',
-          canRemoveEntry && 'group-hover/history-favicon-frame:opacity-0',
+          canRemoveEntry && 'title-interaction:group-hover/history-favicon-frame:opacity-0',
         )}
         aria-hidden="true"
       >
@@ -225,7 +225,7 @@ function HistoryEntryFaviconFrame({ expanded, faviconUrl, faviconDimmed, loading
         <button
           type="button"
           data-tabout-part={canForgetClosedGhost ? 'forget-button' : 'close-button'}
-          className="history-entry-close history-entry-close-favicon pointer-events-none absolute top-1/2 left-1/2 z-3 inline-flex size-5 -translate-x-1/2 -translate-y-1/2 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground opacity-0 leading-0 outline-none group-hover/history-favicon-frame:pointer-events-auto group-hover/history-favicon-frame:opacity-100 hover:bg-neutral-600/10 hover:text-foreground hover:opacity-100 focus-visible:pointer-events-auto focus-visible:bg-(--card-bg) focus-visible:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber)"
+          className="history-entry-close history-entry-close-favicon pointer-events-none absolute top-1/2 left-1/2 z-3 inline-flex size-5 -translate-x-1/2 -translate-y-1/2 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground opacity-0 leading-0 outline-none title-interaction:group-hover/history-favicon-frame:pointer-events-auto title-interaction:group-hover/history-favicon-frame:opacity-100 title-interaction:hover:bg-neutral-600/10 title-interaction:hover:text-foreground title-interaction:hover:opacity-100 focus-visible:pointer-events-auto focus-visible:bg-(--card-bg) focus-visible:text-foreground focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber)"
           tabIndex={expanded ? -1 : undefined}
           aria-label={canForgetClosedGhost ? `Remove ${entryLabel} from recently closed` : `Close ${entryLabel}`}
           onClick={canForgetClosedGhost ? onForget : onClose}
@@ -473,6 +473,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
     return (
       <div
         data-expanded={titleExpanded ? 'true' : undefined}
+        data-title-collapsed={(titleMetrics.isTruncated || titleClamp !== null) && !titleExpanded ? '' : undefined}
         data-current={entry.current ? 'true' : undefined}
         data-active={isActiveEntry ? 'true' : undefined}
         data-active-in-other-window={activeInOtherWindow ? 'true' : undefined}

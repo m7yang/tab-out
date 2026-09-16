@@ -11,6 +11,10 @@
 
 @tailwind utilities source(none);
 
+/* Expandable titles paint interaction chrome only with their expanded content.
+   Include descendants so favicon actions and URL pills cannot reveal early. */
+@custom-variant title-interaction (&:not(:where([data-title-collapsed], [data-title-collapsed] *)));
+
 @theme {
   --font-sans: sans-serif;
   --default-font-family: sans-serif;
