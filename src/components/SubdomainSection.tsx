@@ -129,7 +129,7 @@ export function SubdomainSection({
       data-tabout-removal-key={`section:${sectionLayoutKey}`}
       className={cn(
         'subdomain-section group/subdomain-section flex flex-col',
-        !isFirst && 'mt-1.5 border-t border-[rgba(115,115,115,0.12)]',
+        !isFirst && 'mt-1.5',
       )}
       data-kind={isPort ? 'port' : undefined}
     >
