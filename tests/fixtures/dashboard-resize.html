@@ -28,7 +28,7 @@
       const fixtureParams = new URLSearchParams(window.location.search)
       const shortHistoryTitleCase = fixtureParams.has('shortHistoryTitle')
       const tallGlyphTitleCase = fixtureParams.has('tallGlyphTitle')
-      const historyReorderMotionCase = fixtureParams.has('historyReorderMotion')
+      const historyReorderMotionCase = fixtureParams.has('historyReorderMotion') || fixtureParams.has('historyHoverFrame')
       const appLoadingFaviconCase = fixtureParams.has('appLoadingFavicon')
       const unicodeBionicTitleCase = fixtureParams.has('unicodeBionicTitle')
       const retainedFocusCase = fixtureParams.has('retainedFocus')
@@ -778,6 +778,76 @@
       }
 
       let delayNextDashboardServiceState = false
+      if (fixtureParams.has('historyHoverFrame')) {
+        const expandedSide = fixtureParams.get('historyHoverFrameExpanded')
+        const frameEntries = [
+          ...initialHistoryReorderSnapshot().entries,
+          historyReorderEntry({ index: 3, tabId: 9104, slug: 'delta', title: 'History Delta', lastActivatedAt: 1800000024000 })
+        ].map((entry) => ({
+          ...entry,
+          windowId: entry.index === 1 ? 2 : 1,
+          active: entry.index === 1 || entry.index === 3,
+          activeInOtherWindow: entry.index === 1,
+          current: entry.index === 3,
+          cursor: entry.index === 3,
+          previousTarget: entry.index === 2,
+          title: (expandedSide === 'above' && entry.index === 2) || (expandedSide === 'below' && entry.index === 0)
+            ? `${entry.title} with enough additional words to extend beyond the two visible lines and trigger title expansion`
+            : entry.title
+        }))
+        tabHistorySnapshot = {
+          ...tabHistorySnapshot,
+          stackSize: 4,
+          cursorIndex: 3,
+          currentIndex: 3,
+          previousIndex: 2,
+          nextIndex: -1,
+          activeTabId: 9104,
+          entries: frameEntries
+        }
+        tabs.splice(0, tabs.length, ...frameEntries.map((entry) => ({
+          id: entry.tabId,
+          windowId: entry.windowId,
+          url: entry.url,
+          title: entry.title,
+          active: entry.active,
+          pinned: false,
+          groupId: -1,
+          index: entry.index,
+          favIconUrl: ''
+        })))
+        windows.push({ id: 2, type: 'normal', focused: false })
+      }
+      if (fixtureParams.has('historyHoverSeam')) {
+        const newTabs = [1, 2].map((id) => ({
+          id,
+          windowId: id,
+          url: 'chrome://newtab/',
+          title: 'New Tab',
+          active: true,
+          pinned: false,
+          groupId: -1,
+          index: 0,
+          favIconUrl: ''
+        }))
+        tabs.splice(0, tabs.length, ...newTabs)
+        windows.push({ id: 2, type: 'normal', focused: false })
+        tabHistorySnapshot = {
+          ...tabHistorySnapshot,
+          currentIndex: 0,
+          entries: [{
+            ...tabHistorySnapshot.entries[0],
+            tabId: 1,
+            windowId: 1,
+            url: 'chrome://newtab/',
+            rawUrl: 'chrome://newtab/',
+            displayUrl: 'chrome://newtab/',
+            title: 'New Tab',
+            active: true,
+            current: true
+          }]
+        }
+      }
       let dashboardServiceStateRequestCount = 0
       window.__tabOutSmokeDashboardServiceStateRequestCount = () => dashboardServiceStateRequestCount
       const chromeApi = createFakeChromeApi({

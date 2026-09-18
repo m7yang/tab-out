@@ -1774,7 +1774,8 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
         isTitleVariantGroup && 'cursor-default',
         isFolded && `${CHIP_TRIM_TOKENS.folded} cursor-default after:hidden`,
         chip.saved && 'page-chip-saved',
-        hoverMatched && `${CHIP_TRIM_TOKENS.hoverMatch} outline-1 outline-offset-1 outline-(--accent-amber)`,
+        hoverMatched && CHIP_TRIM_TOKENS.hoverMatch,
+        hoverMatched && chip.iconOnly && 'outline-1 outline-offset-1 outline-(--accent-amber)',
         suppressionHighlighted && cn('page-chip-suppression-highlighted', titleSuppressionChipHighlightClass(activeSuppressionTone)),
         chip.iconOnly && 'page-chip-icon-only h-6 min-h-6 w-6 min-w-6 items-center justify-center gap-0 rounded-xl bg-transparent p-0 [corner-shape:squircle] before:hidden after:hidden',
         trim.iconChipClasses,
@@ -1800,6 +1801,12 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       )}
       {trim.frame && (
         <span className={trim.frame.classes} aria-hidden="true" />
+      )}
+      {hoverMatched && !chip.iconOnly && (
+        <span
+          className="page-chip-hover-match-outline pointer-events-none absolute inset-0 z-3 rounded-[inherit] outline-1 outline-offset-1 outline-(--accent-amber) [corner-shape:squircle]"
+          aria-hidden="true"
+        />
       )}
       {showFaviconFrame && (
         <ChipFaviconFrame
@@ -1889,10 +1896,10 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       data-tabout-removal-anchor=""
       data-tabout-removal-item=""
       data-tabout-removal-key={`page:${chip.rawUrl}`}
-      // The hover-match slot lift (z-3) stays below the interacting-slot
-      // lift (z-4, inside trim.slotClasses) by specificity, so a deliberate
-      // interaction always wins over passive hover-match at the seam.
-      className={cn('chip-slot relative min-w-0', chip.iconOnly ? 'inline-flex' : `${trim.slotClasses} flex w-full`, hoverMatched && 'z-3')}
+      // Full-width hover outlines share a layer above neighboring fills;
+      // isolating matched slots would let later matches cover earlier outlines.
+      // Direct interaction still lifts the whole slot above that layer.
+      className={cn('chip-slot relative min-w-0', chip.iconOnly ? 'inline-flex' : `${trim.slotClasses} flex w-full`, hoverMatched && chip.iconOnly && 'z-3')}
       style={chipSlotStyle}
       ref={chipSlotRef}
       {...variantGroupInteractionProps}

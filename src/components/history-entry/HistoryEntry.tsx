@@ -38,9 +38,10 @@ import { startHistoryEntryRemoval, uniqueUrls, useHistoryEntryActions, workingSe
 import type { HistoryEntryProps } from './types.js'
 
 const HISTORY_ENTRY_CLICKABLE_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 90%, var(--color-neutral-600) 10%)'
+const HISTORY_ENTRY_CLICKABLE_INTERACTION_OVERLAY_BG = 'color-mix(in srgb, var(--color-neutral-600) 10%, transparent)'
 const HISTORY_ENTRY_NON_CLICKABLE_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 96.5%, var(--color-neutral-600) 3.5%)'
 const HISTORY_ENTRY_ACTIVE_OTHER_REST_BG = 'color-mix(in srgb, var(--card-bg) 92.5%, var(--color-neutral-600) 7.5%)'
-const HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 84%, var(--color-neutral-600) 16%)'
+const HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 88%, var(--color-neutral-600) 12%)'
 const HISTORY_ENTRY_INTERACTION_CLASSES = 'title-interaction:hover:bg-(--history-entry-interaction-bg) title-interaction:focus-within:bg-(--history-entry-interaction-bg) [&.history-entry-expanded-open]:bg-(--history-entry-interaction-bg) title-interaction:[&[data-context-menu-open]]:bg-(--history-entry-interaction-bg) title-interaction:hover:after:opacity-100 [&.history-entry-expanded-open]:after:opacity-100 title-interaction:[&[data-context-menu-open]]:after:opacity-100'
 // Every hoverable entry surface answers interaction with a 1px outline beside the
 // fill (chip-trim's hover-line recipe), across the same interaction states
@@ -59,7 +60,7 @@ const HISTORY_ENTRY_OPEN_HOVER_BORDER = 'color-mix(in srgb, var(--color-neutral-
 const HISTORY_ENTRY_CLICKABLE_INTERACTION_CLASSES = `${HISTORY_ENTRY_INTERACTION_CLASSES} ${HISTORY_ENTRY_HOVER_OUTLINE_CLASSES}`
 const HISTORY_ENTRY_NON_CLICKABLE_INTERACTION_CLASSES = HISTORY_ENTRY_INTERACTION_CLASSES
 const HISTORY_ENTRY_CLOSED_INTERACTION_CLASSES = `${HISTORY_ENTRY_INTERACTION_CLASSES} ${HISTORY_ENTRY_HOVER_OUTLINE_CLASSES}`
-const HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_CLASSES = `bg-(--history-entry-rest-bg) text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.04)] ${HISTORY_ENTRY_INTERACTION_CLASSES} ${HISTORY_ENTRY_HOVER_OUTLINE_CLASSES}`
+const HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_CLASSES = `bg-(--history-entry-rest-bg) text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.04)] ${HISTORY_ENTRY_INTERACTION_CLASSES}`
 
 const EMPTY_HIGHLIGHT_TERMS: readonly string[] = []
 
@@ -394,6 +395,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
   // The closed branch outranks canActivateEntry — closed ghosts are
   // activatable (reopen) but must not read as live clickable rows.
   const entryClosed = !entry.exists
+  const plainClickableEntry = !entry.current && !activeInOtherWindow && !entryClosed && canActivateEntry
   const historyEntryInteractionBg = entry.current
     ? 'var(--color-neutral-100)'
     : activeInOtherWindow
@@ -457,7 +459,11 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
   const entryExpandedTitleWidth = entryExpansionGeometry.titleWidth > 0 ? `${entryExpansionGeometry.titleWidth}px` : `${Math.max(1, titleMetrics.width)}px`
   const entryBaseStyle: CSSVariableProperties = {
     '--history-entry-fade-bg': historyEntryInteractionBg,
-    '--history-entry-interaction-bg': historyEntryInteractionBg,
+    // Plain rows overlap their neighbors by 1px; keep those frames visible
+    // through the raised hover fill, as on dashboard chips.
+    '--history-entry-interaction-bg': plainClickableEntry
+      ? HISTORY_ENTRY_CLICKABLE_INTERACTION_OVERLAY_BG
+      : historyEntryInteractionBg,
     '--history-entry-hover-border': entryClosed ? HISTORY_ENTRY_CLOSED_HOVER_BORDER : HISTORY_ENTRY_OPEN_HOVER_BORDER,
     '--history-entry-rest-bg': activeInOtherWindow ? HISTORY_ENTRY_ACTIVE_OTHER_REST_BG : 'transparent',
   }
@@ -469,6 +475,9 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
     maxWidth: entryExpandedMaxWidth,
     width: entryExpandedWidth,
   }
+  // The growing edge needs an inset only while it still meets the resting
+  // seam. CSS compares the actual expanded height with the original slot.
+  const expandedGrowingEdgeInset = `clamp(0px, calc(${entrySlotSize.height + 1}px - 100%), 1px)`
   function historyEntrySurface(expanded: boolean) {
     return (
       <div
@@ -484,11 +493,13 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
           "history-entry group/history-entry relative min-w-0 flex-auto rounded-[13px] border-0 bg-transparent text-tab-live [--history-entry-fade-bg:var(--card-bg)] [corner-shape:squircle] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-0 after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--history-entry-fade-bg)_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] focus-within:shadow-[inset_0_0_0_1px_rgba(234,179,8,0.42)] focus-within:after:opacity-100",
           entryClosed && 'history-entry-closed text-tab-closed',
           titleExpanded && 'history-entry-expanded-open',
+          !expanded && 'title-interaction:hover:z-4 focus-within:z-4 title-interaction:data-context-menu-open:z-4',
           expanded && 'history-entry-expanded pointer-events-none absolute left-0 z-30 min-w-0 max-w-(--history-entry-expanded-max-width) cursor-default select-none overflow-visible! transition-none! w-(--history-entry-expanded-width) shadow-[0_3px_10px_rgba(10,10,10,0.055)]',
           expanded && (entryExpansionGeometry.y === 'up' ? 'bottom-0' : 'top-0'),
           entry.current && 'bg-neutral-100 text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.07)] ring-1 ring-inset ring-neutral-400 [--history-entry-fade-bg:var(--color-neutral-100)]',
           !entry.current && historyEntryInteractionClasses,
           hoverMatched && 'history-entry-hover-match outline-1 outline-offset-1 outline-(--accent-amber)',
+          hoverMatched && !expanded && 'z-3',
         )}
         style={expanded ? entryOverlayStyle : entryBaseStyle}
         ref={expanded ? undefined : entryRef}
@@ -506,9 +517,25 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
           onHistoryEntryBlur(e)
         }}
       >
-        {entry.current && (
+        {expanded && plainClickableEntry && (
           <span
-            className="active-history-entry-frame pointer-events-none absolute inset-0 z-2 rounded-[inherit] shadow-[inset_0_0_0_1px_rgba(82,82,82,0.48)] [corner-shape:squircle]"
+            className="history-entry-expanded-fill pointer-events-none absolute inset-x-0 -z-1 rounded-[inherit] [corner-shape:squircle]"
+            style={{
+              top: entryExpansionGeometry.y === 'up' ? expandedGrowingEdgeInset : '1px',
+              bottom: entryExpansionGeometry.y === 'down' ? expandedGrowingEdgeInset : '1px',
+              backgroundColor: historyEntryInteractionBg,
+            }}
+            aria-hidden="true"
+          />
+        )}
+        {(entry.current || activeInOtherWindow) && (
+          <span
+            className={cn(
+              'active-history-entry-frame pointer-events-none absolute inset-0 z-2 rounded-[inherit] [corner-shape:squircle]',
+              entry.current
+                ? 'shadow-[inset_0_0_0_1px_rgba(82,82,82,0.48)]'
+                : 'shadow-[inset_0_0_0_1px_rgba(115,115,115,0.2)] title-interaction:group-hover/history-entry:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] group-[.history-entry-expanded-open]/history-entry:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] title-interaction:group-data-context-menu-open/history-entry:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)]',
+            )}
             aria-hidden="true"
           />
         )}
@@ -580,7 +607,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
       data-loading={entry.loading ? 'true' : undefined}
       data-pending={entry.pending ? 'true' : undefined}
       className={cn(
-        'history-entry-row group/history-row flex w-full min-w-0 flex-none items-start gap-2 font-[inherit] [&.closing]:pointer-events-none',
+        'history-entry-row group/history-row flex w-full min-w-0 flex-none items-start gap-2 font-[inherit] [.history-entry-row+&]:-mt-px [&.closing]:pointer-events-none',
         titleExpanded && 'history-entry-row-expanded-open',
       )}
       onFocus={onMouseEnter}

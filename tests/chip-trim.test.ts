@@ -277,11 +277,12 @@ test('chip-trim: icon-only slots never join vertical seam runs', () => {
 /* The module is single-language: the seam rules ride in the emitted class
    strings as arbitrary variants that compile to plain CSS selectors, so
    interaction chrome still swaps inside one style recalculation. The only
-   trim classes applied outside chipTrim() output are the hover-match pair
-   (React-state-driven, owned by PageChip): the chip outline and the slot's
-   z-3 lift, which the interacting-slot z-4 outranks by specificity. */
-test('chip-trim: PageChip owns the hover-match pair with the shared outline utilities', () => {
+   trim classes applied outside chipTrim() output are the hover-match styles
+   (React-state-driven, owned by PageChip): the full-width outline layer
+   and icon-only slot lift, which the interacting-slot z-4 outranks. */
+test('chip-trim: PageChip owns the hover-match overlay with the shared outline utilities', () => {
   const pageChipSource = readFileSync(new URL('../src/components/PageChip.tsx', import.meta.url), 'utf8')
-  assert.match(pageChipSource, /hoverMatched && `\$\{CHIP_TRIM_TOKENS\.hoverMatch\} outline-1 outline-offset-1 outline-\(--accent-amber\)`/)
-  assert.match(pageChipSource, /hoverMatched && 'z-3'/)
+  assert.match(pageChipSource, /hoverMatched && CHIP_TRIM_TOKENS\.hoverMatch/)
+  assert.match(pageChipSource, /page-chip-hover-match-outline[^"]*z-3[^"]*outline-1 outline-offset-1 outline-\(--accent-amber\)/)
+  assert.match(pageChipSource, /hoverMatched && chip\.iconOnly && 'z-3'/)
 })

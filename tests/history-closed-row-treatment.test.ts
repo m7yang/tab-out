@@ -87,14 +87,17 @@ test('an open history row hovers with the closed line recipe at the quiet intera
   assert.match(html, /--history-entry-hover-border:color-mix\(in srgb, var\(--color-neutral-600\) 10%, transparent\)/)
 })
 
-test('a row active in another window hovers with the quiet open line too', () => {
+test('a row active in another window strengthens its permanent frame on interaction like a Page Chip', () => {
   const html = renderHistoryPanel([makeHistoryEntry({ activeInOtherWindow: true })])
   const rowMatch = html.match(/class="(history-entry group\/history-entry[^"]*)"/)
   assert.ok(rowMatch, 'history entry surface should render')
   const rowClasses = rowMatch[1]
   assert.ok(rowClasses)
-  assert.match(rowClasses, /hover:outline-\(--history-entry-hover-border\)/)
-  assert.match(html, /--history-entry-hover-border:color-mix\(in srgb, var\(--color-neutral-600\) 10%, transparent\)/)
+  assert.doesNotMatch(rowClasses, /hover:outline-\(--history-entry-hover-border\)/)
+  assert.match(html, /active-history-entry-frame\b[^"]*shadow-\[inset_0_0_0_1px_rgba\(115,115,115,0\.2\)\]/)
+  assert.match(html, /group-hover\/history-entry:shadow-\[inset_0_0_0_1px_rgba\(38,38,38,0\.55\)\]/)
+  assert.match(html, /group-\[\.history-entry-expanded-open\]\/history-entry:shadow-\[inset_0_0_0_1px_rgba\(38,38,38,0\.55\)\]/)
+  assert.match(html, /group-data-context-menu-open\/history-entry:shadow-\[inset_0_0_0_1px_rgba\(38,38,38,0\.55\)\]/)
 })
 
 test('a closed history row keeps the stronger closed line color', () => {

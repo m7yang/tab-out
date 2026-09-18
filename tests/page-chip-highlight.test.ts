@@ -2681,11 +2681,11 @@ test('TabHistoryPanel borrows other-window PageChip surface styling for active n
   assert.match(activeOtherEntry, /shadow-\[0_1px_2px_rgba\(10,10,10,0\.04\)\]/)
   assert.match(activeOtherEntry, /hover:bg-\(--history-entry-interaction-bg\)/)
   assert.match(html, /--history-entry-rest-bg:color-mix\(in srgb, var\(--card-bg\) 92\.5%, var\(--color-neutral-600\) 7\.5%\)/)
-  assert.match(html, /--history-entry-interaction-bg:color-mix\(in srgb, var\(--card-bg\) 84%, var\(--color-neutral-600\) 16%\)/)
+  assert.match(html, /--history-entry-interaction-bg:color-mix\(in srgb, var\(--card-bg\) 88%, var\(--color-neutral-600\) 12%\)/)
   assert.ok(activeOther, 'active other-window history entry should have state data')
   assert.doesNotMatch(activeOther.tag, /data-current="true"/)
   assert.doesNotMatch(activeOtherEntry, /\bring-neutral-400\b/)
-  assert.equal([...html.matchAll(/active-history-entry-frame/g)].length, 1)
+  assert.equal([...html.matchAll(/active-history-entry-frame/g)].length, 2)
 })
 
 test('TabHistoryPanel keeps previous and next history targets visually neutral', () => {
@@ -2744,14 +2744,14 @@ test('TabHistoryPanel keeps previous and next history targets visually neutral',
 })
 
 test('cross-surface hover match styling is outline-only', () => {
-  // Every hover-match surface highlights with the same outline utilities on
-  // its own hoverMatched conditional. Outline-only keeps the four surfaces
+  // Every hover-match surface highlights with the same outline utilities.
+  // Page Chips paint theirs in a shared overlay layer. Outline-only keeps the surfaces
   // visually identical — no bg or border variants.
   const OUTLINE_UTILITIES = /outline-1 outline-offset-1 outline-\(--accent-amber\)/
   const surfaces: Array<[string, RegExp]> = [
     ['../src/components/history-entry/HistoryEntry.tsx', /hoverMatched && 'history-entry-hover-match ([^']*)'/],
     ['../src/components/PageChipOverflow.tsx', /hiddenHoverMatched && 'page-chip-overflow-hover-match ([^']*)'/],
-    ['../src/components/PageChip.tsx', /hoverMatched && `\$\{CHIP_TRIM_TOKENS\.hoverMatch\} ([^`]*)`/],
+    ['../src/components/PageChip.tsx', /className="page-chip-hover-match-outline ([^"]*)"/],
   ]
   for (const [path, conditional] of surfaces) {
     const source = readFileSync(new URL(path, import.meta.url), 'utf8')

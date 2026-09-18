@@ -189,7 +189,7 @@ export function chipTrim(facts: ChipTrimFacts): ChipTrim {
   //   gated on trim markers shifted run heights 1px on those flips.
   // • the interacting slot lifts (z-4) so its strengthened frame paints on
   //   top of the neighbour at the shared seam; specificity keeps it above
-  //   the hover-match slot lift (z-3, applied by PageChip).
+  //   the hover-match outline layer (z-3, applied by PageChip).
   // Icon-only slots wrap horizontally in overflow rows — no seams, no
   // marker, no lift.
   const slotClasses = facts.iconOnly
