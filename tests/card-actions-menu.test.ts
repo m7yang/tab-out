@@ -76,7 +76,6 @@ test('DomainCard keeps the actions menu in the first header row flow', () => {
   const header = html.match(/<header[\s\S]*?<\/header>/)?.[0] ?? ''
 
   assert.match(domainCardSource, /domain-header min-w-0/)
-  assert.match(domainCardSource, /isAppsCard \? 'px-1\.75' : 'px-2'/)
   assert.match(header, /<header class="domain-header min-w-0 px-2/)
   assert.match(domainCardSource, /grid-cols-\[minmax\(0,1fr\)_auto\]/)
   assert.match(domainCardSource, /domain-header-flow flex min-w-0 flex-row flex-wrap/)
@@ -196,7 +195,7 @@ test('DomainCard gives the standalone-apps card a pin-only actions menu', () => 
   const html = renderToStaticMarkup(React.createElement(DomainCard, { group, vm: makeClosableCardVM() }))
 
   assert.match(html, /data-tabout-part="card-menu"/)
-  assert.match(html, /<header class="domain-header min-w-0 px-1\.75 grid/)
+  assert.match(html, /<header class="domain-header min-w-0 px-2 grid/)
 })
 
 test('DomainCard replaces saved badge copy with the saved-page menu icon', () => {

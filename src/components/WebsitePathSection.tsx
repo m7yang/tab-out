@@ -177,7 +177,7 @@ export function WebsitePathSection({
             hiddenChips={cluster.hiddenChips}
             hiddenCount={cluster.hiddenCount}
             className={hasFlat || index > 0 ? 'mt-0.5' : undefined}
-            isFirstContent={isFirstContent && !hasFlat && index === 0}
+            isFirstContent={!hasFlat && index === 0}
             filter={filter}
             suppressedTitleParts={clusterSuppressedTitleParts}
             useSuppressionTokenTones={clusterSuppressionToneScope.useSuppressionTokenTones}

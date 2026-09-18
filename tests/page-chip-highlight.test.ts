@@ -2764,11 +2764,10 @@ test('cross-surface hover match styling is outline-only', () => {
 
 test('cross-surface hover does not restore chrome around a domain card', () => {
   const domainCardSource = readFileSync(new URL('../src/components/DomainCard.tsx', import.meta.url), 'utf8')
-  const contentWrapper = domainCardSource.match(/'(mission-card[^']*)'/)
+  const contentWrapper = domainCardSource.match(/"(mission-card[^"]*)"/)
 
   assert.ok(contentWrapper, 'domain card content wrapper should render')
   assert.doesNotMatch(requiredAt(contentWrapper, 1), /\b(?:rounded|border|bg-|shadow)/)
-  assert.match(domainCardSource, /isAppsCard \? 'p-1\.75' : 'p-2'/)
   assert.doesNotMatch(domainCardSource, /group-has-\[\.page-chip(?:-overflow)?[^\]]*hover-match\]\/domain-block:border-/)
 })
 

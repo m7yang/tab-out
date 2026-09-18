@@ -198,7 +198,7 @@ export function SubdomainSection({
           suppressedTitleParts={websitePathSection.suppressedTitleParts ?? []}
           clusters={websitePathSection.clusters}
           className={hasFlat || index > 0 ? 'mt-0.5' : undefined}
-          isFirstContent={isFirst && !showHeader && !hasFlat && index === 0}
+          isFirstContent={(isFirst || showHeader) && !hasFlat && index === 0}
           filter={filter}
           useSuppressionTokenTones={websitePathSection.titleSuppressionToneScope?.useSuppressionTokenTones ?? false}
           suppressedTitleToneIndexByText={websitePathSection.titleSuppressionToneScope?.suppressedTitleToneIndexByText ?? EMPTY_SUPPRESSION_TONE_INDEX}
@@ -226,7 +226,7 @@ export function SubdomainSection({
             hiddenChips={cluster.hiddenChips}
             hiddenCount={cluster.hiddenCount}
             className={hasFlat || websitePathSections.length > 0 || index > 0 ? 'mt-0.5' : undefined}
-            isFirstContent={isFirst && !showHeader && !hasFlat && websitePathSections.length === 0 && index === 0}
+            isFirstContent={(isFirst || showHeader) && !hasFlat && websitePathSections.length === 0 && index === 0}
             filter={filter}
             suppressedTitleParts={clusterSuppressedTitleParts}
             useSuppressionTokenTones={clusterSuppressionToneScope.useSuppressionTokenTones}

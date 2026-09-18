@@ -218,7 +218,6 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
   }
   if (vm.isHidden) return null
   const hideCardClose = group.domain === '__standalone-apps__'
-  const isAppsCard = group.domain === '__standalone-apps__'
   const canPin = isPinnableDomain(group.domain) && typeof onTogglePinnedDomain === 'function'
   const displayName = vm.displayName || group.label || group.domain
   const closableExtras = vm.closableExtras ?? 0
@@ -395,7 +394,6 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
           // the data attributes above, and the indicator bar with its
           // noop/placement variants reacts to them below.
           "data-[tabout-reorder-target=true]:before:pointer-events-none data-[tabout-reorder-target=true]:before:absolute data-[tabout-reorder-target=true]:before:inset-x-0 data-[tabout-reorder-target=true]:before:z-5 data-[tabout-reorder-target=true]:before:h-0.5 data-[tabout-reorder-target=true]:before:rounded-full data-[tabout-reorder-target=true]:before:content-[''] [&[data-tabout-reorder-target=true]:not([data-tabout-reorder-noop=true])]:before:bg-(--accent-amber) [&[data-tabout-reorder-target=true]:not([data-tabout-reorder-noop=true])]:before:shadow-[0_1px_2px_rgba(10,10,10,0.1)] data-[tabout-reorder-noop=true]:before:bg-[color-mix(in_srgb,var(--accent-amber)_36%,var(--warm-gray))] data-[tabout-reorder-noop=true]:before:shadow-[0_1px_1px_rgba(10,10,10,0.05)] data-[tabout-reorder-placement=before]:before:-top-1.5 data-[tabout-reorder-placement=after]:before:-bottom-1.5",
-          isAppsCard && 'domain-block-apps',
           group.pinned && 'domain-block-pinned',
           cardClosing && 'closing',
         )}
@@ -403,8 +401,7 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
       >
         <header
           className={cn(
-            'domain-header min-w-0',
-            isAppsCard ? 'px-1.75' : 'px-2',
+            'domain-header min-w-0 px-2',
             showCardMenu && 'grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2.5 gap-y-1',
           )}
         >
@@ -452,12 +449,7 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
             />
           )}
         </header>
-        <div
-          className={cn(
-            'mission-card relative flex flex-col gap-2 overflow-visible',
-            isAppsCard ? 'p-1.75' : 'p-2',
-          )}
-        >
+        <div className="mission-card relative flex flex-col gap-1 overflow-visible px-2 pt-0.5 pb-2">
           <TitleSuppressionSummary
             suppressedTitleParts={suppressedTitleParts}
             activeSuppressedTitle={activeSuppressedTitle}
