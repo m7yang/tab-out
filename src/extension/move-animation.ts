@@ -22,8 +22,8 @@ export type MovePosition = { left: number, top: number, width: number, height: n
 export type MovePositionMap = Map<string, MovePosition[]>
 
 export type MoveAnimatorHooks = {
-  /** Override config.beforePlay for one animate() call; null suppresses it. */
-  beforePlay?: ((roots: HTMLElement[]) => void) | null
+  /** Runs once when this animate() call has movers, before the play frame. */
+  beforePlay?: (roots: HTMLElement[]) => void
 }
 
 export type MoveAnimatorConfig = {
@@ -39,12 +39,6 @@ export type MoveAnimatorConfig = {
   suppressNestedMoves?: boolean
   /** Inline z-index while an item is moving (consumers may prefer a class on movingClass instead). */
   moveZIndex?: string
-  /** Runs once per animate() call that has movers, before the play frame. */
-  beforePlay?: (roots: HTMLElement[]) => void
-  /** Runs per item after its move finishes (transitionend or timeout). */
-  afterCleanup?: (item: HTMLElement) => void
-  /** Runs per item whenever a move is cancelled or reset. */
-  onCancel?: (item: HTMLElement) => void
 }
 
 export type MoveAnimator = {
@@ -56,7 +50,6 @@ export type MoveAnimator = {
 type ActiveMove = {
   frameId: number
   timeoutId: number
-  onTransitionEnd: (e: TransitionEvent) => void
   cancel: () => void
 }
 
@@ -137,7 +130,6 @@ export function createMoveAnimator(config: MoveAnimatorConfig): MoveAnimator {
     item.style.transition = ''
     item.style.willChange = ''
     if (config.moveZIndex) item.style.zIndex = ''
-    config.onCancel?.(item)
   }
 
   function cancel(roots: ReadonlyArray<HTMLElement | null>): void {
@@ -214,14 +206,11 @@ export function createMoveAnimator(config: MoveAnimatorConfig): MoveAnimator {
 
     if (moving.length === 0) return
 
-    const beforePlay = hooks && 'beforePlay' in hooks ? hooks.beforePlay : config.beforePlay
-    beforePlay?.(presentRoots)
+    hooks?.beforePlay?.(presentRoots)
 
     presentRoots.forEach((root) => root.getBoundingClientRect())
 
     moving.forEach((item) => {
-      let settled = false
-
       function resetItemStyles() {
         item.classList.remove(config.movingClass, config.activeClass)
         item.style.transform = ''
@@ -231,23 +220,11 @@ export function createMoveAnimator(config: MoveAnimatorConfig): MoveAnimator {
       }
       function cleanup() {
         if (activeMoves.get(item) !== active) return
-        settled = true
         activeMoves.delete(item)
         cancelFrame(active.frameId)
         clearTimeout(active.timeoutId)
         item.removeEventListener('transitionend', onTransitionEnd)
         resetItemStyles()
-        config.afterCleanup?.(item)
-      }
-      function cancelActiveMove() {
-        if (settled) return
-        settled = true
-        cancelFrame(active.frameId)
-        clearTimeout(active.timeoutId)
-        item.removeEventListener('transitionend', onTransitionEnd)
-        if (activeMoves.get(item) === active) activeMoves.delete(item)
-        resetItemStyles()
-        config.onCancel?.(item)
       }
       function onTransitionEnd(e: TransitionEvent) {
         if (e.target === item && e.propertyName === 'transform') cleanup()
@@ -255,8 +232,7 @@ export function createMoveAnimator(config: MoveAnimatorConfig): MoveAnimator {
       const active: ActiveMove = {
         frameId: 0,
         timeoutId: 0,
-        onTransitionEnd,
-        cancel: cancelActiveMove,
+        cancel: cleanup,
       }
 
       item.addEventListener('transitionend', onTransitionEnd)

@@ -38,11 +38,10 @@ function elementSizeEqual(left: ObservedElementSize, right: ObservedElementSize)
  */
 export function createSizeChangeObserver(onSizeChange: (target: HTMLElement) => void): SizeChangeObserver {
   let observedSizes = new WeakMap<HTMLElement, ObservedElementSize>()
-  let observedTargets = new WeakSet<HTMLElement>()
   const observer = new ResizeObserver((entries) => {
     for (const entry of entries) {
       const target = entry.target
-      if (!(target instanceof HTMLElement) || !observedTargets.has(target)) continue
+      if (!(target instanceof HTMLElement) || !observedSizes.has(target)) continue
 
       const previousSize = observedSizes.get(target)
       const nextSize = entryBorderBoxSize(entry)
@@ -56,17 +55,14 @@ export function createSizeChangeObserver(onSizeChange: (target: HTMLElement) => 
     disconnect() {
       observer.disconnect()
       observedSizes = new WeakMap()
-      observedTargets = new WeakSet()
     },
     observe(target, initialSize) {
-      observedTargets.add(target)
       observedSizes.set(target, initialSize ?? elementBorderBoxSize(target))
       observer.observe(target, { box: 'border-box' })
     },
     unobserve(target) {
       observer.unobserve(target)
       observedSizes.delete(target)
-      observedTargets.delete(target)
     },
   }
 }

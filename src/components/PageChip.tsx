@@ -318,7 +318,6 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   const chipExpansionController = useTitleExpansionController({
     id: chipExpansionId,
     lane: pageChipExpansionLane,
-    closeDelayMs: 0,
     onExpandedChange: setChipExpanded,
   })
 
@@ -579,7 +578,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   }
 
   function closeChipExpansion() {
-    chipExpansionController.close({ delayed: false })
+    chipExpansionController.close()
   }
 
   useCloseOnOutsideActivity({

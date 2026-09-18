@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-24
+- Last reviewed: 2026-09-19
 
 ## Decision
 
@@ -9,12 +10,16 @@ The Title Expansion controller owns the keep-open ownership rules that Page Chip
 and Activation History rows previously restated as scattered `contextMenuOpenRef`
 guards. `hold('context-menu' | 'keyboard-focus')` returns an idempotent release;
 holds are refcounted per owner kind so overlapping menus on one chip stay safe.
-Any held owner vetoes `close()`, including the fire-time re-check of a pending
-delayed close; only `context-menu` keeps the expansion through a lane steal;
+Any held owner vetoes synchronous `close()`; only `context-menu` keeps the
+expansion through a lane steal;
 `closeNow()` and `dispose()` bypass owners. Two decisions stay surface-side
 because they need DOM knowledge the headless controller must not have: force-open
 on menu open, and the backdrop-dismiss containment check before the post-release
 close.
+
+The delayed-close scheduler was removed after confirming that every production
+caller closes synchronously. The controller no longer accepts a delay, scheduler,
+or pending-close cancellation; tests exercise immediate closure and ownership.
 
 ## Consequences
 

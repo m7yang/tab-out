@@ -64,10 +64,9 @@ function makeConfig(overrides: Partial<MoveAnimatorConfig> = {}): MoveAnimatorCo
 
 it('move animation inverts, plays on the motion token, and cleans up by timeout', async () => {
   vi.useFakeTimers()
-  const cleaned: string[] = []
   const item = fakeItem('a', { left: 100, top: 100 })
   const root = fakeRoot([item])
-  const animator = createMoveAnimator(makeConfig({ afterCleanup: () => cleaned.push('a') }))
+  const animator = createMoveAnimator(makeConfig())
 
   const previous = animator.snapshot([root])
   item.moveTo({ left: 200, top: 150 })
@@ -84,7 +83,7 @@ it('move animation inverts, plays on the motion token, and cleans up by timeout'
   assert.equal(item.classes.has('moving-active'), true)
 
   await vi.advanceTimersByTimeAsync(120)
-  assert.deepEqual(cleaned, ['a'])
+  assert.equal(item.listeners.length, 0)
   assert.equal(item.classes.size, 0)
   assert.equal(item.style.transform, '')
   assert.equal(item.style.transition, '')
@@ -119,17 +118,11 @@ it('duplicate keys resolve by closest previous position', () => {
   assert.equal(second.style.transform, 'translate(-10px, 0px)')
 })
 
-it('cancel clears a mid-flight move, fires onCancel, and suppresses cleanup hooks', async () => {
+it('cancel clears the move, listeners, and scheduled work', async () => {
   vi.useFakeTimers()
-  const events: string[] = []
   const item = fakeItem('a', { left: 0, top: 0 })
   const root = fakeRoot([item])
-  const animator = createMoveAnimator(
-    makeConfig({
-      afterCleanup: () => events.push('cleanup'),
-      onCancel: () => events.push('cancel'),
-    }),
-  )
+  const animator = createMoveAnimator(makeConfig())
 
   const previous = animator.snapshot([root])
   item.moveTo({ left: 300, top: 0 })
@@ -139,18 +132,19 @@ it('cancel clears a mid-flight move, fires onCancel, and suppresses cleanup hook
   animator.cancel([root])
   assert.equal(item.classes.size, 0)
   assert.equal(item.style.transform, '')
-  assert.ok(events.includes('cancel'))
+  assert.equal(item.listeners.length, 0)
+  assert.equal(vi.getTimerCount(), 0)
 
   await vi.advanceTimersByTimeAsync(150)
-  assert.equal(events.includes('cleanup'), false)
+  assert.equal(item.classes.size, 0)
+  assert.equal(item.style.transform, '')
 })
 
 it('transitionend on transform cleans up and cancels the fallback timeout', () => {
   vi.useFakeTimers()
-  const cleaned: string[] = []
   const item = fakeItem('a', { left: 0, top: 0 })
   const root = fakeRoot([item])
-  const animator = createMoveAnimator(makeConfig({ duration: 5000, afterCleanup: () => cleaned.push('a') }))
+  const animator = createMoveAnimator(makeConfig({ duration: 5000 }))
 
   const previous = animator.snapshot([root])
   item.moveTo({ left: 300, top: 0 })
@@ -161,30 +155,31 @@ it('transitionend on transform cleans up and cancels the fallback timeout', () =
   assert.equal(vi.getTimerCount(), 1)
   item.listeners.slice().forEach((handler) => handler({ target: item.el, propertyName: 'transform' }))
 
-  assert.deepEqual(cleaned, ['a'])
+  assert.equal(item.listeners.length, 0)
   assert.equal(item.classes.size, 0)
   assert.equal(vi.getTimerCount(), 0)
 })
 
-it('beforePlay fires only when movers exist and can be suppressed per call', () => {
-  const calls: string[] = []
+it('the per-call beforePlay hook fires only when movers exist', () => {
+  const calls: HTMLElement[][] = []
+  const hooks = { beforePlay: (roots: HTMLElement[]) => calls.push(roots) }
   const item = fakeItem('a', { left: 0, top: 0 })
   const root = fakeRoot([item])
-  const animator = createMoveAnimator(makeConfig({ beforePlay: () => calls.push('config') }))
+  const animator = createMoveAnimator(makeConfig())
 
-  animator.animate([root], animator.snapshot([root]))
+  animator.animate([root], animator.snapshot([root]), hooks)
   assert.deepEqual(calls, [])
 
   const previous = animator.snapshot([root])
   item.moveTo({ left: 40, top: 0 })
-  animator.animate([root], previous, { beforePlay: null })
-  assert.deepEqual(calls, [])
+  animator.animate([root], previous, hooks)
+  assert.deepEqual(calls, [[root]])
   animator.cancel([root])
 
   const again = animator.snapshot([root])
   item.moveTo({ left: 80, top: 0 })
   animator.animate([root], again)
-  assert.deepEqual(calls, ['config'])
+  assert.deepEqual(calls, [[root]])
   animator.cancel([root])
 })
 

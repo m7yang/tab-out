@@ -225,7 +225,6 @@ test('persisted and cross-context owners retain Schema validation', () => {
     'src/extension/startup-snapshot-schema.ts',
     'src/extension/suspension.ts',
     'src/extension/tab-history.ts',
-    'src/extension/working-set-client.ts',
     'src/extension/working-set.ts',
   ]
 

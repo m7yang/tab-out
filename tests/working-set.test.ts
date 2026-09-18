@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { normalizeWorkingSetSnapshot } from '../src/extension/working-set-client.js'
 import {
   buildWorkingSetSnapshot,
   emptyWorkingSetActivity,
@@ -11,7 +10,7 @@ import {
   recordWorkingSetActivityMutation,
   recordWorkingSetActivity,
 } from '../src/extension/working-set.js'
-import type { DashboardTab, WorkingSetActivityStore, WorkingSetItem } from '../src/extension/types'
+import type { DashboardTab, WorkingSetActivityStore } from '../src/extension/types'
 
 function makeTab(overrides: Partial<DashboardTab> & { id: number, url: string, title: string }): DashboardTab {
   return {
@@ -34,25 +33,6 @@ function record(store: WorkingSetActivityStore, tab: DashboardTab, kind: 'activa
     at,
     tab,
   })
-}
-
-function makeWorkingSetItem(index: number, overrides: Partial<WorkingSetItem> = {}): WorkingSetItem {
-  return {
-    key: `https://example.com/page-${index}`,
-    tabId: index,
-    windowId: 1,
-    tabUrl: `https://example.com/page-${index}`,
-    rawUrl: `https://example.com/page-${index}`,
-    title: `Page ${index}`,
-    displayUrl: `example.com/page-${index}`,
-    faviconUrl: '',
-    dupeCount: 1,
-    active: false,
-    activeInOtherWindow: false,
-    score: 100 - index,
-    lastActivatedAt: 0,
-    ...overrides,
-  }
 }
 
 function valueAt<T>(values: readonly T[], index: number): T {
@@ -326,27 +306,6 @@ test('buildWorkingSetSnapshot clears grouped loading after every awake duplicate
 
   assert.equal(loading.items[0]?.loading, true)
   assert.equal(complete.items[0]?.loading, false)
-})
-
-test('normalizeWorkingSetSnapshot preserves loading state from the background snapshot', () => {
-  const item = makeWorkingSetItem(1, { loading: true })
-  const snapshot = normalizeWorkingSetSnapshot({
-    defaultLimit: 8,
-    expandedLimit: 16,
-    items: [item],
-  })
-
-  assert.equal(snapshot.items[0]?.loading, true)
-})
-
-test('normalizeWorkingSetSnapshot rejects malformed containers and drops invalid item identities', () => {
-  assert.deepEqual(normalizeWorkingSetSnapshot({ items: {} }).items, [])
-
-  const validItem = makeWorkingSetItem(1)
-  const snapshot = normalizeWorkingSetSnapshot({
-    items: [validItem, null, { ...validItem, tabId: 1.5 }, { ...validItem, windowId: '1' }],
-  })
-  assert.deepEqual(snapshot.items.map((item) => item.tabId), [1])
 })
 
 test('buildWorkingSetSnapshot excludes Google Search result pages from working set items', () => {

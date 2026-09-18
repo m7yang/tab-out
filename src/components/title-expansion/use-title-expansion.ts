@@ -5,7 +5,6 @@ import type { TitleExpansionController, TitleExpansionLane } from './controller'
 export type UseTitleExpansionControllerOptions = {
   id: string
   lane: TitleExpansionLane
-  closeDelayMs: number
   onExpandedChange: (expanded: boolean) => void
 }
 
@@ -27,11 +26,10 @@ export function useTitleExpansionController(options: UseTitleExpansionController
   if (facadeRef.current === null) {
     const getInstance = (): TitleExpansionController => {
       if (instanceRef.current === null) {
-        const { id, lane, closeDelayMs } = optionsRef.current
+        const { id, lane } = optionsRef.current
         instanceRef.current = createTitleExpansionController({
           id,
           lane,
-          closeDelayMs,
           onExpandedChange: (expanded) => optionsRef.current.onExpandedChange(expanded),
         })
       }
@@ -39,9 +37,8 @@ export function useTitleExpansionController(options: UseTitleExpansionController
     }
     facadeRef.current = {
       open: () => getInstance().open(),
-      close: (closeOptions) => getInstance().close(closeOptions),
+      close: () => getInstance().close(),
       closeNow: () => getInstance().closeNow(),
-      cancelPendingClose: () => instanceRef.current?.cancelPendingClose(),
       hold: (owner) => getInstance().hold(owner),
       isExpanded: () => instanceRef.current?.isExpanded() ?? false,
       dispose: () => {

@@ -89,7 +89,6 @@ export function useHistoryEntryExpansion(contextMenuOpenRef: RefObject<boolean>,
   const titleExpansionController = useTitleExpansionController({
     id: entryExpansionId,
     lane: historyEntryExpansionLane,
-    closeDelayMs: 0,
     onExpandedChange: setTitleExpanded,
   })
 
@@ -205,7 +204,7 @@ export function useHistoryEntryExpansion(contextMenuOpenRef: RefObject<boolean>,
   }
 
   function closeTitleExpansion() {
-    titleExpansionController.close({ delayed: false })
+    titleExpansionController.close()
   }
 
   useCloseOnOutsideActivity({

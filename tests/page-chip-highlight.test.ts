@@ -1462,7 +1462,7 @@ test('PageChip expands same-title URL variant groups in place', () => {
   // capture phase, closing the moment the pointer leaves that region.
   const outsideActivitySource = readFileSync(new URL('../src/components/title-expansion/use-close-on-outside-activity.ts', import.meta.url), 'utf8')
   assert.match(outsideActivitySource, /useWindowEvent\('pointermove', \(event\) => \{[\s\S]*?\}, \{ capture: true, enabled: expanded \}\)/)
-  assert.match(outsideActivitySource, /if \(!pointWithinRect\(\{ x: event\.clientX, y: event\.clientY \}, region\)\) controller\.close\(\{ delayed: false \}\)/)
+  assert.match(outsideActivitySource, /if \(!pointWithinRect\(\{ x: event\.clientX, y: event\.clientY \}, region\)\) controller\.close\(\)/)
   // The chip's region must measure the EXPANDED chip, not the original slot —
   // the expanded chip floats wider/taller than its 1:1 slot, so testing the slot
   // rect collapsed the chip the instant the pointer reached the revealed overflow
@@ -2127,7 +2127,6 @@ test('TabHistoryPanel uses PageChip-style fade truncation and in-place title exp
   assert.match(pageChipClampSource, /clampedLines\(hasTitleSuppressionMarkers \? rebuildClampedChipMarker : undefined\)/)
   assert.match(historyTitleMeasurementSource, /HISTORY_ENTRY_EXPANDED_VIEWPORT_MARGIN_PX = 12/)
   assert.doesNotMatch(historyEntryExpansionSource, /HISTORY_ENTRY_EXPANDED_CLOSE_DELAY_MS/)
-  assert.match(historyEntryExpansionSource, /closeDelayMs: 0/)
   assert.match(historyTitleMeasurementSource, /HISTORY_ENTRY_EXPANDED_WIDTH_GUARD_PX = 8/)
   assert.match(historyTitleMeasurementSource, /getHistoryEntryExpansionGeometry/)
   assert.match(historyTitleMeasurementSource, /getHistoryTitleExpandedTextWidth/)
@@ -2138,7 +2137,7 @@ test('TabHistoryPanel uses PageChip-style fade truncation and in-place title exp
   assert.match(historyEntryComponentSource, /titleExpanded && 'history-entry-expanded-open'/)
   assert.match(historyEntryComponentSource, /titleExpanded && 'history-entry-row-expanded-open'/)
   assert.match(historyEntryExpansionSource, /function openTitleExpansion\(\)/)
-  assert.match(historyEntryExpansionSource, /function closeTitleExpansion\(\) \{[\s\S]*titleExpansionController\.close\(\{ delayed: false \}\)/)
+  assert.match(historyEntryExpansionSource, /function closeTitleExpansion\(\) \{[\s\S]*titleExpansionController\.close\(\)/)
   assert.match(historyEntryExpansionSource, /function onHistoryEntryPointerEnter\(\) \{[\s\S]*openTitleExpansion\(\)/)
   assert.match(historyEntryExpansionSource, /function onHistoryEntryPointerMove\(e: PointerEvent<HTMLDivElement>\)/)
   assert.match(historyEntryComponentSource, /history-entry-title-expansion-hit-area/)

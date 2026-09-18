@@ -1,27 +1,11 @@
 /* ================================================================
    Title Expansion controller — the headless open/close half of the
-   Title Expansion engine (CONTEXT.md): hover-expanded titles open at
-   most one overlay per surface lane. The controller still supports an
-   optional close schedule, while the current tab-title surfaces close
-   synchronously on pointer departure.
-
-   The controller owns timing, lane arbitration, and expansion
-   ownership. What counts as expandable, how the expanded lines are
-   measured, and the overlay markup all stay with the adapting
-   surface. Ownership is the keep-open mechanism: a held owner vetoes
-   close() — including the fire-time re-check of a pending delayed
-   close — and a held context menu additionally keeps the expansion
-   through a lane steal, while keyboard focus yields the lane to the
-   next hover. closeNow() and dispose() bypass owners.
-
-   The scheduler is injectable so the delay logic tests under node
-   with a fake clock; production uses setTimeout.
+   Title Expansion engine (CONTEXT.md). The controller owns lane
+   arbitration and expansion ownership; measurement and markup stay
+   with each surface. close() is synchronous unless an owner holds
+   the expansion open. Only context menus preserve expansion through
+   a lane steal; closeNow() and dispose() bypass owners.
    ================================================================ */
-
-export type TitleExpansionScheduler = {
-  set: (fn: () => void, delayMs: number) => unknown
-  clear: (handle: unknown) => void
-}
 
 export type TitleExpansionLane = {
   activate: (id: string) => void
@@ -64,11 +48,6 @@ export function createTitleExpansionLane(): TitleExpansionLane {
   }
 }
 
-const defaultScheduler: TitleExpansionScheduler = {
-  set: (fn, delayMs) => setTimeout(fn, delayMs),
-  clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-}
-
 /**
  * The interaction surfaces that may keep an expansion open past its
  * normal close triggers (CONTEXT.md Title Expansion ownership).
@@ -80,17 +59,14 @@ export type TitleExpansionOwner = 'context-menu' | 'keyboard-focus'
 export type TitleExpansionControllerOptions = {
   id: string
   lane: TitleExpansionLane
-  closeDelayMs: number
   onExpandedChange: (expanded: boolean) => void
-  scheduler?: TitleExpansionScheduler
 }
 
 export type TitleExpansionController = {
   open: () => void
-  close: (options?: { delayed?: boolean }) => void
+  close: () => void
   /** Collapse and release unconditionally — bypasses owners. */
   closeNow: () => void
-  cancelPendingClose: () => void
   /**
    * Keep the expansion open while the owner is up. Holds are refcounted
    * per owner kind, so overlapping menus stay safe; the returned release
@@ -104,12 +80,9 @@ export type TitleExpansionController = {
 export function createTitleExpansionController({
   id,
   lane,
-  closeDelayMs,
   onExpandedChange,
-  scheduler = defaultScheduler,
 }: TitleExpansionControllerOptions): TitleExpansionController {
   let expanded = false
-  let pendingClose: unknown = null
   const holds = new Map<TitleExpansionOwner, number>()
 
   function setExpanded(next: boolean) {
@@ -118,19 +91,7 @@ export function createTitleExpansionController({
     onExpandedChange(expanded)
   }
 
-  function closeVetoed() {
-    return holds.size > 0
-  }
-
-  function cancelPendingClose() {
-    if (pendingClose === null) return
-    scheduler.clear(pendingClose)
-    pendingClose = null
-  }
-
-  // Release before collapsing, and only when still the owner: a delayed
-  // close that fires after another element stole the lane must not tear
-  // down the new owner's activation.
+  // Releasing a stale owner must leave the newer lane activation intact.
   function collapseAndRelease() {
     lane.release(id)
     setExpanded(false)
@@ -144,28 +105,14 @@ export function createTitleExpansionController({
 
   return {
     open() {
-      cancelPendingClose()
       lane.activate(id)
       setExpanded(true)
     },
-    close({ delayed = true } = {}) {
-      cancelPendingClose()
-      if (closeVetoed()) return
-      if (!delayed) {
-        collapseAndRelease()
-        return
-      }
-      pendingClose = scheduler.set(() => {
-        pendingClose = null
-        if (closeVetoed()) return
-        collapseAndRelease()
-      }, closeDelayMs)
-    },
-    closeNow() {
-      cancelPendingClose()
+    close() {
+      if (holds.size > 0) return
       collapseAndRelease()
     },
-    cancelPendingClose,
+    closeNow: collapseAndRelease,
     hold(owner) {
       holds.set(owner, (holds.get(owner) ?? 0) + 1)
       let released = false
@@ -181,7 +128,6 @@ export function createTitleExpansionController({
       return expanded
     },
     dispose() {
-      cancelPendingClose()
       unsubscribe()
       lane.release(id)
       holds.clear()

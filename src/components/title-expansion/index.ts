@@ -21,7 +21,6 @@ export type {
   TitleExpansionControllerOptions,
   TitleExpansionLane,
   TitleExpansionOwner,
-  TitleExpansionScheduler,
 } from './controller'
 export { useTitleExpansionController } from './use-title-expansion'
 export { useCloseOnOutsideActivity } from './use-close-on-outside-activity'

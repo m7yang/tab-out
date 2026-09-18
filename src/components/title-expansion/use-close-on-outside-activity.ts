@@ -26,7 +26,7 @@ export function useCloseOnOutsideActivity({ expanded, controller, getPointerRegi
   useWindowEvent('pointermove', (event) => {
     const region = getPointerRegion()
     if (!region) return
-    if (!pointWithinRect({ x: event.clientX, y: event.clientY }, region)) controller.close({ delayed: false })
+    if (!pointWithinRect({ x: event.clientX, y: event.clientY }, region)) controller.close()
   }, { capture: true, enabled: expanded })
 
   useDocumentEvent('visibilitychange', () => {

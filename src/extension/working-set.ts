@@ -15,8 +15,8 @@ import { unwrapSuspenderUrl } from './suspension.js'
 import { pickTabFavicon } from './favicons.js'
 import { isBrowserInternalUrl } from './browser-url-policy.js'
 
-export const WORKING_SET_DEFAULT_LIMIT = 8
-export const WORKING_SET_EXPANDED_LIMIT = 16
+const WORKING_SET_DEFAULT_LIMIT = 8
+const WORKING_SET_EXPANDED_LIMIT = 16
 const WORKING_SET_MIN_ITEMS = 3
 
 export const WORKING_SET_ACTIVITY_VERSION = 1
