@@ -14,10 +14,10 @@ async function tabStatus(worker: Worker, tabId: number) {
 function targetSurfaces(page: Page, tabId: number) {
   return {
     historyEntry: page.locator(
-      `[data-tabout="activation-history-entry"][data-tabout-layout-key$=":${tabId}"]`,
+      `[data-tabout="activation-history-row"][data-tabout-layout-key$=":${tabId}"]`,
     ),
     newTabChip: page.locator(
-      '[data-tabout="domain-card"][data-tabout-domain="__tab-out__"] [data-tabout="page-chip"]',
+      '[data-tabout="domain-card"][data-tabout-domain="__tab-out__"] [data-tabout="page-chip"][data-tabout-context="domain-card"]',
     ).first(),
   }
 }

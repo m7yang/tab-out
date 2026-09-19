@@ -82,7 +82,7 @@ for (const edge of ['top', 'bottom'] as const) {
   test(`expanded history titles paint above the ${edge} cue`, async ({ page }) => {
     await page.setViewportSize({ width: 1420, height: 360 })
     await page.goto('/tests/fixtures/dashboard-resize.html')
-    const row = page.locator('[data-tabout="activation-history-entry"]').filter({ hasText: 'Tooltip Edge Alpha Story' })
+    const row = page.locator('[data-tabout="activation-history-row"]').filter({ hasText: 'Tooltip Edge Alpha Story' })
     await expect(row).toHaveCount(1)
     await row.evaluate((element, edge) => {
       const scroller = element.closest<HTMLElement>('.history-entry-list')!

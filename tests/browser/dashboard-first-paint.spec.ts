@@ -421,7 +421,7 @@ test('dashboard coalesces collapsed-title layout reads during startup', async ({
     }
     return {
       ...benchmarkWindow.__tabOutFirstPaintMeasurements,
-      chipCount: document.querySelectorAll('[data-tabout="page-chip"]').length,
+      chipCount: document.querySelectorAll('[data-tabout="page-chip"][data-tabout-context="domain-card"]').length,
       domainCardCount: document.querySelectorAll('[data-tabout="domain-card"]').length,
       historyTitleCount: document.querySelectorAll('.history-entry-title').length,
       pathgroupLabelCount: document.querySelectorAll('.pathgroup-header .chip-pathgroup').length,
@@ -587,7 +587,7 @@ test('long Page Chip paints its final truncation treatment on the first refresh 
     let frameCount = 0
     const captureFrame = () => {
       frameCount += 1
-      const chip = Array.from(document.querySelectorAll<HTMLElement>('[data-tabout="page-chip"]'))
+      const chip = Array.from(document.querySelectorAll<HTMLElement>('[data-tabout="page-chip"][data-tabout-context="domain-card"]'))
         .find((element) => element.textContent?.includes(title))
       const text = chip?.querySelector<HTMLElement>('.chip-text')
       if (text) {

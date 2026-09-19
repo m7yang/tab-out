@@ -1754,6 +1754,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       role={parentInteractive ? 'button' : 'group'}
       id={hasFilter && parentInteractive ? chipFilterResultCandidate.domId : undefined}
       data-tabout="page-chip"
+      data-tabout-context="domain-card"
       data-tabout-retained-page-identity={chip.sourceType === 'retained-page' ? chip.retainedPageIdentity : undefined}
       data-tabout-retained-page-closure-token={chip.sourceType === 'retained-page' ? chip.retainedPageClosureToken : undefined}
       data-tabout-filter-result={hasFilter && parentInteractive ? '' : undefined}

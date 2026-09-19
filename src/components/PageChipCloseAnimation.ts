@@ -70,7 +70,7 @@ function pageChipCloseFocusTarget(slotValue: unknown, focusWasInsideClosingChip:
   ]
   for (const candidate of candidates) {
     const focusTarget = candidate.querySelector<HTMLElement>(
-      '[data-tabout="page-chip"][tabindex="0"], [data-tabout-default-variant="true"]',
+      '[data-tabout="page-chip"][data-tabout-context="domain-card"][tabindex="0"], [data-tabout-default-variant="true"]',
     )
     if (focusTarget) return focusTarget
   }

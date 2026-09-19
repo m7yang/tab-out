@@ -211,7 +211,7 @@ test('a clean dashboard shows retained pages and Open + Saved can focus them out
     `chrome-extension://${installedExtension.extensionId}/index.html`,
     { waitUntil: 'domcontentloaded' },
   )
-  const chip = dashboard.locator('[data-tabout="page-chip"]')
+  const chip = dashboard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
     .filter({ hasText: retainedPage.title })
     .first()
   await expect(dashboard.getByRole('tab', { name: 'All Tabs' }))
@@ -272,10 +272,10 @@ test('a real Domain Card menu removes two retained pages in one batch', async ({
     { waitUntil: 'domcontentloaded' },
   )
   const firstChip = dashboard.locator(
-    `[data-tabout="page-chip"][data-tabout-retained-page-identity="${firstRetainedPage.identityDigest}"]`,
+    `[data-tabout="page-chip"][data-tabout-context="domain-card"][data-tabout-retained-page-identity="${firstRetainedPage.identityDigest}"]`,
   )
   const secondChip = dashboard.locator(
-    `[data-tabout="page-chip"][data-tabout-retained-page-identity="${secondRetainedPage.identityDigest}"]`,
+    `[data-tabout="page-chip"][data-tabout-context="domain-card"][data-tabout-retained-page-identity="${secondRetainedPage.identityDigest}"]`,
   )
   await Promise.all([
     expect(firstChip).toBeVisible(),
@@ -338,10 +338,10 @@ test('two live dashboards converge after physical retention and exact removal', 
     installedExtension,
     targetUrl,
   )
-  const firstChip = firstDashboard.locator('[data-tabout="page-chip"]')
+  const firstChip = firstDashboard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
     .filter({ hasText: retainedPage.title })
     .first()
-  const secondChip = secondDashboard.locator('[data-tabout="page-chip"]')
+  const secondChip = secondDashboard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
     .filter({ hasText: retainedPage.title })
     .first()
   await Promise.all([
@@ -402,7 +402,7 @@ test('the production earliest-expiry alarm durably prunes a retained page', asyn
     installedExtension,
     targetUrl,
   )
-  const chip = dashboard.locator('[data-tabout="page-chip"]')
+  const chip = dashboard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
     .filter({ hasText: retainedPage.title })
     .first()
   await expect(chip).toBeVisible()
@@ -499,10 +499,10 @@ test('an app retained snapshot falls back to one exact ordinary tab', async ({
     `chrome-extension://${installedExtension.extensionId}/index.html`,
     { waitUntil: 'domcontentloaded' },
   )
-  const targetChip = dashboard.locator('[data-tabout="page-chip"]')
+  const targetChip = dashboard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
     .filter({ hasText: targetRecord.title })
     .first()
-  const companionChip = dashboard.locator('[data-tabout="page-chip"]')
+  const companionChip = dashboard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
     .filter({ hasText: companionRecord.title })
     .first()
   await Promise.all([
@@ -596,7 +596,7 @@ test('real chrome APIs reopen the exact retained target and consume its snapshot
     `chrome-extension://${installedExtension.extensionId}/index.html`,
     { waitUntil: 'domcontentloaded' },
   )
-  const chip = dashboard.locator('[data-tabout="page-chip"]')
+  const chip = dashboard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
     .filter({ hasText: retainedPage.title })
     .first()
   await expect(chip).toBeVisible()

@@ -1090,7 +1090,7 @@ async function measureStartupFrame(
     serviceStateToHeaderMs:
       diagnostic.headerReadyAt - diagnostic.latestPreHeaderRequest.finishedAt,
     startupFrameReadyMs: diagnostic.headerReadyAt,
-    visiblePageChips: await page.locator('[data-tabout="page-chip"]').count(),
+    visiblePageChips: await page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').count(),
     wallToHeaderObservationMs,
   }
 }

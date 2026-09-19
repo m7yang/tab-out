@@ -475,6 +475,9 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
   function historyEntrySurface(expanded: boolean) {
     return (
       <div
+        data-tabout={expanded ? undefined : 'page-chip'}
+        data-tabout-context="activation-history"
+        data-tabout-part={expanded ? 'expanded-surface' : undefined}
         data-expanded={titleExpanded ? 'true' : undefined}
         data-title-collapsed={(titleMetrics.isTruncated || titleClamp !== null) && !titleExpanded ? '' : undefined}
         data-current={entry.current ? 'true' : undefined}
@@ -597,7 +600,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
 
   return (
     <div
-      data-tabout="activation-history-entry"
+      data-tabout="activation-history-row"
       data-tabout-layout-key={layoutKey}
       data-working-set-extra={isWorkingSetExtra ? 'true' : undefined}
       data-loading={entry.loading ? 'true' : undefined}

@@ -107,7 +107,7 @@ test('keyboard-selected results scroll clear of the bottom cue', async ({ page }
 test('expanded titles paint above the bottom cue without blocking pointer input', async ({ page }) => {
   await page.setViewportSize({ width: 760, height: 700 })
   await page.goto('/tests/fixtures/dashboard-resize.html')
-  const chip = page.locator('[data-tabout-domain="tab-out-smoke-24.com"] [data-tabout="page-chip"]')
+  const chip = page.locator('[data-tabout-domain="tab-out-smoke-24.com"] [data-tabout="page-chip"][data-tabout-context="domain-card"]')
   await expect(page.locator('#openTabsMissions')).toHaveClass(/is-packed/)
   await chip.evaluate((element) => {
     const scroller = element.closest<HTMLElement>('.scroll-region')!

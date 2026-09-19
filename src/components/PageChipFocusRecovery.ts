@@ -1,5 +1,5 @@
 const PAGE_CHIP_FOCUS_TARGET_SELECTOR = [
-  '[data-tabout="page-chip"][tabindex="0"]',
+  '[data-tabout="page-chip"][data-tabout-context="domain-card"][tabindex="0"]',
   'button.chip-env',
   'button.chip-title-variant',
 ].join(', ')

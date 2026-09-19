@@ -94,7 +94,7 @@ function restorePendingPageChipFocus() {
     .values()
     .find((candidate) => candidate.dataset.taboutRemovalKey === pending.focusRemovalKey)
   const replacement = replacementSlot?.querySelector<HTMLElement>(
-    '[data-tabout="page-chip"][tabindex="0"], [data-tabout-default-variant="true"]',
+    '[data-tabout="page-chip"][data-tabout-context="domain-card"][tabindex="0"], [data-tabout-default-variant="true"]',
   )
   if (!replacement) return
   replacement.focus({ preventScroll: true })

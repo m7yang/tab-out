@@ -25,7 +25,7 @@ folded / title-variant groups — and loads `extension/dist/app.js`. Rebuild
 
 ## Measure, don't guess
 
-The page-chip / title expansion-width logic in `src/components/PageChip.tsx`
+The Domain Card Page Chip title expansion-width logic in `src/components/PageChip.tsx`
 (`getPageChipExpansionGeometry`, `getExpandedPageChipContentWidth`) is intricate.
 Reason about it by **measuring the live DOM**, not by eye:
 
@@ -44,12 +44,12 @@ layout math.
 automated form of the same idea: Playwright serves the repo, loads the fixture
 in headless Chrome, and asserts on layout / expansion behavior.
 
-## Inspecting Page Chip title expansion
+## Inspecting Domain Card Page Chip title expansion
 
-Truncated Page Chip titles expand in place as `.page-chip-expanded`; they do
+Truncated Domain Card Page Chip titles expand in place as `.page-chip-expanded`; they do
 not open a tooltip popup. Small auxiliary controls can still use
 `[data-slot="tooltip-content"]`. When a real-extension result differs from the
-fixture, hover the affected Page Chip and run this geometry-only probe in the
+fixture, hover the affected Domain Card Page Chip and run this geometry-only probe in the
 Tab Out console. It intentionally omits title and URL data so the output can be
 shared safely:
 

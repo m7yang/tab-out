@@ -124,7 +124,7 @@ function debugDomCards() {
 
 function debugHistoryRows() {
   const rows = []
-  const rowEls = document.querySelectorAll<HTMLElement>('[data-tabout="activation-history-entry"]')
+  const rowEls = document.querySelectorAll<HTMLElement>('[data-tabout="activation-history-row"]')
   for (const [index, row] of rowEls.entries()) {
     const rect = row.getBoundingClientRect()
     rows.push({

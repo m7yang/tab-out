@@ -1023,7 +1023,7 @@ test('pinned same-title URL variants stay unified with a close-slot pin marker',
   })
 
   const card = page.locator('[data-tabout="domain-card"][data-tabout-domain="atlassian.net"]')
-  const matchingChips = card.locator('[data-tabout="page-chip"]').filter({ hasText: 'Platform Ops Dev 2026' })
+  const matchingChips = card.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({ hasText: 'Platform Ops Dev 2026' })
   await expect(matchingChips).toHaveCount(1)
 
   const chip = matchingChips.first()
@@ -1132,7 +1132,7 @@ test('History search renders bounded labels for opaque same-title URL variants',
   })
 
   await page.locator('[data-tabout="filter-query"] input').fill('Example account')
-  const chip = page.locator('#historyMatchesMissions [data-tabout="page-chip"]')
+  const chip = page.locator('#historyMatchesMissions [data-tabout="page-chip"][data-tabout-context="domain-card"]')
     .filter({ hasText: 'Example account' })
   await expect(chip).toHaveCount(1)
 
@@ -1190,14 +1190,14 @@ test('same-title URL groups share hover paint with and without filter results', 
       __tabOutSmokeAddPlainTitleVariantTabs?: () => Promise<void>
     }).__tabOutSmokeAddPlainTitleVariantTabs?.()
   })
-  const tabsGroup = page.locator('[data-tabout="page-chip"]').filter({ hasText: 'Plain Title Variant' }).first()
+  const tabsGroup = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({ hasText: 'Plain Title Variant' }).first()
   const tabsRows = tabsGroup.locator('.chip-title-variant')
   await expect(tabsRows).toHaveCount(2)
   const tabsGroupHoverPaint = await hoveredGroupPaint(tabsGroup)
   const tabsHoverPaint = await hoveredRowPaint(tabsRows.first())
 
   await page.locator('[data-tabout="filter-query"] input').fill('Plain Title Variant')
-  const filteredTabsGroup = page.locator('#openTabsMissions [data-tabout="page-chip"]')
+  const filteredTabsGroup = page.locator('#openTabsMissions [data-tabout="page-chip"][data-tabout-context="domain-card"]')
     .filter({ hasText: 'Plain Title Variant' })
   await expect(filteredTabsGroup).toHaveCount(1)
   const filteredTabsRows = filteredTabsGroup.locator('.chip-title-variant')
@@ -1222,7 +1222,7 @@ test('same-title URL groups share hover paint with and without filter results', 
     ]
   })
   await page.locator('[data-tabout="filter-query"] input').fill('Plain Title Variant')
-  const historyGroup = page.locator('#historyMatchesMissions [data-tabout="page-chip"]')
+  const historyGroup = page.locator('#historyMatchesMissions [data-tabout="page-chip"][data-tabout-context="domain-card"]')
     .filter({ hasText: 'Plain Title Variant' })
   await expect(historyGroup).toHaveCount(1)
   const historyRows = historyGroup.locator('.chip-title-variant')
@@ -1241,7 +1241,7 @@ test('truncated same-title URL labels fade at rest and use ellipsis when expande
     }).__tabOutSmokeAddPlainTitleVariantTabs?.()
   })
 
-  const chip = page.locator('[data-tabout="page-chip"]')
+  const chip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
     .filter({ hasText: 'Plain Title Variant' })
     .first()
   const labels = chip.locator('.chip-title-variant-label')
@@ -1293,22 +1293,22 @@ test('hover-revealed close actions keep a stable pointer on direct entry', async
     }).__tabOutSmokeAddPlainTitleVariantTabs?.()
   })
 
-  const titleGroup = page.locator('[data-tabout="page-chip"]').filter({
+  const titleGroup = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({
     has: page.locator('[data-tabout-removal-key="page:https://plain-title-variant.test/docs/example"]'),
   }).first()
   const cases = [
     {
-      action: page.locator('#openTabsMissions [data-tabout="domain-card"][data-tabout-domain="tab-out-smoke-01.com"] [data-tabout="page-chip"] [data-tabout-part="close-button"]').first(),
+      action: page.locator('#openTabsMissions [data-tabout="domain-card"][data-tabout-domain="tab-out-smoke-01.com"] [data-tabout="page-chip"][data-tabout-context="domain-card"] [data-tabout-part="close-button"]').first(),
       expectedSize: 20,
       label: 'Page Chip',
-      owner: page.locator('#openTabsMissions [data-tabout="domain-card"][data-tabout-domain="tab-out-smoke-01.com"] [data-tabout="page-chip"] [data-tabout-part="close-hit-owner"]').first(),
+      owner: page.locator('#openTabsMissions [data-tabout="domain-card"][data-tabout-domain="tab-out-smoke-01.com"] [data-tabout="page-chip"][data-tabout-context="domain-card"] [data-tabout-part="close-hit-owner"]').first(),
       ownerSelector: '[data-tabout-part="close-hit-owner"]',
     },
     {
-      action: page.locator('[data-tabout="activation-history-entry"][data-tabout-layout-key="stack:1:9101"] [data-tabout-part="close-button"]').first(),
+      action: page.locator('[data-tabout="activation-history-row"][data-tabout-layout-key="stack:1:9101"] [data-tabout-part="close-button"]').first(),
       expectedSize: 20,
       label: 'Activation History',
-      owner: page.locator('[data-tabout="activation-history-entry"][data-tabout-layout-key="stack:1:9101"] [data-tabout-part="close-hit-owner"]').first(),
+      owner: page.locator('[data-tabout="activation-history-row"][data-tabout-layout-key="stack:1:9101"] [data-tabout-part="close-hit-owner"]').first(),
       ownerSelector: '[data-tabout-part="close-hit-owner"]',
     },
     {
@@ -1353,7 +1353,7 @@ test('hover-revealed close actions keep a stable pointer on direct entry', async
   await expect(variantAction).toHaveCSS('pointer-events', 'none')
 
   await page.goto('/tests/fixtures/dashboard-resize.html')
-  const expandedHistoryRow = page.locator('[data-tabout="activation-history-entry"]').filter({
+  const expandedHistoryRow = page.locator('[data-tabout="activation-history-row"]').filter({
     hasText: 'Low score history item with enough tooltip text',
   }).first()
   await expandedHistoryRow.locator('.history-entry-title').first().hover()
@@ -1371,8 +1371,8 @@ test('hover-revealed close actions keep a stable pointer on direct entry', async
 
   const appTitle = 'Inbox (417) - example.user@example.test'
   await page.goto('/tests/fixtures/dashboard-resize.html?appLoadingFavicon=1')
-  const appChip = page.locator('[data-tabout="page-chip"]').filter({ hasText: appTitle }).first()
-  const appHistory = page.locator('[data-tabout="activation-history-entry"]').filter({ hasText: appTitle }).first()
+  const appChip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({ hasText: appTitle }).first()
+  const appHistory = page.locator('[data-tabout="activation-history-row"]').filter({ hasText: appTitle }).first()
 
   for (const pointerCase of [
     {
@@ -1425,7 +1425,7 @@ test('ordinary dashboard renders keep masonry observers attached', async ({ page
     }).__tabOutObserverDisconnects
   ))
   const before = await readDisconnects()
-  const chip = page.locator('[data-tabout="page-chip"]').first()
+  const chip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').first()
   await chip.hover()
   await expect(chip).toHaveAttribute('data-expanded', 'true')
   await page.locator('[data-tabout="dashboard-shell"]').hover({ position: { x: 1, y: 1 } })
@@ -1439,7 +1439,7 @@ test('Page Chip closes its expansion and interaction chrome as soon as the point
   await page.goto('/tests/fixtures/dashboard-resize.html')
   await expect.poll(() => page.locator('[data-tabout="domain-card"]').count()).toBeGreaterThanOrEqual(12)
 
-  const chip = page.locator('[data-tabout="page-chip"]').first()
+  const chip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').first()
   const readInteractionPaint = (element: HTMLElement) => {
     const style = getComputedStyle(element)
     const expandedFill = element.querySelector<HTMLElement>('.page-chip-expanded-fill')
@@ -1487,7 +1487,7 @@ test('Page Chip keeps hydrated title details and interaction chrome in one expan
   const targetLabel = 'Tooltip Boundary Alpha'
   await page.setViewportSize({ width: 1600, height: 900 })
   await page.goto('/tests/fixtures/dashboard-resize.html')
-  const chip = page.locator('[data-tabout="page-chip"]').filter({ hasText: targetLabel }).first()
+  const chip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({ hasText: targetLabel }).first()
   await expect(chip).toBeVisible()
   await chip.scrollIntoViewIfNeeded()
   await chip.evaluate((element) => {
@@ -1611,7 +1611,7 @@ test('Page Chip keeps hydrated title details and interaction chrome in one expan
 test('Page Chip applies grapheme-aware fixation to accented Latin titles', async ({ page }) => {
   const title = "naïve nai\u0308ve café don't can’t München e-mail"
   await page.goto('/tests/fixtures/dashboard-resize.html?unicodeBionicTitle=1')
-  const chip = page.locator('[data-tabout="page-chip"]').filter({ hasText: title }).first()
+  const chip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({ hasText: title }).first()
 
   await expect(chip).toBeVisible()
   await expect(chip).toContainText(title)
@@ -1626,7 +1626,7 @@ test('Page Chip applies grapheme-aware fixation to accented Latin titles', async
 
 test('Page Chip preserves tall first-line glyph ink without changing its layout box', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?tallGlyphTitle=1')
-  const chip = page.locator('[data-tabout="page-chip"]').filter({ hasText: '⬆️ Tall glyph title' }).first()
+  const chip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({ hasText: '⬆️ Tall glyph title' }).first()
   const title = chip.locator('.chip-text')
   await expect(title).toBeVisible()
 
@@ -1639,7 +1639,7 @@ test('Page Chip preserves tall first-line glyph ink without changing its layout 
     content.prepend(baselineProbe)
 
     const titleRect = element.getBoundingClientRect()
-    const chipRect = element.closest<HTMLElement>('[data-tabout="page-chip"]')?.getBoundingClientRect()
+    const chipRect = element.closest<HTMLElement>('[data-tabout="page-chip"][data-tabout-context="domain-card"]')?.getBoundingClientRect()
     const baselineRect = baselineProbe.getBoundingClientRect()
     const style = getComputedStyle(element)
     const context = document.createElement('canvas').getContext('2d')
@@ -1723,7 +1723,7 @@ test('measured dashboard titles share one document font listener', async ({ page
   })
 
   await page.goto('/tests/fixtures/dashboard-resize.html')
-  await expect.poll(() => page.locator('[data-tabout="page-chip"]').count()).toBeGreaterThan(20)
+  await expect.poll(() => page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').count()).toBeGreaterThan(20)
 
   const counts = await page.evaluate(() => (
     (window as typeof window & {
@@ -1748,6 +1748,41 @@ test('Path Group tooltip follows observer-driven label truncation', async ({ pag
 
   await label.hover()
   await expect(page.locator('[data-slot="tooltip-content"]:visible')).toHaveText(labelText)
+})
+
+test('Page Chip landmarks distinguish contexts and count an expanded history chip once', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html')
+  const domainChips = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
+  const historyChips = page.locator('[data-tabout="page-chip"][data-tabout-context="activation-history"]')
+  const historyRows = page.locator('[data-tabout="activation-history-row"]')
+  await expect.poll(() => domainChips.count()).toBeGreaterThan(0)
+  await expect.poll(() => historyRows.count()).toBeGreaterThan(0)
+  await expect(historyChips).toHaveCount(await historyRows.count())
+  await expect(page.locator('[data-tabout="page-chip"]:not([data-tabout-context="domain-card"]):not([data-tabout-context="activation-history"])')).toHaveCount(0)
+  await expect(page.locator('[data-tabout="domain-card"] [data-tabout-context="activation-history"]')).toHaveCount(0)
+  await expect(page.locator('[data-tabout="activation-history"] [data-tabout-context="domain-card"]')).toHaveCount(0)
+
+  const row = historyRows.filter({ hasText: 'Low score history item with enough tooltip text' }).first()
+  const chip = row.locator('[data-tabout="page-chip"]')
+  const marker = row.locator('[data-tabout-part="history-entry-marker"]')
+  await expect(row).toHaveAttribute('data-tabout-layout-key', /.+/)
+  await expect(chip).toHaveCount(1)
+  await expect(chip.locator('[data-tabout-part="history-entry-marker"]')).toHaveCount(0)
+  await expect(marker).toHaveCount(1)
+
+  await chip.scrollIntoViewIfNeeded()
+  await chip.locator('.history-entry-title').hover()
+  const overlay = row.locator('[data-tabout-part="expanded-surface"]')
+  await expect(overlay).toBeVisible()
+  await expect(overlay).toHaveAttribute('aria-hidden', 'true')
+  await expect(overlay).toHaveAttribute('data-tabout-context', 'activation-history')
+  await expect(overlay).not.toHaveAttribute('data-tabout')
+  await expect(chip).toHaveCount(1)
+  await expect(historyChips).toHaveCount(await historyRows.count())
+
+  await page.mouse.move(2, 2)
+  await expect(overlay).toHaveCount(0)
+  await expect(chip).toHaveCount(1)
 })
 
 test('Activation History restores its title fade after hover expansion closes', async ({ page }) => {
@@ -1776,7 +1811,7 @@ test('Activation History closes its title expansion as soon as the pointer leave
   await page.goto('/tests/fixtures/dashboard-resize.html')
   await expect.poll(() => page.locator('[data-tabout="domain-card"]').count()).toBeGreaterThanOrEqual(12)
 
-  const row = page.locator('[data-tabout="activation-history-entry"]').filter({
+  const row = page.locator('[data-tabout="activation-history-row"]').filter({
     hasText: 'Low score history item with enough tooltip text',
   }).first()
   const title = row.locator('.history-entry-title').first()
@@ -1804,7 +1839,7 @@ test('Activation History expands a faded two-line title on hover', async ({ page
   await page.goto('/tests/fixtures/dashboard-resize.html?shortHistoryTitle=1')
   await expect.poll(() => page.locator('[data-tabout="domain-card"]').count()).toBeGreaterThanOrEqual(12)
 
-  const row = page.locator('[data-tabout="activation-history-entry"]').filter({
+  const row = page.locator('[data-tabout="activation-history-row"]').filter({
     hasText: 'Shop Glasses Accessories | Fast Shipping | Zenon Optical',
   }).first()
   const title = row.locator('.history-entry-title')
@@ -1819,7 +1854,7 @@ test('Activation History hover begins at the visible entry surface', async ({ pa
   await page.goto('/tests/fixtures/dashboard-resize.html')
   await expect.poll(() => page.locator('[data-tabout="domain-card"]').count()).toBeGreaterThanOrEqual(12)
 
-  const row = page.locator('[data-tabout="activation-history-entry"]').filter({
+  const row = page.locator('[data-tabout="activation-history-row"]').filter({
     hasText: 'Low score history item with enough tooltip text',
   }).first()
   const marker = row.locator('[data-tabout-part="history-entry-marker"]')
@@ -1874,7 +1909,7 @@ test('Activation History marker stays aligned with the favicon and first title l
   await page.goto('/tests/fixtures/dashboard-resize.html')
   await expect.poll(() => page.locator('[data-tabout="domain-card"]').count()).toBeGreaterThanOrEqual(12)
 
-  const row = page.locator('[data-tabout="activation-history-entry"]').filter({
+  const row = page.locator('[data-tabout="activation-history-row"]').filter({
     hasText: 'Low score history item with enough tooltip text',
   }).first()
   const title = row.locator('.history-entry-title')
@@ -1913,10 +1948,10 @@ test('loading indicators stay centered inside app favicon outlines', async ({ pa
   const appTitle = 'Inbox (417) - example.user@example.test'
   await page.goto('/tests/fixtures/dashboard-resize.html?appLoadingFavicon=1')
 
-  const historyOutline = page.locator('[data-tabout="activation-history-entry"]')
+  const historyOutline = page.locator('[data-tabout="activation-history-row"]')
     .filter({ hasText: appTitle })
     .locator('.history-entry-app-favicon')
-  const chipOutline = page.locator('[data-tabout="page-chip"]')
+  const chipOutline = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
     .filter({ hasText: appTitle })
     .locator('.chip-app-favicon-ring')
 
@@ -1947,7 +1982,7 @@ test('filter results include matching Apps without adding them to global filtere
 
   const appsCard = page.locator('#openTabsMissions [data-tabout="domain-card"][data-tabout-domain="__standalone-apps__"]')
   await expect(appsCard).toHaveCount(1)
-  await expect(appsCard.locator('[data-tabout="page-chip"]')).toContainText(appTitle)
+  await expect(appsCard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')).toContainText(appTitle)
   await expect(appsCard.locator('[data-tabout-part="close-button"]')).toHaveCount(1)
   await expect(page.locator('[data-tabout-part="tab-count"]')).toContainText(/^1\/\d+ tabs/)
   await expect(page.locator('[data-tabout-part="window-count-value"]')).toContainText(/^0\/\d+$/)
@@ -1983,7 +2018,7 @@ test('Activation History scrollbar follows filtered row content', async ({ page 
   await page.setViewportSize({ width: 1420, height: 360 })
   await page.goto('/tests/fixtures/dashboard-resize.html')
 
-  const rows = page.locator('[data-tabout="activation-history-entry"]')
+  const rows = page.locator('[data-tabout="activation-history-row"]')
   const scrollbar = page.locator('[data-tabout-part="history-scrollbar"]')
   await expect.poll(() => rows.count()).toBeGreaterThan(0)
   await expect(scrollbar).toHaveCount(1)
@@ -2002,8 +2037,8 @@ test('context-menu triggers preserve keyboard focus on chips and history entries
   await expect.poll(() => page.locator('[data-tabout="domain-card"]').count()).toBeGreaterThanOrEqual(12)
 
   for (const trigger of [
-    page.locator('[data-tabout="page-chip"][tabindex="0"]').first(),
-    page.locator('[data-tabout="activation-history-entry"] [data-tabout-part="focus-button"][tabindex="0"]').first(),
+    page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"][tabindex="0"]').first(),
+    page.locator('[data-tabout="activation-history-row"] [data-tabout-part="focus-button"][tabindex="0"]').first(),
   ]) {
     await trigger.focus()
     await page.waitForTimeout(300)
@@ -2025,7 +2060,7 @@ test('the first right-click opens a Page Chip context menu immediately after ref
     await route.continue()
   })
 
-  const trigger = page.locator('[data-tabout="page-chip"]').filter({ hasText: 'Short title' }).first()
+  const trigger = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({ hasText: 'Short title' }).first()
   const triggerBox = await trigger.boundingBox()
   if (!triggerBox) throw new Error('Page Chip context-menu trigger geometry is unavailable')
 
@@ -2181,7 +2216,7 @@ test('meaningful secondary text avoids opacity layering and the dashboard expose
 
 test('a favicon recovers after the same image node receives a valid source', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html')
-  const chip = page.locator('[data-tabout="page-chip"]').filter({
+  const chip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({
     hasText: 'Short title',
   }).first()
   const setFavicon = async (faviconUrl: string) => {
@@ -3297,7 +3332,7 @@ test('Page Chip restores its title fade after hover expansion closes', async ({ 
   await page.goto('/tests/fixtures/dashboard-resize.html')
   await expect.poll(() => page.locator('[data-tabout="domain-card"]').count()).toBeGreaterThanOrEqual(12)
 
-  const chip = page.locator('[data-tabout="page-chip"]').filter({
+  const chip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({
     hasText: 'Example 2 with enough tooltip text',
   }).first()
   const title = chip.locator('.chip-text')
@@ -3867,7 +3902,7 @@ test('global filtered close keeps its retained result ahead of matching History'
   await closeFiltered.click()
   await expect(openCard).toHaveCount(1)
   await expect(openCard.locator('.tab-count-badge')).toHaveText('1 closed')
-  const openChip = openCard.locator('[data-tabout="page-chip"]')
+  const openChip = openCard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
   await expect(openChip).toHaveAttribute('data-tabout-retained-page-identity', /\S+/)
   await expect(openChip.locator('[data-tabout-part="close-button"]')).toHaveCount(0)
   await expect(page.locator('[data-tabout-part="close-filtered-button"]')).toHaveCount(0)
@@ -3996,7 +4031,7 @@ test('Page Chip overflow expansion fades the expander and reveals hidden chips t
   const card = page.locator('[data-tabout="domain-card"][data-tabout-domain="overflow-motion.test"]')
   const expander = card.locator('[data-tabout-part="overflow-expander"]')
   await expect(expander).toHaveCount(1)
-  await expect(card.locator('.page-chips-overflow-reveal [data-tabout="page-chip"]')).toHaveCount(0)
+  await expect(card.locator('.page-chips-overflow-reveal [data-tabout="page-chip"][data-tabout-context="domain-card"]')).toHaveCount(0)
 
   const motion = await expander.evaluate((button) => new Promise<{
     fadeKeyframes: Keyframe[]
@@ -4167,7 +4202,7 @@ test('closing the last rendered Page Chip keeps the overflow layout and retains 
   const slot = slots.last()
   const scope = await slot.getAttribute('data-tabout-layout-scope')
   const visibleSlotCount = await slots.count()
-  const targetLabel = await slot.locator('[data-tabout="page-chip"]').getAttribute('aria-label')
+  const targetLabel = await slot.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').getAttribute('aria-label')
   expect(scope).toBeTruthy()
   expect(targetLabel).toBeTruthy()
   await slot.evaluate((element) => element.setAttribute('data-motion-target-slot', ''))
@@ -4201,7 +4236,7 @@ test('closing the last rendered Page Chip keeps the overflow layout and retains 
   await expect(card.locator('.intra-card-layout-moving')).toHaveCount(0)
   await expect(page.locator('.layout-moving')).toHaveCount(0)
   await expander.click()
-  const retainedChip = card.locator('[data-tabout="page-chip"]', { hasText: targetLabel || '' })
+  const retainedChip = card.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]', { hasText: targetLabel || '' })
   await expect(retainedChip).toHaveAttribute(
     'data-tabout-retained-page-identity',
     /\S+/,
@@ -4247,7 +4282,7 @@ test('pinning an intra-card section keeps the moved section and its siblings con
 test('closing a Page Chip retains it without an exit or card reflow', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?motion=1')
   const card = page.locator('[data-tabout="domain-card"][data-tabout-domain="overflow-motion.test"]')
-  const chip = card.locator('[data-tabout="page-chip"]').first()
+  const chip = card.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').first()
   const chipLabel = await chip.getAttribute('aria-label')
   expect(chipLabel).toBeTruthy()
   await chip.hover()
@@ -4260,7 +4295,7 @@ test('closing a Page Chip retains it without an exit or card reflow', async ({ p
   await expect(card.locator('.intra-card-layout-moving')).toHaveCount(0)
   await expect(page.locator('.layout-moving')).toHaveCount(0)
   await expander.click()
-  const retainedChip = card.locator('[data-tabout="page-chip"]', { hasText: chipLabel || '' })
+  const retainedChip = card.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]', { hasText: chipLabel || '' })
   await expect(retainedChip).toHaveAttribute('data-tabout-retained-page-identity', /\S+/)
   await expect(retainedChip.locator('[data-tabout-part="close-button"]')).toHaveCount(0)
 })
@@ -4268,13 +4303,13 @@ test('closing a Page Chip retains it without an exit or card reflow', async ({ p
 test('closing the final Page Chip in a scope keeps that retained scope in place', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?motion=1&slowCloseRefresh=1')
   const card = page.locator('[data-tabout="domain-card"][data-tabout-domain="last-scope-motion.test"]')
-  const chip = card.locator('[data-tabout="page-chip"]', { hasText: 'Last Scope Only' })
+  const chip = card.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]', { hasText: 'Last Scope Only' })
   const slot = chip.locator('xpath=ancestor::*[@data-tabout-layout-item][1]')
   const scope = await slot.getAttribute('data-tabout-layout-scope')
   expect(scope).toBeTruthy()
   await expect(card.locator(`[data-tabout-layout-scope="${scope}"][data-tabout-layout-item]`)).toHaveCount(1)
 
-  const followingChip = card.locator('[data-tabout="page-chip"]', { hasText: 'Last Scope Group One' })
+  const followingChip = card.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]', { hasText: 'Last Scope Group One' })
   const followingSlot = followingChip.locator('xpath=ancestor::*[@data-tabout-removal-item][1]')
   await expect(followingSlot).toHaveCount(1)
   const followingRemovalKey = await followingSlot.getAttribute('data-tabout-removal-key')
@@ -4296,7 +4331,7 @@ test('closing the final Page Chip in a scope keeps that retained scope in place'
 test('retained Page Chip actions hand focus to next, previous, then Filter Query', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?retainedFocus=1')
   let card = page.locator('[data-tabout="domain-card"][data-tabout-domain="retained-focus.test"]')
-  let chips = card.locator('[data-tabout="page-chip"]')
+  let chips = card.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
   await expect(chips).toHaveCount(3)
 
   const middleChip = chips.nth(1)
@@ -4319,11 +4354,11 @@ test('retained Page Chip actions hand focus to next, previous, then Filter Query
     fixtureWindow.__tabOutSmokeSetRetainedFocusVisibility?.('visible')
   })
   await expect(chips).toHaveCount(2)
-  await expect(card.locator('[data-tabout="page-chip"]', { hasText: nextLabel || '' })).toBeFocused()
+  await expect(card.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]', { hasText: nextLabel || '' })).toBeFocused()
 
   await page.goto('/tests/fixtures/dashboard-resize.html?retainedFocus=1')
   card = page.locator('[data-tabout="domain-card"][data-tabout-domain="retained-focus.test"]')
-  chips = card.locator('[data-tabout="page-chip"]')
+  chips = card.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
   await expect(chips).toHaveCount(3)
   const lastChip = chips.nth(2)
   const previousChip = chips.nth(1)
@@ -4335,10 +4370,10 @@ test('retained Page Chip actions hand focus to next, previous, then Filter Query
   await expect(removeFromTabs).toBeVisible()
   await removeFromTabs.press('Enter')
   await expect(chips).toHaveCount(2)
-  await expect(card.locator('[data-tabout="page-chip"]', { hasText: previousLabel || '' })).toBeFocused()
+  await expect(card.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]', { hasText: previousLabel || '' })).toBeFocused()
 
   const onlyCard = page.locator('[data-tabout="domain-card"][data-tabout-domain="retained-focus-only.test"]')
-  const onlyChip = onlyCard.locator('[data-tabout="page-chip"]')
+  const onlyChip = onlyCard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
   await expect(onlyChip).toHaveCount(1)
   await onlyChip.focus()
   await onlyChip.click({ button: 'right' })
@@ -4374,7 +4409,7 @@ test('retained focus follows the next chip promoted out of collapsed overflow', 
   const card = page.locator(
     '[data-tabout="domain-card"][data-tabout-domain="retained-focus-overflow.test"]',
   )
-  const chips = card.locator('[data-tabout="page-chip"]')
+  const chips = card.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
   await expect(chips).toHaveCount(5)
   await expect(card.locator('[data-tabout-part="overflow-expander"]')).toHaveText('+2 more')
 
@@ -4392,7 +4427,7 @@ test('retained focus follows the next chip promoted out of collapsed overflow', 
 test('a stalled retention refresh keeps the closing Page Chip slot visible', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?motion=1&stalledCloseRefresh=1')
   const card = page.locator('[data-tabout="domain-card"][data-tabout-domain="last-scope-motion.test"]')
-  const chip = card.locator('[data-tabout="page-chip"]', { hasText: 'Last Scope Only' })
+  const chip = card.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]', { hasText: 'Last Scope Only' })
   const slot = chip.locator('xpath=ancestor::*[@data-tabout-layout-item][1]')
 
   await chip.hover()
@@ -4403,7 +4438,7 @@ test('a stalled retention refresh keeps the closing Page Chip slot visible', asy
     timeout: 1_300,
     intervals: [50, 100],
   }).toBe('')
-  await expect(slot.locator('[data-tabout="page-chip"]')).toHaveAttribute(
+  await expect(slot.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')).toHaveAttribute(
     'data-tabout-retained-page-identity',
     /\S+/,
     { timeout: 3_000 },
@@ -4420,7 +4455,7 @@ test('closing the last Page Chip in a section keeps both sections in place', asy
   await expect(documentSection).toHaveCount(1)
   await expect(spreadsheetSection).toHaveCount(1)
 
-  const chip = documentSection.locator('[data-tabout="page-chip"]', { hasText: 'Example Document Gamma' })
+  const chip = documentSection.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]', { hasText: 'Example Document Gamma' })
   const slot = chip.locator('xpath=ancestor::*[@data-tabout-layout-item][1]')
   const scope = await slot.getAttribute('data-tabout-layout-scope')
   expect(scope).toBeTruthy()
@@ -4447,13 +4482,13 @@ test('closing the last Page Chip in a section keeps both sections in place', asy
 
 test('closing an Activation History entry leaves an exit ghost while survivor rows fill the gap', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html')
-  const row = page.locator('[data-tabout="activation-history-entry"]').nth(2)
+  const row = page.locator('[data-tabout="activation-history-row"]').nth(2)
   await row.hover()
   await row.locator('[data-tabout-part="close-button"]').click({ force: true })
 
   await expect.poll(() => page.evaluate(() => ({
     ghosts: document.querySelectorAll('.history-entry-closing-ghost').length,
-    hiddenRows: Array.from(document.querySelectorAll<HTMLElement>('[data-tabout="activation-history-entry"]'))
+    hiddenRows: Array.from(document.querySelectorAll<HTMLElement>('[data-tabout="activation-history-row"]'))
       .filter((entry) => getComputedStyle(entry).display === 'none').length,
   })), {
     message: 'History removal should hide the real row and FLIP survivors immediately',

@@ -592,7 +592,7 @@ async function measureColdStartupFrame(
       trace.headerReadyAt - trace.latestPreHeaderRequest.finishedAt,
     startupFrameReadyMs: trace.headerReadyAt,
     preHeaderServiceStateRequestCount: trace.preHeaderRequestCount,
-    visiblePageChips: await dashboard.locator('[data-tabout="page-chip"]').count(),
+    visiblePageChips: await dashboard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').count(),
     wallToHeaderObservationMs,
     workerAbsentBeforeNavigation: true,
   }

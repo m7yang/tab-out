@@ -24,3 +24,12 @@ Read this guide when changing React components/hooks, shared primitives, styling
 - Add `corner-shape: squircle` to non-round UI elements that use `border-radius`.
 - Do not add squircle styling to true circles or pills such as `border-radius: 50%` or `999px`.
 - Squircle corners read less rounded than ordinary rounded corners. As a visual rule of thumb, a `4px` squircle looks similar to a `2px` non-squircle corner.
+
+## Page Chip Landmarks
+
+- When naming Page Chips or Activation History Rows, use the definitions in [CONTEXT.md](../../CONTEXT.md#domain-language).
+- Each logical Page Chip has one `data-tabout="page-chip"` landmark on its canonical surface, qualified by `data-tabout-context="domain-card"` or `data-tabout-context="activation-history"`. Queries that expect one location must include that qualifier.
+- The Activation History wrapper uses `data-tabout="activation-history-row"`; layout keys and row metadata stay on that wrapper. Select it for row counts and row geometry. Select its canonical Page Chip for chip identity, counting, and interaction targets.
+- For collapsed Activation History paint and geometry, inspect the canonical Page Chip. During expansion, inspect `[data-tabout-part="expanded-surface"]` within the same Activation History Row: the canonical chip becomes transparent and retains its resting geometry.
+- The expansion overlay carries the same context qualifier and is an `aria-hidden` visual copy. Give it only the part anchor; keep the single Page Chip landmark on the canonical surface throughout expansion.
+- `PageChip`, `HistoryEntry`, and their CSS classes are existing implementation identifiers. Shared vocabulary and landmarks do not merge their record models, actions, or layout policies. See [ADR 0033](../adr/0033-share-page-chip-language-and-landmarks.md).

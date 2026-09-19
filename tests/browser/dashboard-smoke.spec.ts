@@ -311,7 +311,7 @@ test('dashboard attaches before storage resolves and fills startup surfaces atom
       if (startupCommit.firstContent) return
       const domainCards = document.querySelectorAll('[data-tabout="domain-card"]').length
       const headerStats = document.querySelector('[data-tabout="header-stats"]')?.textContent ?? ''
-      const historyRows = Array.from(document.querySelectorAll<HTMLElement>('[data-tabout="activation-history-entry"]'))
+      const historyRows = Array.from(document.querySelectorAll<HTMLElement>('[data-tabout="activation-history-row"]'))
       const dedupeText = document.querySelector('[data-tabout="header-stats"] button')?.textContent?.trim() ?? ''
       if (domainCards === 0 && !headerStats.trim() && historyRows.length === 0 && !dedupeText) return
       startupCommit.firstContent = {
@@ -389,7 +389,7 @@ test('dashboard attaches before storage resolves and fills startup surfaces atom
   expect(firstContent.dedupeText).toBe('')
   expect(firstContent.headerStats).toMatch(/\d+(?:\/\d+)? tabs/)
   expect(firstContent.historyEntries).toBeGreaterThan(0)
-  expect(await page.locator('[data-tabout="activation-history-entry"]').evaluateAll((rows) =>
+  expect(await page.locator('[data-tabout="activation-history-row"]').evaluateAll((rows) =>
     rows.map((row) => (row as HTMLElement).dataset.taboutLayoutKey ?? ''),
   )).toEqual(firstContent.historyOrder)
   expect(await page.evaluate(() => {
@@ -504,7 +504,7 @@ test('startup failure keeps the shell truthful and visually quiet', async ({ pag
 
   await expect(page.locator('[data-tabout="dashboard-startup-status"]')).toHaveCount(0)
   await expect(page.locator('[data-tabout="domain-card"]')).toHaveCount(0)
-  await expect(page.locator('[data-tabout="activation-history-entry"]')).toHaveCount(0)
+  await expect(page.locator('[data-tabout="activation-history-row"]')).toHaveCount(0)
   await expect(page.locator('[data-tabout="header-stats"] button')).toHaveCount(0)
   expect(await page.evaluate(() =>
     (window as typeof window & { __tabOutStartupPresentation: { failureCopySeen: boolean, retryButtonSeen: boolean } })
@@ -1501,7 +1501,7 @@ async function measureHistoryEntryExpansionClickFocus(harness: DashboardHarness)
   })
   await wait(80)
   const expansionCollapseProbeStarted = await startClassRetentionProbe(harness, {
-    selector: '[data-tabout="activation-history-entry"]',
+    selector: '[data-tabout="activation-history-row"]',
     label: 'Low score history item with enough tooltip text',
     className: 'history-entry-row-expanded-open',
   })
@@ -1798,7 +1798,7 @@ async function measurePageChipContextMenuSave(harness: DashboardHarness) {
   })
   await wait(80)
   const expansionCollapseProbeStarted = await startClassRetentionProbe(harness, {
-    selector: '[data-tabout="page-chip"]',
+    selector: '[data-tabout="page-chip"][data-tabout-context="domain-card"]',
     label: replacementTarget.label,
     className: 'page-chip-expanded',
   })
@@ -3872,7 +3872,7 @@ test('destructive menu actions stay red at rest and through pointer and keyboard
   await page.goto('/tests/fixtures/dashboard-resize.html?retainedFocus=1&retainedMixedFocus=1')
 
   const retainedChip = page.locator(
-    '[data-tabout="domain-card"][data-tabout-domain="retained-focus-only.test"] [data-tabout="page-chip"]',
+    '[data-tabout="domain-card"][data-tabout-domain="retained-focus-only.test"] [data-tabout="page-chip"][data-tabout-context="domain-card"]',
   ).first()
   await expect(retainedChip).toBeVisible()
   await retainedChip.click({ button: 'right' })
@@ -3950,7 +3950,7 @@ test('destructive menu actions stay red at rest and through pointer and keyboard
 test('Page Chip context-menu separators stay conditional for retained and copy-only pages', async ({ page }) => {
   async function expectContextMenuSequence(domain: string, sequence: string[]) {
     const trigger = page.locator(
-      `[data-tabout="domain-card"][data-tabout-domain="${domain}"] [data-tabout="page-chip"]`,
+      `[data-tabout="domain-card"][data-tabout-domain="${domain}"] [data-tabout="page-chip"][data-tabout-context="domain-card"]`,
     ).first()
     await expect(trigger).toBeVisible()
     await trigger.click({ button: 'right' })
@@ -4055,7 +4055,7 @@ test('domain card menu conditionally groups actions and puts retained-page remov
   })
 
   const mixedCard = page.locator('[data-tabout="domain-card"][data-tabout-domain="retained-focus.test"]')
-  await expect(mixedCard.locator('[data-tabout="page-chip"]')).toHaveCount(5)
+  await expect(mixedCard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')).toHaveCount(5)
   await expectCardMenuSequence(
     'retained-focus.test',
     [
