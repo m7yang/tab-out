@@ -1,5 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
-import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useRef } from 'react'
 import { Tabs as TabsPrimitive } from '@base-ui/react/tabs'
 import { useWindowEvent } from '../hooks/useGlobalEvent'
 import { HeaderStats } from './HeaderStats'
@@ -7,17 +6,8 @@ import { Tabs, TabsList, TabsTrigger } from './ui/tabs'
 import { dashboardViewOptionId, type DashboardView } from '../extension/dashboard-view.js'
 import { isHistoryFilterEnabled } from '../extension/history-range.js'
 import { isFilterFocusShortcut } from '../extension/app-url.js'
-import {
-  EMPTY_FILTER_RESULT_SELECTION,
-  filterResultKeyboardIntent,
-  reconcileFilterResultSelection,
-  reconcileVisibleFilterResultSelection,
-  selectAdjacentFilterResult,
-  selectHorizontalFilterResult,
-  type FilterResultCandidate,
-  type FilterResultMoveDirection,
-  type FilterResultSelection,
-} from '../extension/filter-result-navigation.js'
+import type { FilterResultCandidate } from '../extension/filter-result-navigation.js'
+import { useFilterResultNavigation } from './filter-result-navigation/use-filter-result-navigation.js'
 import { cn } from '@/lib/utils'
 import type { DashboardSource, DashboardStats } from './types'
 
@@ -55,110 +45,6 @@ interface HeaderBarProps {
 }
 
 const EMPTY_FILTER_RESULT_CANDIDATES: readonly FilterResultCandidate[] = []
-
-type PendingFilterResultAction =
-  | {
-    kind: 'move'
-    direction: FilterResultMoveDirection
-    query: string
-    source: DashboardSource
-  }
-  | {
-    kind: 'activate'
-    modifiers: {
-      altKey: boolean
-      ctrlKey: boolean
-      metaKey: boolean
-      shiftKey: boolean
-    }
-    query: string
-    source: DashboardSource
-  }
-
-function filterResultCandidateForSelection(
-  selection: FilterResultSelection,
-  candidates: readonly FilterResultCandidate[],
-) {
-  return candidates.find((candidate) => candidate.key === selection.candidateKey)
-}
-
-function mountedFilterResultCandidates(candidates: readonly FilterResultCandidate[]) {
-  return candidates.filter(isMountedFilterResultCandidate)
-}
-
-function isMountedFilterResultCandidate(candidate: FilterResultCandidate) {
-  const target = document.getElementById(candidate.domId)
-  return target instanceof HTMLElement && target.getClientRects().length > 0
-}
-
-function applyFilterResultSelection(
-  selection: FilterResultSelection,
-  candidates: readonly FilterResultCandidate[],
-  input: HTMLInputElement | null,
-  previousElement: HTMLElement | null,
-  scroll: boolean,
-): HTMLElement | null {
-  const candidate = filterResultCandidateForSelection(selection, candidates)
-  const nextElement = candidate ? document.getElementById(candidate.domId) : null
-  if (previousElement !== nextElement) {
-    previousElement?.removeAttribute('data-tabout-filter-result-selected')
-  }
-  if (!candidate || !(nextElement instanceof HTMLElement)) {
-    input?.removeAttribute('aria-activedescendant')
-    return null
-  }
-
-  nextElement.setAttribute('data-tabout-filter-result-selected', 'true')
-  input?.setAttribute('aria-activedescendant', candidate.domId)
-  if (scroll) nextElement.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-  return nextElement
-}
-
-function dispatchFilterResultActivation(
-  candidate: FilterResultCandidate,
-  modifiers: Extract<PendingFilterResultAction, { kind: 'activate' }>['modifiers'],
-) {
-  const target = document.getElementById(candidate.domId)
-  if (!(target instanceof HTMLElement)) return
-  target.dispatchEvent(new MouseEvent('click', {
-    bubbles: true,
-    cancelable: true,
-    button: 0,
-    detail: 1,
-    view: window,
-    ...modifiers,
-  }))
-}
-
-function moveFilterResultSelection(
-  current: FilterResultSelection,
-  query: string,
-  candidates: readonly FilterResultCandidate[],
-  direction: FilterResultMoveDirection,
-) {
-  if (direction === 'next' || direction === 'previous') {
-    return selectAdjacentFilterResult(current, query, candidates, direction)
-  }
-
-  const positionedCandidates = candidates.flatMap((candidate) => {
-    const target = document.getElementById(candidate.domId)
-    if (!(target instanceof HTMLElement) || target.getClientRects().length === 0) return []
-
-    const rect = target.getBoundingClientRect()
-    if (rect.width <= 0 || rect.height <= 0) return []
-    return [{
-      candidate,
-      rect: {
-        left: rect.left,
-        right: rect.right,
-        top: rect.top,
-        bottom: rect.bottom,
-      },
-    }]
-  })
-
-  return selectHorizontalFilterResult(current, query, positionedCandidates, direction)
-}
 
 function DashboardViewSwitch({ dashboardView, onDashboardViewChange }: DashboardViewSwitchProps) {
   function handleDashboardViewChange(nextValue: unknown) {
@@ -215,119 +101,16 @@ export function HeaderBar({
   stats,
 }: HeaderBarProps) {
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const pendingFilterResultActionRef = useRef<PendingFilterResultAction | null>(null)
-  const selectedFilterResultElementRef = useRef<HTMLElement | null>(null)
-  const filterResultSelectionRef = useRef(EMPTY_FILTER_RESULT_SELECTION)
-  const filterResultContextRef = useRef({ dashboardView, source, sourceSelection })
-  const filterResultNavigationEnabled = source === sourceSelection
-  const availableCandidates = filterResultNavigationEnabled
-    ? filterResultCandidates
-    : EMPTY_FILTER_RESULT_CANDIDATES
-
-  function updateFilter(nextValue: string) {
-    pendingFilterResultActionRef.current = null
-    onFilterChange(nextValue)
-  }
-
-  useLayoutEffect(() => {
-    const previousContext = filterResultContextRef.current
-    filterResultContextRef.current = { dashboardView, source, sourceSelection }
-    if (
-      previousContext.dashboardView === dashboardView &&
-      previousContext.source === source &&
-      previousContext.sourceSelection === sourceSelection
-    ) return
-
-    pendingFilterResultActionRef.current = null
-    filterResultSelectionRef.current = EMPTY_FILTER_RESULT_SELECTION
-    selectedFilterResultElementRef.current = applyFilterResultSelection(
-      EMPTY_FILTER_RESULT_SELECTION,
-      EMPTY_FILTER_RESULT_CANDIDATES,
-      inputRef.current,
-      selectedFilterResultElementRef.current,
-      false,
-    )
-  }, [dashboardView, source, sourceSelection])
-
-  useLayoutEffect(() => {
-    const pendingAction = pendingFilterResultActionRef.current
-    const pendingActionMatches = pendingAction?.query === filter &&
-      pendingAction.source === source &&
-      filterResultNavigationEnabled
-    const mountedCandidates = pendingActionMatches && pendingAction.kind === 'move'
-      ? mountedFilterResultCandidates(availableCandidates)
-      : null
-    let nextSelection: FilterResultSelection
-    let nextCandidate: FilterResultCandidate | undefined
-    if (mountedCandidates) {
-      nextSelection = reconcileFilterResultSelection(
-        filterResultSelectionRef.current,
-        filter,
-        mountedCandidates,
-      )
-      nextCandidate = filterResultCandidateForSelection(nextSelection, mountedCandidates)
-    } else {
-      const reconciledResult = reconcileVisibleFilterResultSelection(
-        filterResultSelectionRef.current,
-        filter,
-        availableCandidates,
-        isMountedFilterResultCandidate,
-      )
-      nextSelection = reconciledResult.selection
-      nextCandidate = reconciledResult.candidate
-    }
-
-    if (pendingActionMatches && pendingAction.kind === 'activate' && !nextCandidate) {
-      nextCandidate = availableCandidates.find(isMountedFilterResultCandidate)
-    }
-    let pendingActivation: Extract<PendingFilterResultAction, { kind: 'activate' }> | null = null
-    let scrollSelection = false
-
-    if (
-      pendingActionMatches &&
-      (
-        nextCandidate ||
-        (pendingAction.kind === 'move' && (mountedCandidates?.length ?? 0) > 0) ||
-        filterResultSearchSettled
-      )
-    ) {
-      pendingFilterResultActionRef.current = null
-      if (pendingAction.kind === 'move') {
-        nextSelection = moveFilterResultSelection(
-          nextSelection,
-          filter,
-          mountedCandidates ?? EMPTY_FILTER_RESULT_CANDIDATES,
-          pendingAction.direction,
-        )
-        nextCandidate = filterResultCandidateForSelection(
-          nextSelection,
-          mountedCandidates ?? EMPTY_FILTER_RESULT_CANDIDATES,
-        )
-        scrollSelection = true
-      } else {
-        pendingActivation = pendingAction
-      }
-    }
-
-    selectedFilterResultElementRef.current = applyFilterResultSelection(
-      nextSelection,
-      mountedCandidates ?? availableCandidates,
-      inputRef.current,
-      selectedFilterResultElementRef.current,
-      scrollSelection,
-    )
-    filterResultSelectionRef.current = nextSelection
-
-    if (pendingActivation && nextCandidate) {
-      dispatchFilterResultActivation(nextCandidate, pendingActivation.modifiers)
-    }
-  }, [
-    availableCandidates,
-    filter,
-    filterResultNavigationEnabled,
-    filterResultSearchSettled,
+  const navigation = useFilterResultNavigation({
+    inputRef,
+    dashboardView,
     source,
-  ])
+    sourceSelection,
+    filter,
+    filterResultCandidates,
+    filterResultSearchSettled,
+    onFilterChange,
+  })
 
   useWindowEvent('keydown', (e) => {
     if (!isFilterFocusShortcut(e)) return
@@ -338,91 +121,8 @@ export function HeaderBar({
 
   const filterPlaceholder = source === 'bookmarks' ? BOOKMARKS_FILTER_PLACEHOLDER : isHistoryFilterEnabled(historyRange) ? 'Filter tabs, bookmarks, history…' : 'Filter tabs and bookmarks…'
 
-  function onFilterKeyDown(e: ReactKeyboardEvent<HTMLInputElement>) {
-    const intent = filterResultKeyboardIntent({
-      key: e.key,
-      altKey: e.altKey,
-      ctrlKey: e.ctrlKey,
-      isComposing: e.nativeEvent.isComposing,
-      metaKey: e.metaKey,
-      shiftKey: e.shiftKey,
-    })
-    if (!intent || !filter.trim()) return
-    if (!filterResultNavigationEnabled) return
-
-    const selectionIsInputOwned = filterResultSelectionRef.current.query !== filter ||
-      filterResultSelectionRef.current.candidateKey === null
-    if ((intent === 'left' || intent === 'right') && selectionIsInputOwned) return
-
-    e.preventDefault()
-    const action: PendingFilterResultAction = intent === 'activate'
-      ? {
-          kind: 'activate',
-          modifiers: {
-            altKey: e.altKey,
-            ctrlKey: e.ctrlKey,
-            metaKey: e.metaKey,
-            shiftKey: e.shiftKey,
-          },
-          query: filter,
-          source,
-        }
-      : {
-          kind: 'move',
-          direction: intent,
-          query: filter,
-          source,
-        }
-
-    const mountedCandidates = mountedFilterResultCandidates(availableCandidates)
-    const currentSelection = reconcileFilterResultSelection(
-      filterResultSelectionRef.current,
-      filter,
-      mountedCandidates,
-    )
-
-    if (mountedCandidates.length === 0 && !filterResultSearchSettled) {
-      pendingFilterResultActionRef.current = action
-      return
-    }
-
-    if (action.kind === 'move') {
-      const nextSelection = moveFilterResultSelection(
-        currentSelection,
-        filter,
-        mountedCandidates,
-        action.direction,
-      )
-      filterResultSelectionRef.current = nextSelection
-      selectedFilterResultElementRef.current = applyFilterResultSelection(
-        nextSelection,
-        mountedCandidates,
-        inputRef.current,
-        selectedFilterResultElementRef.current,
-        true,
-      )
-      return
-    }
-
-    filterResultSelectionRef.current = currentSelection
-    selectedFilterResultElementRef.current = applyFilterResultSelection(
-      currentSelection,
-      mountedCandidates,
-      inputRef.current,
-      selectedFilterResultElementRef.current,
-      false,
-    )
-    const selectedFilterResultCandidate = filterResultCandidateForSelection(
-      currentSelection,
-      mountedCandidates,
-    ) ?? mountedCandidates[0]
-    if (selectedFilterResultCandidate) {
-      dispatchFilterResultActivation(selectedFilterResultCandidate, action.modifiers)
-    }
-  }
-
   function onClear() {
-    updateFilter('')
+    navigation.onQueryChange('')
     inputRef.current?.focus()
   }
 
@@ -458,8 +158,8 @@ export function HeaderBar({
               placeholder={filterPlaceholder}
               value={filter}
               aria-controls={filter.trim() ? 'dashboardMissions' : undefined}
-              onChange={(e) => updateFilter(e.currentTarget.value)}
-              onKeyDown={onFilterKeyDown}
+              onChange={(e) => navigation.onQueryChange(e.currentTarget.value)}
+              onKeyDown={navigation.onKeyDown}
             />
             <button
               type="button"
