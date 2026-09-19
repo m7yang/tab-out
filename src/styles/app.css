@@ -21,7 +21,7 @@
   --color-foreground: var(--color-black);
   --color-muted-foreground: var(--color-neutral-500);
   --color-tab-live: var(--color-foreground);
-  --color-tab-closed: var(--color-muted-foreground);
+  --color-tab-closed: var(--color-neutral-600);
   --color-tab-card: var(--card-bg);
   --color-background: var(--paper);
   --color-popover: var(--card-bg);

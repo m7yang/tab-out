@@ -22,11 +22,13 @@ test('a loading live history row replaces its favicon with Chrome’s loading in
 test('a suspended history row dims its favicon', () => {
   const html = renderHistoryPanel([makeHistoryEntry({ suspended: true })])
   assert.match(html, /chip-favicon-dimmed/)
+  assert.doesNotMatch(html, /saturate-/)
 })
 
 test('a closed history row dims its favicon', () => {
   const html = renderHistoryPanel([makeHistoryEntry({ exists: false, tabId: -1 })])
   assert.match(html, /chip-favicon-dimmed/)
+  assert.match(html, /saturate-60/)
 })
 
 test('rows dim independently within one panel', () => {

@@ -102,11 +102,13 @@ test('loading title-variant and folded chips expose one busy semantic group', ()
 test('a suspended tab chip dims its favicon', () => {
   const html = renderChip({ suspended: true })
   assert.match(html, /chip-favicon-dimmed/)
+  assert.doesNotMatch(html, /saturate-/)
 })
 
 test('a closed saved page chip dims its favicon', () => {
   const html = renderChip({ sourceType: 'saved-page', saved: true, closedSaved: true })
   assert.match(html, /chip-favicon-dimmed/)
+  assert.match(html, /saturate-60/)
 })
 
 test('a closed saved page chip dims its default favicon too', () => {
@@ -181,9 +183,9 @@ test('a suspended current variant keeps a distinct full-opacity label color whil
       makeChip({ tabUrl: 'https://site.example/b', rawUrl: 'https://site.example/b', pathSuffix: '/b' }),
     ]),
   })
-  assert.match(html, /chip-title-variant clickable[^"]*text-neutral-600/)
+  assert.match(html, /chip-title-variant clickable[^"]*text-tab-live/)
   assert.equal((html.match(/chip-variant-label-dimmed/g) || []).length, 1)
-  assert.match(html, /chip-variant-label-dimmed[^"]*text-neutral-500/)
+  assert.match(html, /chip-variant-label-dimmed[^"]*text-neutral-600/)
   assert.doesNotMatch(html, /chip-variant-label-dimmed[^"]*opacity-/)
 })
 

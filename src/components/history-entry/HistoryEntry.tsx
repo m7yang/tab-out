@@ -13,7 +13,7 @@ import type { PageChipContextMenuTriggerElement } from '../PageChipContextMenu'
 import type { ContextMenuChangeEventDetails } from '../context-menu-outside-press'
 import { DefaultFavicon } from '../DefaultFavicon'
 import { FaviconImage } from '../FaviconImage'
-import { FAVICON_DIM_CLASS_NAME } from '../liveness-dim'
+import { faviconLivenessClassName } from '../liveness-dim'
 import { TabAudioButton } from '../TabAudioButton'
 import { TabLoadingIndicator } from '../TabLoadingIndicator'
 import { createBionicTitleTextRenderer } from '../bionic-title-text'
@@ -94,23 +94,18 @@ export function historyEntryIndexLabel(entry: TabHistoryEntry, snapshot: TabHist
 
 type HistoryEntryMarkerCellProps = {
   indexLabel: ReactNode
-  isIndexHighlighted: boolean
 }
 
 // Ghost rows (Working Set extras, recently-closed) render a blank marker
 // cell: their open/closed state already reads from the row itself via the
 // liveness treatment, so the old amber dot glyphs carried redundant signal.
-function HistoryEntryMarkerCell({ indexLabel, isIndexHighlighted }: HistoryEntryMarkerCellProps) {
-  const marker: ReactNode = indexLabel
+function HistoryEntryMarkerCell({ indexLabel }: HistoryEntryMarkerCellProps) {
   return (
     <span
       data-tabout-part="history-entry-marker"
-      className={cn(
-        'mt-1.25 inline-flex h-4 w-5.5 flex-none items-center justify-end gap-px bg-transparent text-xs font-medium tabular-nums text-muted-foreground group-has-[.history-entry:hover:not([data-title-collapsed])]/history-row:text-[rgba(64,64,64,0.76)] group-focus-within/history-row:text-[rgba(64,64,64,0.76)]',
-        isIndexHighlighted && 'font-semibold text-tab-live group-has-[.history-entry:hover:not([data-title-collapsed])]/history-row:text-tab-live group-focus-within/history-row:text-tab-live',
-      )}
+      className="mt-1.25 inline-flex h-4 w-5.5 flex-none items-center justify-end gap-px bg-transparent text-xs font-medium tabular-nums text-muted-foreground group-has-[.history-entry:hover:not([data-title-collapsed])]/history-row:text-[rgba(64,64,64,0.76)] group-focus-within/history-row:text-[rgba(64,64,64,0.76)]"
     >
-      {marker}
+      {indexLabel}
     </span>
   )
 }
@@ -175,7 +170,7 @@ function HistoryEntryTitle({ expanded, title, highlightTerms, mutedTitle, geomet
 type HistoryEntryFaviconFrameProps = {
   expanded: boolean
   faviconUrl: string
-  faviconDimmed: boolean
+  faviconClassName: string
   loading: boolean
   isApp: boolean
   isWorkingSetExtra: boolean
@@ -186,7 +181,7 @@ type HistoryEntryFaviconFrameProps = {
   onClose: (e: MouseEvent<HTMLButtonElement>) => void
 }
 
-function HistoryEntryFaviconFrame({ expanded, faviconUrl, faviconDimmed, loading, isApp, isWorkingSetExtra, canRemoveEntry, canForgetClosedGhost, entryLabel, onForget, onClose }: HistoryEntryFaviconFrameProps) {
+function HistoryEntryFaviconFrame({ expanded, faviconUrl, faviconClassName, loading, isApp, isWorkingSetExtra, canRemoveEntry, canForgetClosedGhost, entryLabel, onForget, onClose }: HistoryEntryFaviconFrameProps) {
   return (
     <span className={cn(
       'history-entry-favicon-frame group/history-favicon-frame relative grid size-4 flex-none place-items-center',
@@ -213,7 +208,7 @@ function HistoryEntryFaviconFrame({ expanded, faviconUrl, faviconDimmed, loading
         )}
         aria-hidden="true"
       >
-        {loading ? <TabLoadingIndicator /> : faviconUrl ? <FaviconImage className={cn('block h-full w-full object-contain', faviconDimmed && FAVICON_DIM_CLASS_NAME)} src={faviconUrl} alt="" /> : isWorkingSetExtra || canForgetClosedGhost ? <DefaultFavicon className={faviconDimmed ? FAVICON_DIM_CLASS_NAME : ''} /> : null}
+        {loading ? <TabLoadingIndicator /> : faviconUrl ? <FaviconImage className={cn('block h-full w-full object-contain', faviconClassName)} src={faviconUrl} alt="" /> : isWorkingSetExtra || canForgetClosedGhost ? <DefaultFavicon className={faviconClassName} /> : null}
       </span>
       {canRemoveEntry && (
         <span
@@ -423,13 +418,12 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
       matchUrls.some((url) => url === state.url || state.urls.includes(url))
     )
   ))
-  const isIndexHighlighted = isActiveEntry || entry.previousTarget || entry.nextTarget || hoverMatched
   const entryLabel = entry.title || entry.displayUrl || entry.url
   const faviconUrl = entry.favIconUrl || workingSetItem?.faviconUrl || ''
   // Same liveness rule as page chips: full strength only when an awake tab
   // backs the row. Open-ghost rows derive `suspended` from the suspender url
   // (makeHistoryEntry default), closed rows are exists:false.
-  const faviconDimmed = !entry.exists || entry.suspended
+  const faviconClassName = faviconLivenessClassName({ closed: entryClosed, suspended: entry.suspended })
   // Audio icon shows on any live (exists) row that is playing or muted — both
   // stack entries and working-set open-ghost rows (the adapter carries the
   // tab's audible/muted). Closed rows are exists:false, so a gone tab gets none.
@@ -568,7 +562,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
           <HistoryEntryFaviconFrame
             expanded={expanded}
             faviconUrl={faviconUrl}
-            faviconDimmed={faviconDimmed}
+            faviconClassName={faviconClassName}
             loading={!!entry.loading}
             isApp={entry.isApp}
             isWorkingSetExtra={isWorkingSetExtra}
@@ -615,10 +609,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
       onFocus={onMouseEnter}
       onBlur={onMouseLeave}
     >
-      <HistoryEntryMarkerCell
-        indexLabel={indexLabel}
-        isIndexHighlighted={isIndexHighlighted}
-      />
+      <HistoryEntryMarkerCell indexLabel={indexLabel} />
       <div
         className="history-entry-slot relative min-w-0 flex-auto"
         style={entrySlotStyle}

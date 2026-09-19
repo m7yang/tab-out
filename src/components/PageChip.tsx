@@ -40,7 +40,7 @@ import { titleSuppressionChipHighlightClass, titleSuppressionMarkerClass, titleS
 import type { TitleSuppressionTone } from './title-suppression'
 import { createTitleExpansionLane, useCloseOnOutsideActivity, useTitleExpansionController } from './title-expansion'
 import { chipTrim, CHIP_TRIM_TOKENS } from './chip-trim'
-import { FAVICON_DIM_CLASS_NAME, VARIANT_LABEL_DIM_CLASS_NAME } from './liveness-dim'
+import { faviconLivenessClassName, VARIANT_LABEL_DIM_CLASS_NAME } from './liveness-dim'
 import type { DashboardChipData } from './types'
 import type { DashboardChipEnv, DashboardSegment, SameTitlePageChipPlan, SameTitlePageChipRowView } from '../extension/types'
 import { foldedTabCloseTargets, historyDeleteFullyRemoved } from './chip-close-targets.js'
@@ -134,7 +134,7 @@ type ChipFaviconFrameProps = {
  * keep their weight.
  */
 function ChipFaviconFrame({ chip, dupeCount, showDefaultFavicon, showFaviconCloseAction, dedupeBadgesClosing, closeActionLabel, closeActionDestructive, onCloseAction, onToggleAudio }: ChipFaviconFrameProps) {
-  const faviconDimmed = !!chip.suspended || isClosedSavedDashboardTab(chip)
+  const faviconClassName = faviconLivenessClassName({ closed: isClosedSavedDashboardTab(chip), suspended: !!chip.suspended })
   return (
     <span
       className={cn(
@@ -184,9 +184,9 @@ function ChipFaviconFrame({ chip, dupeCount, showDefaultFavicon, showFaviconClos
         {chip.loading ? (
           <TabLoadingIndicator />
         ) : chip.faviconUrl ? (
-          <FaviconImage className={cn('chip-favicon block h-full w-full rounded-none object-cover', faviconDimmed && FAVICON_DIM_CLASS_NAME)} src={chip.faviconUrl} alt="" />
+          <FaviconImage className={cn('chip-favicon block h-full w-full rounded-none object-cover', faviconClassName)} src={chip.faviconUrl} alt="" />
         ) : showDefaultFavicon ? (
-          <DefaultFavicon className={faviconDimmed ? FAVICON_DIM_CLASS_NAME : ''} />
+          <DefaultFavicon className={faviconClassName} />
         ) : null}
       </span>
       {!chip.iconOnly && chip.pagePinned && (
@@ -1389,7 +1389,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     const labelContent = (
       <>
         <span className={cn(
-          'chip-title-variant-label min-w-0 overflow-hidden text-left whitespace-nowrap [&.chip-title-variant-label-truncated]:mask-(--title-fade-mask)',
+          'chip-title-variant-label min-w-0 overflow-hidden text-left text-[12px] font-medium whitespace-nowrap [&.chip-title-variant-label-truncated]:mask-(--title-fade-mask)',
           variantLabelTruncated && (chipExpanded ? 'text-ellipsis' : 'chip-title-variant-label-truncated'),
           row.dimmed && VARIANT_LABEL_DIM_CLASS_NAME,
         )}
@@ -1423,7 +1423,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
         data-tabout-removal-key={row.removalKey}
         data-tabout-default-variant={row.id === sameTitlePageChipView?.defaultRowId ? 'true' : undefined}
         className={cn(
-          'chip-title-variant clickable flex w-full max-w-full min-w-0 cursor-default items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-0.75 [font-size:inherit] leading-tight font-normal text-neutral-600 [corner-shape:squircle] title-interaction:hover:bg-(--chip-target-interaction-bg) title-interaction:hover:text-tab-live focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-target-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-1 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
+          'chip-title-variant clickable flex w-full max-w-full min-w-0 cursor-default items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-0.75 [font-size:inherit] leading-tight font-normal text-tab-live [corner-shape:squircle] title-interaction:hover:bg-(--chip-target-interaction-bg) title-interaction:hover:text-tab-live focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-target-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-1 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
           'title-interaction:[&.page-chip-context-menu-open]:bg-(--chip-target-interaction-bg) title-interaction:[&.page-chip-context-menu-open]:text-tab-live',
           row.active && 'bg-neutral-600/7.5 text-tab-live',
           row.current && 'bg-neutral-600/10 text-tab-live',
@@ -1466,7 +1466,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       return (
         <span
           key={row.id}
-          className="chip-title-variant inline-flex max-w-full items-center gap-1 rounded-lg bg-neutral-500/4.5 px-1.5 py-0.5 leading-tight font-normal text-neutral-600 [corner-shape:squircle]"
+          className="chip-title-variant inline-flex max-w-full items-center gap-1 rounded-lg bg-neutral-500/4.5 px-1.5 py-0.5 leading-tight font-normal text-tab-live [corner-shape:squircle]"
         >
           {labelContent}
         </span>

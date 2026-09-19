@@ -2252,7 +2252,7 @@ test('TabHistoryPanel omits the extras section when working-set items overlap th
   assert.doesNotMatch(html, /data-tabout-part="working-set-extra-list"/)
 })
 
-test('TabHistoryPanel gives highlighted history indexes stronger contrast', () => {
+test('TabHistoryPanel keeps active and inactive history indexes uniformly muted', () => {
   const baseEntry = makeHistoryEntry()
   const html = renderToStaticMarkup(
     React.createElement(TabHistoryPanel as React.ComponentType<any>, {
@@ -2277,14 +2277,13 @@ test('TabHistoryPanel gives highlighted history indexes stronger contrast', () =
     }),
   )
   const indexMatches = Array.from(html.matchAll(/<span data-tabout-part="history-entry-marker" class="([^"]*)"/g))
-  const highlighted = indexMatches.filter((match) => /\bfont-semibold\b/.test(requiredAt(match, 1)))
-  const muted = indexMatches.filter((match) => !/\bfont-semibold\b/.test(requiredAt(match, 1)))
-
   assert.equal(indexMatches.length, 2)
-  assert.equal(highlighted.length, 1)
-  assert.equal(muted.length, 1)
-  assert.match(requiredAt(requiredAt(highlighted, 0), 1), /\btext-tab-live\b/)
-  assert.match(requiredAt(requiredAt(muted, 0), 1), /\btext-muted-foreground\b/)
+  for (const match of indexMatches) {
+    const classes = requiredAt(match, 1)
+    assert.match(classes, /\bfont-medium\b/)
+    assert.match(classes, /\btext-muted-foreground\b/)
+    assert.doesNotMatch(classes, /\bfont-semibold\b|\btext-tab-live\b/)
+  }
 })
 
 test('TabHistoryPanel keeps FLIP keys stable when stack indexes change', () => {
