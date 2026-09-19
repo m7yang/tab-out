@@ -14,11 +14,10 @@
      resolution and precedence (an active frame suppresses the group
      outline) live INSIDE the table, never in callers.
 
-   • A chip kind that draws no trim at rest never gains a border or
-     outline from hover, context menu, or Title Expansion. Interaction
-     feedback for trim-less kinds is fill-only, and their fills are
-     translucent so a neighbour's line on the shared seam row shows
-     through.
+   • Plain full-width chips have no resting trim, but gain a quiet
+     outline on interaction. Their in-flow fills stay translucent so a
+     neighbour's line on the shared seam row shows through. Icon-only
+     chips retain their outside ring instead of gaining an inset rim.
 
    • Adjacent full-width chip slots overlap by 1px so coinciding trim
      lines render once. Whoever paints on the shared row either draws

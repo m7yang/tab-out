@@ -141,7 +141,7 @@ test('chip-trim: the three frame flavours resolve by precedence', () => {
   assert.match(currentActive.chipClasses, /current-active-chip .*ring-1 ring-inset ring-neutral-400/)
   assert.ok(currentActive.frame)
   assert.match(currentActive.frame.classes, /current-active-chip-frame/)
-  assert.equal(currentActive.styleVars.interactionBg, 'var(--color-neutral-50)')
+  assert.equal(currentActive.styleVars.interactionBg, 'var(--color-neutral-100)')
 
   const currentTabOut = chipTrim(facts({ activeChipFrame: true, isCurrentTabOut: true }))
   assert.match(currentTabOut.chipClasses, /current-tab-out-chip /)
@@ -183,6 +183,7 @@ test('chip-trim: the expanded fill spares flush edges and extends grown edges', 
   assert.equal(inPlaceDown.top, '1px')
   assert.equal(inPlaceDown.bottom, '1px')
   assert.equal(inPlaceDown.background, OPAQUE_CLICKABLE)
+  assert.ok(inPlaceDown.classes.includes('rounded-[inherit]'))
   assert.ok(inPlaceDown.classes.includes('opacity-0'))
   assert.ok(inPlaceDown.classes.includes('group-hover/page-chip:opacity-100'))
   assert.ok(inPlaceDown.classes.includes('group-focus-visible/page-chip:opacity-100'))

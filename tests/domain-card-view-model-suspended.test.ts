@@ -114,4 +114,6 @@ test('a folded env chip stays awake when a suspended environment representative 
   assert.ok(chip)
   assert.equal(chip.envs?.length, 2)
   assert.equal(chip.suspended, false)
+  assert.equal(chip.envs?.find((env) => env.prefix === 'dev')?.suspended, false)
+  assert.equal(chip.envs?.find((env) => env.prefix === 'qa')?.suspended, true)
 })

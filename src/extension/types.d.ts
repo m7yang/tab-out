@@ -125,6 +125,7 @@ export interface DashboardChipEnv {
   sourceType?: DashboardTab['sourceType']
   saved?: boolean
   closedSaved?: boolean
+  suspended?: boolean
   savedPageKey?: string
   retainedPageIdentity?: string
   retainedPageClosureToken?: string

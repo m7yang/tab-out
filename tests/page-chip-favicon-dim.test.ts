@@ -272,3 +272,19 @@ test('a retained variant row dims its label without a duplicate badge', () => {
   assert.equal((html.match(/chip-variant-label-dimmed/g) || []).length, 1)
   assert.doesNotMatch(html, /chip-title-variant-dupe|open copies|Closed saved page/)
 })
+
+test('folded target labels preserve their own liveness under an active parent', () => {
+  const html = renderChip({
+    activeInOtherWindow: true,
+    envs: [
+      { prefix: 'awake', tabUrl: 'https://awake.example.com/page', rawUrl: 'https://awake.example.com/page', activeInOtherWindow: true },
+      { prefix: 'suspended', tabUrl: 'https://suspended.example.com/page', rawUrl: 'https://suspended.example.com/page', suspended: true, activeInOtherWindow: true },
+      { prefix: 'closed', tabUrl: 'https://closed.example.com/page', rawUrl: 'https://closed.example.com/page', sourceType: 'saved-page', closedSaved: true },
+      { prefix: 'bookmark', tabUrl: 'https://bookmark.example.com/page', rawUrl: 'https://bookmark.example.com/page', sourceType: 'bookmark' },
+    ],
+  })
+  assert.match(html, /class="chip-env-label">awake<\/span>/)
+  assert.match(html, /class="chip-env-label chip-variant-label-dimmed text-neutral-600">suspended<\/span>/)
+  assert.match(html, /class="chip-env-label chip-variant-label-dimmed text-neutral-600">closed<\/span>/)
+  assert.match(html, /class="chip-env-label">bookmark<\/span>/)
+})

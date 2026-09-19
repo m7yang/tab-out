@@ -14,6 +14,7 @@ import type { ContextMenuChangeEventDetails } from '../context-menu-outside-pres
 import { DefaultFavicon } from '../DefaultFavicon'
 import { FaviconImage } from '../FaviconImage'
 import { faviconLivenessClassName } from '../liveness-dim'
+import { PAGE_CHIP_CURRENT_CLASSES, PAGE_CHIP_PAINT } from '../page-chip-paint'
 import { TabAudioButton } from '../TabAudioButton'
 import { TabLoadingIndicator } from '../TabLoadingIndicator'
 import { createBionicTitleTextRenderer } from '../bionic-title-text'
@@ -37,11 +38,6 @@ import { useHistoryEntryExpansion } from './use-history-entry-expansion.js'
 import { startHistoryEntryRemoval, uniqueUrls, useHistoryEntryActions, workingSetUrls } from './use-history-entry-actions.js'
 import type { HistoryEntryProps } from './types.js'
 
-const HISTORY_ENTRY_CLICKABLE_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 90%, var(--color-neutral-600) 10%)'
-const HISTORY_ENTRY_CLICKABLE_INTERACTION_OVERLAY_BG = 'color-mix(in srgb, var(--color-neutral-600) 10%, transparent)'
-const HISTORY_ENTRY_NON_CLICKABLE_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 96.5%, var(--color-neutral-600) 3.5%)'
-const HISTORY_ENTRY_ACTIVE_OTHER_REST_BG = 'color-mix(in srgb, var(--card-bg) 92.5%, var(--color-neutral-600) 7.5%)'
-const HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 88%, var(--color-neutral-600) 12%)'
 const HISTORY_ENTRY_INTERACTION_CLASSES = 'title-interaction:hover:bg-(--history-entry-interaction-bg) title-interaction:focus-within:bg-(--history-entry-interaction-bg) [&.history-entry-expanded-open]:bg-(--history-entry-interaction-bg) title-interaction:[&[data-context-menu-open]]:bg-(--history-entry-interaction-bg) title-interaction:hover:after:opacity-100 [&.history-entry-expanded-open]:after:opacity-100 title-interaction:[&[data-context-menu-open]]:after:opacity-100'
 // Every hoverable entry surface answers interaction with a 1px outline beside the
 // fill (chip-trim's hover-line recipe), across the same interaction states
@@ -55,8 +51,6 @@ const HISTORY_ENTRY_INTERACTION_CLASSES = 'title-interaction:hover:bg-(--history
 // once more at the edge — because the darkened fill already carries the
 // open-hover emphasis.
 const HISTORY_ENTRY_HOVER_OUTLINE_CLASSES = 'title-interaction:hover:outline title-interaction:hover:outline-1 title-interaction:hover:-outline-offset-1 title-interaction:hover:outline-(--history-entry-hover-border) [&.history-entry-expanded-open]:outline [&.history-entry-expanded-open]:outline-1 [&.history-entry-expanded-open]:-outline-offset-1 [&.history-entry-expanded-open]:outline-(--history-entry-hover-border) title-interaction:[&[data-context-menu-open]]:outline title-interaction:[&[data-context-menu-open]]:outline-1 title-interaction:[&[data-context-menu-open]]:-outline-offset-1 title-interaction:[&[data-context-menu-open]]:outline-(--history-entry-hover-border)'
-const HISTORY_ENTRY_CLOSED_HOVER_BORDER = 'color-mix(in srgb, var(--color-neutral-600) 22%, transparent)'
-const HISTORY_ENTRY_OPEN_HOVER_BORDER = 'color-mix(in srgb, var(--color-neutral-600) 10%, transparent)'
 const HISTORY_ENTRY_CLICKABLE_INTERACTION_CLASSES = `${HISTORY_ENTRY_INTERACTION_CLASSES} ${HISTORY_ENTRY_HOVER_OUTLINE_CLASSES}`
 const HISTORY_ENTRY_NON_CLICKABLE_INTERACTION_CLASSES = HISTORY_ENTRY_INTERACTION_CLASSES
 const HISTORY_ENTRY_CLOSED_INTERACTION_CLASSES = `${HISTORY_ENTRY_INTERACTION_CLASSES} ${HISTORY_ENTRY_HOVER_OUTLINE_CLASSES}`
@@ -392,14 +386,14 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
   const entryClosed = !entry.exists
   const plainClickableEntry = !entry.current && !activeInOtherWindow && !entryClosed && canActivateEntry
   const historyEntryInteractionBg = entry.current
-    ? 'var(--color-neutral-100)'
+    ? PAGE_CHIP_PAINT.currentBg
     : activeInOtherWindow
-      ? HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_BG
+      ? PAGE_CHIP_PAINT.activeOtherInteractionBg
       : entryClosed
-        ? HISTORY_ENTRY_NON_CLICKABLE_INTERACTION_BG
+        ? PAGE_CHIP_PAINT.quietInteractionBg
         : canActivateEntry
-          ? HISTORY_ENTRY_CLICKABLE_INTERACTION_BG
-          : HISTORY_ENTRY_NON_CLICKABLE_INTERACTION_BG
+          ? PAGE_CHIP_PAINT.openInteractionBg
+          : PAGE_CHIP_PAINT.quietInteractionBg
   const historyEntryInteractionClasses = activeInOtherWindow
     ? HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_CLASSES
     : entryClosed
@@ -456,10 +450,10 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
     // Plain rows overlap their neighbors by 1px; keep those frames visible
     // through the raised hover fill, as on dashboard chips.
     '--history-entry-interaction-bg': plainClickableEntry
-      ? HISTORY_ENTRY_CLICKABLE_INTERACTION_OVERLAY_BG
+      ? PAGE_CHIP_PAINT.openInteractionOverlayBg
       : historyEntryInteractionBg,
-    '--history-entry-hover-border': entryClosed ? HISTORY_ENTRY_CLOSED_HOVER_BORDER : HISTORY_ENTRY_OPEN_HOVER_BORDER,
-    '--history-entry-rest-bg': activeInOtherWindow ? HISTORY_ENTRY_ACTIVE_OTHER_REST_BG : 'transparent',
+    '--history-entry-hover-border': entryClosed ? PAGE_CHIP_PAINT.quietHoverBorder : PAGE_CHIP_PAINT.openHoverBorder,
+    '--history-entry-rest-bg': activeInOtherWindow ? PAGE_CHIP_PAINT.activeOtherRestBg : 'transparent',
   }
   const entryOverlayStyle: CSSVariableProperties = {
     ...entryBaseStyle,
@@ -487,7 +481,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
         data-next-target={entry.nextTarget ? 'true' : undefined}
         aria-hidden={expanded ? true : undefined}
         className={cn(
-          "history-entry group/history-entry relative min-w-0 flex-auto rounded-[17px] border-0 bg-transparent text-tab-live [--history-entry-fade-bg:var(--card-bg)] [corner-shape:squircle] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-0 after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--history-entry-fade-bg)_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] focus-within:shadow-[inset_0_0_0_1px_rgba(234,179,8,0.42)] focus-within:after:opacity-100",
+          "history-entry group/history-entry relative min-w-0 flex-auto rounded-[17px] border-0 bg-transparent text-tab-live [--history-entry-fade-bg:var(--card-bg)] [corner-shape:squircle] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-0 after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--history-entry-fade-bg)_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] group-has-[.history-entry-main:focus-visible]/history-row:outline-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-offset-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-(--accent-amber) focus-within:after:opacity-100",
           entryClosed && 'history-entry-closed text-tab-closed',
           titleExpanded && 'history-entry-expanded-open',
           // Keep the resting hit target, but paint the translucent rim only once.
@@ -495,7 +489,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
           !expanded && 'title-interaction:hover:z-4 focus-within:z-4 title-interaction:data-context-menu-open:z-4',
           expanded && 'history-entry-expanded pointer-events-none absolute left-0 z-30 min-w-0 max-w-(--history-entry-expanded-max-width) cursor-default select-none overflow-visible! transition-none! w-(--history-entry-expanded-width) shadow-[0_3px_10px_rgba(10,10,10,0.055)]',
           expanded && (entryExpansionGeometry.y === 'up' ? 'bottom-0' : 'top-0'),
-          entry.current && 'bg-neutral-100 text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.07)] ring-1 ring-inset ring-neutral-400 [--history-entry-fade-bg:var(--color-neutral-100)]',
+          entry.current && PAGE_CHIP_CURRENT_CLASSES,
           !entry.current && historyEntryInteractionClasses,
           hoverMatched && 'history-entry-hover-match outline-1 outline-offset-1 outline-(--accent-amber)',
           hoverMatched && !expanded && 'z-3',

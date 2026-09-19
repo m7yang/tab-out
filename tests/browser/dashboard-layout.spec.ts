@@ -1313,7 +1313,7 @@ test('hover-revealed close actions keep a stable pointer on direct entry', async
     },
     {
       action: titleGroup.locator('[data-tabout-part="variant-close-button"]').first(),
-      expectedSize: 19,
+      expectedSize: 20,
       label: 'same-title variant',
       owner: titleGroup.locator('[data-tabout-part="variant-close-hit-owner"]').first(),
       ownerSelector: '[data-tabout-part="variant-close-hit-owner"]',

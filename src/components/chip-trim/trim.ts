@@ -1,9 +1,11 @@
+import { PAGE_CHIP_CURRENT_CLASSES, PAGE_CHIP_PAINT } from '../page-chip-paint'
+
 /* Chip Trim implementation — the decision table. See index.ts for the
    contract; this file is implementation and may only be imported from
    there.
 
    Every class that needs CSS emitted for it appears as a FULL LITERAL in
-   this file — Tailwind's scanner reads source text, so interpolated
+   this file or page-chip-paint.ts. Tailwind scans source text; interpolated
    candidates never emit. Marker names (no CSS of their own) may ride
    through CHIP_TRIM_TOKENS. */
 
@@ -13,25 +15,8 @@ const SURFACE_INTERACTION_CLASSES = 'title-interaction:hover:bg-(--chip-interact
 // The color rides --chip-hover-border (per-kind value via styleVars) — an
 // interpolated color-mix() class would not survive Tailwind's extractor.
 const HOVER_OUTLINE_CLASSES = 'title-interaction:hover:not-focus-visible:not-data-[tabout-filter-result-selected=true]:outline title-interaction:hover:not-focus-visible:not-data-[tabout-filter-result-selected=true]:outline-1 title-interaction:hover:not-focus-visible:not-data-[tabout-filter-result-selected=true]:-outline-offset-1 title-interaction:hover:not-focus-visible:not-data-[tabout-filter-result-selected=true]:outline-(--chip-hover-border) [&.page-chip-expanded:not(:focus-visible):not([data-tabout-filter-result-selected=true])]:outline [&.page-chip-expanded:not(:focus-visible):not([data-tabout-filter-result-selected=true])]:outline-1 [&.page-chip-expanded:not(:focus-visible):not([data-tabout-filter-result-selected=true])]:-outline-offset-1 [&.page-chip-expanded:not(:focus-visible):not([data-tabout-filter-result-selected=true])]:outline-(--chip-hover-border) title-interaction:[&.page-chip-context-menu-open]:outline title-interaction:[&.page-chip-context-menu-open]:outline-1 title-interaction:[&.page-chip-context-menu-open]:-outline-offset-1 title-interaction:[&.page-chip-context-menu-open]:outline-(--chip-hover-border) title-interaction:[&.page-chip-tooltip-open]:outline title-interaction:[&.page-chip-tooltip-open]:outline-1 title-interaction:[&.page-chip-tooltip-open]:-outline-offset-1 title-interaction:[&.page-chip-tooltip-open]:outline-(--chip-hover-border)'
-const CLICKABLE_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 90%, var(--color-neutral-600) 10%)'
-// Translucent equivalent of the clickable fill (10% neutral composited on the
-// card bg renders identically to the 90/10 opaque mix). In-flow plain chips
-// must use this one: adjacent chip-slots overlap by 1px (the seam rule), so
-// an opaque fill on the z-lifted hovered slot would paint over — visually
-// delete — a bordered neighbour's line on the shared row. Chips with their
-// own trim redraw that line; a plain chip's fill must let it show through.
-const CLICKABLE_INTERACTION_OVERLAY_BG = 'color-mix(in srgb, var(--color-neutral-600) 10%, transparent)'
-const GROUP_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 96.5%, var(--color-neutral-600) 3.5%)'
-const GROUP_HOVER_BORDER = 'color-mix(in srgb, var(--color-neutral-600) 22%, transparent)'
-// Open plain chips hover on the 10% clickable fill, which already carries
-// the emphasis; their line deliberately repeats that interaction-fill tone
-// (CLICKABLE_INTERACTION_OVERLAY_BG), laid once more at the edge — a quiet
-// rim, owner-tuned 2026-07-15 down from 32%. The closed/group kinds keep
-// the stronger 22% line: their 3.5% fill barely darkens, so there the
-// line, not the fill, carries the hover signal.
-const CLICKABLE_HOVER_BORDER = 'color-mix(in srgb, var(--color-neutral-600) 10%, transparent)'
-const ACTIVE_OTHER_REST_BG = 'color-mix(in srgb, var(--card-bg) 92.5%, var(--color-neutral-600) 7.5%)'
-const ACTIVE_OTHER_INTERACTION_BG = 'color-mix(in srgb, var(--card-bg) 88%, var(--color-neutral-600) 12%)'
+// Open-chip fills carry the hover emphasis, so their rim stays quiet.
+// Group/closed fills are lighter and need a stronger rim to stay visible.
 const CLICKABLE_INTERACTION_CLASSES = `${SURFACE_INTERACTION_CLASSES} ${FADE_INTERACTION_CLASSES}`
 const GROUP_INTERACTION_CLASSES = `${SURFACE_INTERACTION_CLASSES} ${HOVER_OUTLINE_CLASSES}`
 const ACTIVE_OTHER_INTERACTION_CLASSES = `${SURFACE_INTERACTION_CLASSES} ${FADE_INTERACTION_CLASSES}`
@@ -95,7 +80,7 @@ export type ChipTrim = {
   expandedFill: null | { classes: string, top: string, bottom: string, background: string }
 }
 
-const EXPANDED_FILL_CLASSES = 'page-chip-expanded-fill pointer-events-none absolute inset-x-0 -z-1 rounded-[9px] opacity-0 [corner-shape:squircle] title-interaction:group-hover/page-chip:opacity-100 group-focus-visible/page-chip:opacity-100 group-[.page-chip-expanded]/page-chip:opacity-100 title-interaction:group-[.page-chip-context-menu-open]/page-chip:opacity-100 title-interaction:group-[.page-chip-tooltip-open]/page-chip:opacity-100'
+const EXPANDED_FILL_CLASSES = 'page-chip-expanded-fill pointer-events-none absolute inset-x-0 -z-1 rounded-[inherit] opacity-0 [corner-shape:squircle] title-interaction:group-hover/page-chip:opacity-100 group-focus-visible/page-chip:opacity-100 group-[.page-chip-expanded]/page-chip:opacity-100 title-interaction:group-[.page-chip-context-menu-open]/page-chip:opacity-100 title-interaction:group-[.page-chip-tooltip-open]/page-chip:opacity-100'
 
 export function chipTrim(facts: ChipTrimFacts): ChipTrim {
   const hasActiveChipFrame = facts.activeChipFrame || facts.activeInOtherWindow
@@ -114,8 +99,8 @@ export function chipTrim(facts: ChipTrimFacts): ChipTrim {
     facts.closedSavedPage && 'text-tab-closed',
     facts.closedSavedPage && !isGroupKind && `${CHIP_TRIM_TOKENS.savedClosed} ${GROUP_INTERACTION_CLASSES}`,
     hasActiveChipFrame && !isCurrentActiveFrame && !isCurrentTabOutFrame && 'bg-(--chip-rest-bg) text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.04)]',
-    isCurrentActiveFrame && 'current-active-chip bg-neutral-50 text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.07)] ring-1 ring-inset ring-neutral-400',
-    isCurrentTabOutFrame && 'current-tab-out-chip bg-neutral-100 text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.07)] ring-1 ring-inset ring-neutral-400',
+    isCurrentActiveFrame && `current-active-chip ${PAGE_CHIP_CURRENT_CLASSES}`,
+    isCurrentTabOutFrame && `current-tab-out-chip ${PAGE_CHIP_CURRENT_CLASSES}`,
     hasActiveChipFrame && !isCurrentActiveFrame && !isCurrentTabOutFrame && ACTIVE_OTHER_INTERACTION_CLASSES,
     isGroupKind && !hasActiveChipFrame && !isCurrentActiveFrame && !isCurrentTabOutFrame && GROUP_INTERACTION_CLASSES,
   ].filter(Boolean).join(' ')
@@ -146,30 +131,28 @@ export function chipTrim(facts: ChipTrimFacts): ChipTrim {
       }
     : null
 
-  const fadeBg = isCurrentTabOutFrame
-    ? 'var(--color-neutral-100)'
-    : isCurrentActiveFrame
-      ? 'var(--color-neutral-50)'
-      : hasActiveChipFrame
-        ? ACTIVE_OTHER_INTERACTION_BG
-        : facts.closedSavedPage || facts.readOnlyFilterResult || isGroupKind
-          ? GROUP_INTERACTION_BG
-          : CLICKABLE_INTERACTION_BG
+  const fadeBg = isCurrentTabOutFrame || isCurrentActiveFrame
+    ? PAGE_CHIP_PAINT.currentBg
+    : hasActiveChipFrame
+      ? PAGE_CHIP_PAINT.activeOtherInteractionBg
+      : facts.closedSavedPage || facts.readOnlyFilterResult || isGroupKind
+        ? PAGE_CHIP_PAINT.quietInteractionBg
+        : PAGE_CHIP_PAINT.openInteractionBg
 
   const styleVars = {
     // Child targets inside a mixed folded/title-variant chip may be closed
     // even when an open sibling gives the parent an active frame.
-    closedInteractionBg: GROUP_INTERACTION_BG,
+    closedInteractionBg: PAGE_CHIP_PAINT.quietInteractionBg,
     // Live plain chips use the translucent overlay so a bordered neighbour's
     // line survives on overlapped seam rows. Read-only search results instead
     // use the lighter opaque closed/group fill; their hover and keyboard
     // selection still retain the existing outline recipes.
     interactionBg: isPlainClickable && !facts.readOnlyFilterResult
-      ? CLICKABLE_INTERACTION_OVERLAY_BG
+      ? PAGE_CHIP_PAINT.openInteractionOverlayBg
       : fadeBg,
-    restBg: hasActiveChipFrame && !isCurrentTabOutFrame ? ACTIVE_OTHER_REST_BG : 'transparent',
+    restBg: hasActiveChipFrame && !isCurrentTabOutFrame ? PAGE_CHIP_PAINT.activeOtherRestBg : 'transparent',
     fadeBg,
-    hoverBorder: isPlainClickable ? CLICKABLE_HOVER_BORDER : GROUP_HOVER_BORDER,
+    hoverBorder: isPlainClickable ? PAGE_CHIP_PAINT.openHoverBorder : PAGE_CHIP_PAINT.quietHoverBorder,
   }
 
   const expandedFill = facts.expanded && isPlainClickable && !facts.iconOnly

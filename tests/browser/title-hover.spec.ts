@@ -115,3 +115,34 @@ test('Page Chip keeps its keyboard-selection outline when the pointer enters', a
   await page.mouse.move(0, 0)
   await expect.poll(readOutline).toEqual(selected)
 })
+
+test('Activation History keeps keyboard focus visible on the painted surface during expansion and hover', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html')
+  const candidate = page.locator('[data-tabout="activation-history-row"]')
+    .filter({ has: page.locator('.history-entry[data-title-collapsed] .history-entry-main[tabindex="0"]') }).first()
+  await expect(candidate).toBeVisible()
+  await candidate.evaluate((element) => element.setAttribute('data-focus-probe', 'history'))
+  const row = page.locator('[data-focus-probe="history"]')
+  const target = row.locator('[data-tabout="page-chip"] .history-entry-main')
+  await row.scrollIntoViewIfNeeded()
+  await page.mouse.move(0, 0)
+  await page.keyboard.press('Tab')
+  await target.focus()
+  await expect(target).toBeFocused()
+  await expect(row.locator('[data-tabout-part="expanded-surface"]')).toBeVisible()
+
+  const readOutline = () => row.evaluate((element) => {
+    const surface = element.querySelector('[data-tabout-part="expanded-surface"]')
+      ?? element.querySelector('[data-tabout="page-chip"]')
+    if (!surface) return null
+    const style = getComputedStyle(surface)
+    return { width: style.outlineWidth, offset: style.outlineOffset, color: style.outlineColor }
+  })
+  const focusOutline = { width: '2px', offset: '2px', color: 'rgb(82, 82, 82)' }
+  await expect.poll(readOutline).toEqual(focusOutline)
+  await target.hover()
+  await expect.poll(readOutline).toEqual(focusOutline)
+  await page.mouse.move(0, 0)
+  await expect(target).toBeFocused()
+  await expect.poll(readOutline).toEqual(focusOutline)
+})

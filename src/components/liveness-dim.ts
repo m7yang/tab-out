@@ -8,9 +8,8 @@
    their source colors; closed pages also lose some saturation to
    distinguish a page that must reopen from one that can wake.
 
-   Variant rows inside a title-variant group carry no favicon of
-   their own, so their label text carries the liveness signal
-   instead. A fixed neutral-600 color keeps suspended and closed labels
+   Same-title URL rows and folded environment targets have no individual
+   favicon, so their labels carry the liveness signal instead. A fixed neutral-600 color keeps suspended and closed labels
    distinct even when the row itself becomes current or hovered.
    ================================================================ */
 
