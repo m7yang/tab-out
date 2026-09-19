@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { pickTabFavicon } from '../src/extension/favicons.js'
+import { pickFavicon, pickTabFavicon } from '../src/extension/favicons.js'
 
 // Stub Chrome's _favicon URL builder so pickFavicon's recovery path can run
 // under node (the real API is provided by the extension runtime at call time).
@@ -75,5 +75,17 @@ test('pickTabFavicon: a suspended tab falls back to its own favicon without the 
     assert.equal(pickTabFavicon({ favIconUrl: data, url: 'https://real.example/page', suspended: true }), data)
   } finally {
     globalWithChrome.chrome = saved
+  }
+})
+
+test('pickFavicon: closed pages keep their stored icon when the favicon API is unavailable', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'chrome')
+  Reflect.deleteProperty(globalThis, 'chrome')
+  try {
+    const data = 'data:image/png;base64,AAAA'
+    assert.equal(pickFavicon({ url: 'https://site.example/page', favIconUrl: data, sourceType: 'saved-page' }), data)
+    assert.equal(pickFavicon({ url: 'https://site.example/page', favIconUrl: data, sourceType: 'retained-page' }), data)
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'chrome', descriptor)
   }
 })

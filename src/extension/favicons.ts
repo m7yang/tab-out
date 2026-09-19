@@ -1,10 +1,11 @@
 /* ================================================================
    Favicon resolver
 
-   Uses Chrome's internal favicon cache for ordinary page URLs while
-   preserving data: favicons that carry extension-specific styling.
+   Uses Chrome's internal favicon cache for ordinary page URLs and
+   closed snapshots while preserving awake/read-only data: favicons.
    ================================================================ */
 
+import { isClosedSavedDashboardTab } from './dashboard-source.js'
 import type { DashboardTab } from './types'
 
 function faviconCacheUrl(url: string): string {
@@ -12,9 +13,12 @@ function faviconCacheUrl(url: string): string {
   return `${chrome.runtime.getURL('/_favicon/')}?pageUrl=${encodeURIComponent(url)}&size=32`
 }
 
-export function pickFavicon(tab?: Pick<DashboardTab, 'favIconUrl' | 'url'> | null): string {
+export function pickFavicon(tab?: (Pick<DashboardTab, 'favIconUrl' | 'url'> & Partial<Pick<DashboardTab, 'sourceType' | 'closedSaved'>>) | null): string {
   const fav = tab?.favIconUrl || ''
-  if (fav.startsWith('data:')) return fav
+  // Closed snapshots can contain a suspender's pre-faded data: image without
+  // retaining its provenance. Resolve the effective page before dimming it,
+  // including for snapshots saved before this policy was introduced.
+  if (fav.startsWith('data:') && (!tab || !isClosedSavedDashboardTab(tab))) return fav
 
   const url = tab?.url || ''
   if (!url) return ''
