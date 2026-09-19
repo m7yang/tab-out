@@ -50,6 +50,13 @@ import { chipTextHasExpandableContent, useChipTextLayout, PAGE_CHIP_TOOLTIP_STRU
 const PAGE_CHIP_TARGET_INTERACTION_BG = 'color-mix(in oklab, var(--color-neutral-600) 14%, transparent)'
 const DESTRUCTIVE_ICON_ACTION_CLASS_NAME = 'title-interaction:hover:bg-destructive/10 title-interaction:hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive'
 
+function pageChipTargetCursorClass(target: Pick<DashboardChipEnv, 'tabId' | 'tabUrl' | 'sourceType' | 'closedSaved'> | undefined) {
+  if (!target?.tabUrl) return 'cursor-default'
+  return typeof target.tabId === 'number' && !isReadOnlyDashboardSourceType(target.sourceType) && !target.closedSaved
+    ? 'cursor-default'
+    : 'cursor-pointer'
+}
+
 interface PageChipProps {
   chip: DashboardChipData
   filter?: string | undefined
@@ -255,6 +262,12 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   const variantCloseCount = (sameTitlePageChipView?.groupRemoval?.historyCount ?? 0) +
     (sameTitlePageChipView?.groupRemoval?.tabCount ?? 0)
   const parentInteractive = !isFolded && !isTitleVariantGroup
+  const defaultVariantActivation = sameTitlePageChipPlan
+    ? resolveSameTitlePageChip(sameTitlePageChipPlan, { kind: 'activate' })
+    : undefined
+  const chipCursorClass = pageChipTargetCursorClass(
+    parentInteractive ? chip : defaultVariantActivation?.kind === 'activate' ? defaultVariantActivation.target : undefined,
+  )
   const hasFilter = filter.trim().length > 0
   const isHistorySource = chip.sourceType === 'history'
   const isClosedSavedPage = isClosedSavedDashboardTab(chip)
@@ -1242,7 +1255,8 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     const envClassName = cn(
       "chip-env inline-flex items-center rounded-md border-0 bg-neutral-500/4.5 px-1.5 text-xs leading-[inherit] font-medium text-tab-live [corner-shape:squircle] after:ml-px after:font-normal after:opacity-45 after:content-['.']",
       isFolded && 'h-6 px-2',
-      mode === 'chip' && 'clickable cursor-default title-interaction:hover:bg-(--chip-target-interaction-bg) title-interaction:hover:text-tab-live focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-target-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-1 data-[tabout-filter-result-selected=true]:outline-(--accent-amber) title-interaction:[&.page-chip-context-menu-open]:bg-(--chip-target-interaction-bg) title-interaction:[&.page-chip-context-menu-open]:text-tab-live',
+      mode === 'chip' && pageChipTargetCursorClass({ ...env, sourceType: envSourceType }),
+      mode === 'chip' && 'clickable title-interaction:hover:bg-(--chip-target-interaction-bg) title-interaction:hover:text-tab-live focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-target-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-1 data-[tabout-filter-result-selected=true]:outline-(--accent-amber) title-interaction:[&.page-chip-context-menu-open]:bg-(--chip-target-interaction-bg) title-interaction:[&.page-chip-context-menu-open]:text-tab-live',
       env.activeInOtherWindow && 'bg-neutral-600/7.5 text-tab-live',
     )
 
@@ -1367,6 +1381,9 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   }
 
   function titleVariantNode(row: SameTitlePageChipRowView, index: number, mode: ChipTextRenderMode) {
+    const variantActivation = sameTitlePageChipPlan
+      ? resolveSameTitlePageChip(sameTitlePageChipPlan, { kind: 'activate', rowId: row.id })
+      : undefined
     const variantTargetCount = row.exactTargetCount
     const singleTarget = variantTargetCount === 1
     const variantHoverMatched = hoverMatchKey[index + 1] === '1'
@@ -1430,8 +1447,9 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
         data-tabout-removal-key={row.removalKey}
         data-tabout-default-variant={row.id === sameTitlePageChipView?.defaultRowId ? 'true' : undefined}
         className={cn(
-          'chip-title-variant clickable flex w-full max-w-full min-w-0 cursor-default items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-0.75 [font-size:inherit] leading-tight font-normal text-tab-live [corner-shape:squircle] title-interaction:hover:bg-(--chip-target-interaction-bg) title-interaction:hover:text-tab-live focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-target-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-1 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
+          'chip-title-variant clickable flex w-full max-w-full min-w-0 items-center gap-1 rounded-md border-0 bg-transparent px-1.5 py-0.75 [font-size:inherit] leading-tight font-normal text-tab-live [corner-shape:squircle] title-interaction:hover:bg-(--chip-target-interaction-bg) title-interaction:hover:text-tab-live focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-target-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-1 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
           'title-interaction:[&.page-chip-context-menu-open]:bg-(--chip-target-interaction-bg) title-interaction:[&.page-chip-context-menu-open]:text-tab-live',
+          pageChipTargetCursorClass(variantActivation?.kind === 'activate' ? variantActivation.target : undefined),
           row.active && 'bg-neutral-600/7.5 text-tab-live',
           row.current && 'bg-neutral-600/10 text-tab-live',
           variantHoverMatched && 'bg-(--chip-target-interaction-bg) text-tab-live',
@@ -1772,14 +1790,14 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       className={cn(
         "page-chip group/page-chip relative flex items-start gap-2 rounded-page-chip border-0 bg-transparent py-1.25 pr-1 pl-3 text-left text-[13px] leading-tight text-tab-live font-[inherit] [corner-shape:squircle] transition-[color] duration-100 before:pointer-events-none before:absolute before:top-1.75 before:bottom-1.75 before:left-1 before:w-0.5 before:rounded-[1px] before:bg-(--group-color,transparent) before:[corner-shape:squircle] before:content-[''] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-(--chip-hover-fade-width) after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--chip-hover-fade-bg)_34%,var(--chip-hover-fade-bg)_100%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none",
         !chip.iconOnly && 'w-full',
-        parentInteractive && 'clickable cursor-default focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-2 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
+        chipCursorClass,
+        parentInteractive && 'clickable focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-2 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
         chipTooltipOpen && CHIP_TRIM_TOKENS.tooltipOpen,
         chipExpanded && 'page-chip-expanded absolute z-30 min-w-0 max-w-(--page-chip-expanded-max-width) overflow-visible! transition-none! w-(--page-chip-expanded-width) [&.page-chip-expanded]:shadow-[0_3px_10px_rgba(10,10,10,0.055)]',
         chipExpanded && 'left-0',
         chipExpanded && (chipTextLayout.expansion.y === 'up' ? 'bottom-0' : 'top-0'),
         trim.chipClasses,
-        isTitleVariantGroup && 'cursor-default',
-        isFolded && `${CHIP_TRIM_TOKENS.folded} cursor-default after:hidden`,
+        isFolded && `${CHIP_TRIM_TOKENS.folded} after:hidden`,
         chip.saved && 'page-chip-saved',
         hoverMatched && CHIP_TRIM_TOKENS.hoverMatch,
         hoverMatched && chip.iconOnly && 'outline-1 outline-offset-1 outline-(--accent-amber)',
@@ -1883,7 +1901,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   const renderedChipElement = chip.iconOnly && chipTooltipContent ? (
     <TooltipAnchor
       content={chipTooltipContent}
-      className="page-chip-tooltip max-w-[calc(100vw-16px)] text-[13px] leading-tight wrap-break-word cursor-default select-none"
+      className={cn('page-chip-tooltip max-w-[calc(100vw-16px)] text-[13px] leading-tight wrap-break-word select-none', parentInteractive ? chipCursorClass : 'cursor-default')}
       instant
       onClick={onPageChipTooltipClick}
       onOpenChange={onChipTooltipOpenChange}
@@ -1906,7 +1924,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       // Full-width hover outlines share a layer above neighboring fills;
       // isolating matched slots would let later matches cover earlier outlines.
       // Direct interaction still lifts the whole slot above that layer.
-      className={cn('chip-slot relative min-w-0', chip.iconOnly ? 'inline-flex' : `${trim.slotClasses} flex w-full`, hoverMatched && chip.iconOnly && 'z-3')}
+      className={cn('chip-slot relative min-w-0', isTitleVariantGroup && chipCursorClass, chip.iconOnly ? 'inline-flex' : `${trim.slotClasses} flex w-full`, hoverMatched && chip.iconOnly && 'z-3')}
       style={chipSlotStyle}
       ref={chipSlotRef}
       {...variantGroupInteractionProps}

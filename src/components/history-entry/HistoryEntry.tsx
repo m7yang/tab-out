@@ -371,6 +371,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
   const isActiveEntry = entry.active || entry.activeInOtherWindow
   // Liveness controls title/icon dimming independently of the shared hover paint.
   const entryClosed = !entry.exists
+  const entryCursorClass = entryClosed && canActivateEntry ? 'cursor-pointer' : 'cursor-default'
   const plainClickableEntry = !entry.current && !activeInOtherWindow && !entryClosed && canActivateEntry
   const historyEntryInteractionBg = entry.current
     ? PAGE_CHIP_PAINT.currentBg
@@ -463,12 +464,13 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
         aria-hidden={expanded ? true : undefined}
         className={cn(
           "history-entry group/history-entry relative min-w-0 flex-auto rounded-page-chip border-0 bg-transparent text-tab-live [--history-entry-fade-bg:var(--card-bg)] [corner-shape:squircle] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-0 after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--history-entry-fade-bg)_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] group-has-[.history-entry-main:focus-visible]/history-row:outline-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-offset-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-(--accent-amber) focus-within:after:opacity-100",
+          entryCursorClass,
           entryClosed && 'history-entry-closed text-tab-closed',
           titleExpanded && 'history-entry-expanded-open',
           // Keep the resting hit target, but paint the translucent rim only once.
           titleExpanded && !expanded && 'opacity-0',
           !expanded && 'title-interaction:hover:z-4 focus-within:z-4 title-interaction:data-context-menu-open:z-4',
-          expanded && 'history-entry-expanded pointer-events-none absolute left-0 z-30 min-w-0 max-w-(--history-entry-expanded-max-width) cursor-default select-none overflow-visible! transition-none! w-(--history-entry-expanded-width) shadow-[0_3px_10px_rgba(10,10,10,0.055)]',
+          expanded && 'history-entry-expanded pointer-events-none absolute left-0 z-30 min-w-0 max-w-(--history-entry-expanded-max-width) select-none overflow-visible! transition-none! w-(--history-entry-expanded-width) shadow-[0_3px_10px_rgba(10,10,10,0.055)]',
           expanded && (entryExpansionGeometry.y === 'up' ? 'bottom-0' : 'top-0'),
           entry.current && PAGE_CHIP_CURRENT_CLASSES,
           !entry.current && historyEntryInteractionClasses,
@@ -532,7 +534,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
           aria-label={entryLabel}
           aria-disabled={!canActivateEntry || expanded}
           aria-busy={entry.loading ? true : undefined}
-          className="history-entry-main flex w-full cursor-default items-start gap-2 border-0 bg-transparent px-2.25 py-1.25 text-left text-[13px] font-normal text-inherit font-[inherit] leading-tight outline-none focus-visible:outline-none"
+          className={cn('history-entry-main flex w-full items-start gap-2 border-0 bg-transparent px-2.25 py-1.25 text-left text-[13px] font-normal text-inherit font-[inherit] leading-tight outline-none focus-visible:outline-none', entryCursorClass)}
           onClick={!expanded && canActivateEntry ? activateHistoryEntry : undefined}
           onMouseDown={!expanded && canActivateEntry ? onEntryMouseDown : undefined}
           onKeyDown={expanded ? undefined : onEntryKeyDown}
