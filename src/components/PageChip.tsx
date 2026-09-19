@@ -1734,7 +1734,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   // The grouped chip stays keyboard-inert (no role/tabIndex — the URL variant
   // buttons are the keyboard targets), but its whole mouse surface targets the
   // default variant. These live on the rectangular `.chip-slot`, NOT the
-  // `.page-chip`: the chip is rounded (`rounded-[13px] [corner-shape:squircle]`)
+  // `.page-chip`: the chip is rounded (`rounded-[17px] [corner-shape:squircle]`)
   // so clicks at its corners fall through to the slot underneath; owning them
   // on the slot makes the corner gutter activate the default variant too. The
   // exact pills, their action rails, the favicon close, and the audio toggle
@@ -1762,7 +1762,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       data-title-collapsed={shouldExpandChip && !chipExpanded ? '' : undefined}
       data-loading={chip.loading ? 'true' : undefined}
       className={cn(
-        "page-chip group/page-chip relative flex items-start gap-2 rounded-[13px] border-0 bg-transparent py-1.25 pr-1 pl-3 text-left text-[13px] leading-tight text-tab-live font-[inherit] [corner-shape:squircle] transition-[color] duration-100 before:pointer-events-none before:absolute before:top-1.75 before:bottom-1.75 before:left-1 before:w-0.5 before:rounded-[1px] before:bg-(--group-color,transparent) before:[corner-shape:squircle] before:content-[''] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-(--chip-hover-fade-width) after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--chip-hover-fade-bg)_34%,var(--chip-hover-fade-bg)_100%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none",
+        "page-chip group/page-chip relative flex items-start gap-2 rounded-[17px] border-0 bg-transparent py-1.25 pr-1 pl-3 text-left text-[13px] leading-tight text-tab-live font-[inherit] [corner-shape:squircle] transition-[color] duration-100 before:pointer-events-none before:absolute before:top-1.75 before:bottom-1.75 before:left-1 before:w-0.5 before:rounded-[1px] before:bg-(--group-color,transparent) before:[corner-shape:squircle] before:content-[''] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-(--chip-hover-fade-width) after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--chip-hover-fade-bg)_34%,var(--chip-hover-fade-bg)_100%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none",
         !chip.iconOnly && 'w-full',
         parentInteractive && 'clickable cursor-default focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-2 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
         chipTooltipOpen && CHIP_TRIM_TOKENS.tooltipOpen,

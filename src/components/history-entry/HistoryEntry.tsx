@@ -484,7 +484,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
         data-next-target={entry.nextTarget ? 'true' : undefined}
         aria-hidden={expanded ? true : undefined}
         className={cn(
-          "history-entry group/history-entry relative min-w-0 flex-auto rounded-[13px] border-0 bg-transparent text-tab-live [--history-entry-fade-bg:var(--card-bg)] [corner-shape:squircle] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-0 after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--history-entry-fade-bg)_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] focus-within:shadow-[inset_0_0_0_1px_rgba(234,179,8,0.42)] focus-within:after:opacity-100",
+          "history-entry group/history-entry relative min-w-0 flex-auto rounded-[17px] border-0 bg-transparent text-tab-live [--history-entry-fade-bg:var(--card-bg)] [corner-shape:squircle] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-0 after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--history-entry-fade-bg)_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] focus-within:shadow-[inset_0_0_0_1px_rgba(234,179,8,0.42)] focus-within:after:opacity-100",
           entryClosed && 'history-entry-closed text-tab-closed',
           titleExpanded && 'history-entry-expanded-open',
           // Keep the resting hit target, but paint the translucent rim only once.
