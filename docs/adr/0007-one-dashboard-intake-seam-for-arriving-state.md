@@ -21,8 +21,8 @@ loop that was suppressed with an equality check rather than removed.
 
 ## Decision
 
-- Dashboard builds are pure. `buildDashboardDataFromTabs` and
-  `buildTabsDashboardStartupSnapshot` return the Saved Page metadata refresh
+- Dashboard builds are pure. `buildDashboardDataFromTabsEffect` and
+  `buildTabsDashboardStartupSnapshotEffect` return the Saved Page metadata refresh
   as data (`savedPageUpdates: { base, merged }`) instead of persisting it.
   Nothing transient enters `DashboardData` or the cached snapshot shape, so
   the startup cache contract is unchanged.

@@ -43,9 +43,7 @@ const HISTORY_ENTRY_INTERACTION_CLASSES = 'title-interaction:hover:bg-(--history
 // Keyboard focus retains its stronger outer outline. Paint values use CSS
 // variables so Tailwind sees complete class literals for every selector.
 const HISTORY_ENTRY_HOVER_OUTLINE_CLASSES = 'title-interaction:hover:outline title-interaction:hover:outline-1 title-interaction:hover:-outline-offset-1 title-interaction:hover:outline-(--history-entry-hover-border) [&.history-entry-expanded-open]:outline [&.history-entry-expanded-open]:outline-1 [&.history-entry-expanded-open]:-outline-offset-1 [&.history-entry-expanded-open]:outline-(--history-entry-hover-border) title-interaction:[&[data-context-menu-open]]:outline title-interaction:[&[data-context-menu-open]]:outline-1 title-interaction:[&[data-context-menu-open]]:-outline-offset-1 title-interaction:[&[data-context-menu-open]]:outline-(--history-entry-hover-border)'
-const HISTORY_ENTRY_CLICKABLE_INTERACTION_CLASSES = `${HISTORY_ENTRY_INTERACTION_CLASSES} ${HISTORY_ENTRY_HOVER_OUTLINE_CLASSES}`
-const HISTORY_ENTRY_NON_CLICKABLE_INTERACTION_CLASSES = HISTORY_ENTRY_INTERACTION_CLASSES
-const HISTORY_ENTRY_CLOSED_INTERACTION_CLASSES = `${HISTORY_ENTRY_INTERACTION_CLASSES} ${HISTORY_ENTRY_HOVER_OUTLINE_CLASSES}`
+const HISTORY_ENTRY_OUTLINED_INTERACTION_CLASSES = `${HISTORY_ENTRY_INTERACTION_CLASSES} ${HISTORY_ENTRY_HOVER_OUTLINE_CLASSES}`
 const HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_CLASSES = `bg-(--history-entry-rest-bg) text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.04)] ${HISTORY_ENTRY_INTERACTION_CLASSES}`
 
 const EMPTY_HIGHLIGHT_TERMS: readonly string[] = []
@@ -381,11 +379,9 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
       : PAGE_CHIP_PAINT.quietInteractionBg
   const historyEntryInteractionClasses = activeInOtherWindow
     ? HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_CLASSES
-    : entryClosed
-      ? HISTORY_ENTRY_CLOSED_INTERACTION_CLASSES
-      : canActivateEntry
-        ? HISTORY_ENTRY_CLICKABLE_INTERACTION_CLASSES
-        : HISTORY_ENTRY_NON_CLICKABLE_INTERACTION_CLASSES
+    : entryClosed || canActivateEntry
+      ? HISTORY_ENTRY_OUTLINED_INTERACTION_CLASSES
+      : HISTORY_ENTRY_INTERACTION_CLASSES
   const hoverSource: HoverUrlSource = workingSetItem ? 'working-set' : 'history'
   const matchUrls = uniqueUrls([
     ...pageTargetMatchUrls(entry),

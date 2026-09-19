@@ -1,4 +1,4 @@
-import { paintedRangeRect } from '../title-expansion'
+import { findFirstTextNodeOnLine, paintedRangeRect } from '../title-expansion'
 import { getChipTextLineHeight } from './measure.js'
 import {
   chipExpansionLineIndexForRect,
@@ -164,61 +164,7 @@ export function getExpandedPageChipLineHtml(
   }
 
   function textPositionForLine(targetLineIndex: number): ChipExpansionDomPosition | null {
-    if (textNodes.length === 0) return null
-
-    let candidateIndex = -1
-    if (targetLineIndex === 0) {
-      candidateIndex = textNodes.findIndex((node) => {
-        const bounds = getTextLineBounds(node)
-        return !!bounds && bounds.first <= targetLineIndex && bounds.last >= targetLineIndex
-      })
-    } else {
-      let low = 0
-      let high = textNodes.length - 1
-      while (low < high) {
-        const middle = Math.floor((low + high) / 2)
-        const middleNode = textNodes[middle]
-        if (!middleNode) return null
-        const bounds = getTextLineBounds(middleNode)
-        if (bounds && bounds.last >= targetLineIndex) {
-          high = middle
-        } else {
-          low = middle + 1
-        }
-      }
-      const lowNode = textNodes[low]
-      if (!lowNode) return null
-      const bounds = getTextLineBounds(lowNode)
-      if (bounds && bounds.first <= targetLineIndex && bounds.last >= targetLineIndex) {
-        candidateIndex = low
-      }
-    }
-
-    // Hidden/non-painting text can make the binary predicate sparse. Walk back
-    // through that rare gap so a later valid node cannot hide an earlier line
-    // start; ordinary wrapped-line searches stop after one predecessor.
-    if (candidateIndex >= 0 && targetLineIndex > 0) {
-      for (let index = candidateIndex - 1; index >= 0; index -= 1) {
-        const candidateNode = textNodes[index]
-        if (!candidateNode) continue
-        const bounds = getTextLineBounds(candidateNode)
-        if (!bounds) continue
-        if (bounds.last < targetLineIndex) break
-        if (bounds.first <= targetLineIndex) candidateIndex = index
-      }
-    }
-
-    // Preserve the old engine's correctness with a cached linear fallback if
-    // no monotonic candidate survived at all.
-    if (candidateIndex < 0) {
-      candidateIndex = textNodes.findIndex((node) => {
-        const bounds = getTextLineBounds(node)
-        return !!bounds && bounds.first <= targetLineIndex && bounds.last >= targetLineIndex
-      })
-    }
-    if (candidateIndex < 0) return null
-
-    const node = textNodes[candidateIndex]
+    const node = findFirstTextNodeOnLine(textNodes, targetLineIndex, getTextLineBounds)
     if (!node) return null
     const offset = firstChipExpansionTextOffsetOnLine(node, targetLineIndex, range, textRect, lineHeight)
     return offset === null ? null : { kind: 'text', node, offset }

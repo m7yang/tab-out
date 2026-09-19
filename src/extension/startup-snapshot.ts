@@ -652,13 +652,3 @@ export const buildTabsDashboardStartupSnapshotEffect = Effect.fn(
     catch: (cause) => DashboardDataBuildError.make({ cause }),
   })
 })
-
-export function buildTabsDashboardStartupSnapshot(
-  inputs: TabsStartupSnapshotInputs,
-): Promise<TabsStartupSnapshotBuild> {
-  return getAppRuntime().runPromise(
-    buildTabsDashboardStartupSnapshotEffect(inputs).pipe(
-      Effect.catchTag('DashboardDataBuildError', (error) => Effect.fail(error.cause)),
-    ),
-  )
-}

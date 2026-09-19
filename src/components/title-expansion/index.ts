@@ -39,6 +39,7 @@ export {
   expansionLineHtmlEquals,
   expansionLineMarkup,
   expansionLineNodesFromHtml,
+  findFirstTextNodeOnLine,
   fragmentHtml,
   paintedRangeRect,
   syncClampedTitleFadeEnd,
