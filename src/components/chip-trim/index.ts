@@ -15,7 +15,7 @@
      outline) live INSIDE the table, never in callers.
 
    • Plain full-width chips have no resting trim, but gain a quiet
-     outline on interaction. Their in-flow fills stay translucent so a
+     outline on interaction, matching the closed-page treatment. Their in-flow fills stay translucent so a
      neighbour's line on the shared seam row shows through. Icon-only
      chips retain their outside ring instead of gaining an inset rim.
 

@@ -74,7 +74,7 @@ test('history entries never render Cursor, Pending, or Pinned title badges', () 
   assert.doesNotMatch(html, />Pinned<\/span>/)
 })
 
-test('an open history row hovers with the closed line recipe at the quiet interaction-fill color', () => {
+test('an open history row shares the closed-page hover surface', () => {
   const html = renderHistoryPanel([makeHistoryEntry()])
   const rowMatch = html.match(/class="(history-entry group\/history-entry[^"]*)"/)
   assert.ok(rowMatch, 'history entry surface should render')
@@ -82,9 +82,7 @@ test('an open history row hovers with the closed line recipe at the quiet intera
   assert.ok(rowClasses)
   assert.match(rowClasses, /hover:outline\b/)
   assert.match(rowClasses, /hover:outline-\(--history-entry-hover-border\)/)
-  // The interaction-fill rim: same 10% mix as the open rows' clickable fill, laid
-  // once more at the edge — the darkened fill carries the hover emphasis.
-  assert.match(html, /--history-entry-hover-border:color-mix\(in srgb, var\(--color-neutral-600\) 10%, transparent\)/)
+  assert.match(html, /--history-entry-hover-border:color-mix\(in srgb, var\(--color-neutral-600\) 22%, transparent\)/)
 })
 
 test('a row active in another window strengthens its permanent frame on interaction like a Page Chip', () => {
@@ -100,9 +98,7 @@ test('a row active in another window strengthens its permanent frame on interact
   assert.match(html, /group-data-context-menu-open\/history-entry:shadow-\[inset_0_0_0_1px_rgba\(38,38,38,0\.55\)\]/)
 })
 
-test('a closed history row keeps the stronger closed line color', () => {
-  // Closed rows barely darken their fill on hover, so the line carries
-  // their signal at 22% — not the open rows' quiet 10% rim.
+test('a closed history row keeps the shared line color', () => {
   const html = renderHistoryPanel([makeHistoryEntry({ exists: false, tabId: -1 })])
   assert.match(html, /--history-entry-hover-border:color-mix\(in srgb, var\(--color-neutral-600\) 22%, transparent\)/)
   assert.doesNotMatch(html, /--history-entry-hover-border:color-mix\(in srgb, var\(--color-neutral-600\) 10%, transparent\)/)

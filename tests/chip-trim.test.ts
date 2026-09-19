@@ -25,27 +25,22 @@ function facts(overrides: Partial<ChipTrimFacts> = {}): ChipTrimFacts {
 
 const OUTLINE_TRIO = /hover:not-focus-visible:not-data-\[tabout-filter-result-selected=true\]:outline-1.*-outline-offset-1.*outline-\(--chip-hover-border\)/
 const EXPANDED_OUTLINE_TRIO = /\[&\.page-chip-expanded:not\(:focus-visible\):not\(\[data-tabout-filter-result-selected=true\]\)\]:outline-1.*\[&\.page-chip-expanded:not\(:focus-visible\):not\(\[data-tabout-filter-result-selected=true\]\)\]:-outline-offset-1.*\[&\.page-chip-expanded:not\(:focus-visible\):not\(\[data-tabout-filter-result-selected=true\]\)\]:outline-\(--chip-hover-border\)/
-const OPAQUE_CLICKABLE = 'color-mix(in srgb, var(--card-bg) 90%, var(--color-neutral-600) 10%)'
-const TRANSLUCENT_CLICKABLE = 'color-mix(in srgb, var(--color-neutral-600) 10%, transparent)'
+const TRANSLUCENT_CLICKABLE = 'color-mix(in srgb, var(--color-neutral-600) 3.5%, transparent)'
 const GROUP_BG = 'color-mix(in srgb, var(--card-bg) 96.5%, var(--color-neutral-600) 3.5%)'
 const ACTIVE_OTHER_BG = 'color-mix(in srgb, var(--card-bg) 88%, var(--color-neutral-600) 12%)'
 const ACTIVE_OTHER_REST = 'color-mix(in srgb, var(--card-bg) 92.5%, var(--color-neutral-600) 7.5%)'
 const GROUP_LINE = 'color-mix(in srgb, var(--color-neutral-600) 22%, transparent)'
-const CLICKABLE_LINE = 'color-mix(in srgb, var(--color-neutral-600) 10%, transparent)'
 
-test('chip-trim: plain chips get the translucent fill, the quiet hover line, and no resting trim', () => {
+test('chip-trim: plain chips get the translucent fill, the shared hover line, and no resting trim', () => {
   const trim = chipTrim(facts())
   assert.match(trim.chipClasses, /hover:bg-\(--chip-interaction-bg\)/)
   assert.match(trim.chipClasses, /\[&\.page-chip-expanded\]:bg-\(--chip-interaction-bg\)/)
   assert.match(trim.chipClasses, /\[&\.page-chip-expanded:has\(\.chip-actions\)::after\]:opacity-100/)
   assert.match(trim.chipClasses, /\[&\.page-chip-context-menu-open\]:bg-\(--chip-interaction-bg\)/)
   assert.match(trim.chipClasses, /\[&\.page-chip-tooltip-open\]:bg-\(--chip-interaction-bg\)/)
-  // Open plain chips answer hover with the group kinds' 1px line at the
-  // quiet interaction-fill color — the same 10% mix as their interaction fill,
-  // laid once more at the edge (the darkened fill carries the emphasis).
   assert.match(trim.chipClasses, OUTLINE_TRIO)
   assert.match(trim.chipClasses, EXPANDED_OUTLINE_TRIO)
-  assert.equal(trim.styleVars.hoverBorder, CLICKABLE_LINE)
+  assert.equal(trim.styleVars.hoverBorder, GROUP_LINE)
   assert.doesNotMatch(trim.chipClasses, /ring-/)
   assert.equal(trim.frame, null)
   assert.equal(trim.expandedFill, null)
@@ -53,7 +48,7 @@ test('chip-trim: plain chips get the translucent fill, the quiet hover line, and
   assert.match(trim.slotClasses, new RegExp(`\\b${RegExp.escape(CHIP_TRIM_TOKENS.slotRow)}\\b`))
   assert.equal(trim.styleVars.interactionBg, TRANSLUCENT_CLICKABLE)
   assert.equal(trim.styleVars.closedInteractionBg, GROUP_BG)
-  assert.equal(trim.styleVars.fadeBg, OPAQUE_CLICKABLE)
+  assert.equal(trim.styleVars.fadeBg, GROUP_BG)
   assert.equal(trim.styleVars.restBg, 'transparent')
 })
 
@@ -68,7 +63,7 @@ test('chip-trim: saved-closed chips carry the marker and the interaction outline
   assert.equal(trim.styleVars.fadeBg, GROUP_BG)
 })
 
-test('chip-trim: read-only filter results use the closed fill without changing the outline treatment', () => {
+test('chip-trim: read-only filter results share the closed fill and outline treatment', () => {
   const trim = chipTrim(facts({ readOnlyFilterResult: true }))
   assert.match(trim.chipClasses, /hover:bg-\(--chip-interaction-bg\)/)
   assert.match(trim.chipClasses, OUTLINE_TRIO)
@@ -76,7 +71,7 @@ test('chip-trim: read-only filter results use the closed fill without changing t
   assert.doesNotMatch(trim.chipClasses, new RegExp(`\\b${RegExp.escape(CHIP_TRIM_TOKENS.savedClosed)}\\b`))
   assert.equal(trim.styleVars.interactionBg, GROUP_BG)
   assert.equal(trim.styleVars.fadeBg, GROUP_BG)
-  assert.equal(trim.styleVars.hoverBorder, CLICKABLE_LINE)
+  assert.equal(trim.styleVars.hoverBorder, GROUP_LINE)
 })
 
 test('chip-trim: variant-group and folded chips get the group outline', () => {
@@ -103,16 +98,12 @@ test('chip-trim: all-closed group kinds use the closed title tone with the group
   }
 })
 
-test('chip-trim: the open hover line repeats the quiet interaction-fill tone; icon and framed kinds opt out', () => {
-  // Two line weights by where the hover signal lives: group/saved kinds
-  // barely darken their fill, so they hover the stronger 22% line; open
-  // plain chips darken to the 10% fill, so their line repeats that tone
-  // laid once more at the edge — a quiet rim (owner-tuned from 32%).
+test('chip-trim: ordinary chips share the closed hover line; icon and framed kinds opt out', () => {
   // Icon-only chips keep fill-only feedback (their always-on ring sits
   // OUTSIDE via outline-offset-1 — the trio's inset offset would yank it
   // inward on hover), and framed kinds strengthen their inset frame
   // instead of drawing an outline.
-  assert.equal(chipTrim(facts()).styleVars.hoverBorder, CLICKABLE_LINE)
+  assert.equal(chipTrim(facts()).styleVars.hoverBorder, GROUP_LINE)
   for (const kind of [{ closedSavedPage: true }, { folded: true }, { titleVariantGroup: true }]) {
     assert.equal(chipTrim(facts(kind)).styleVars.hoverBorder, GROUP_LINE)
   }
@@ -182,7 +173,7 @@ test('chip-trim: the expanded fill spares flush edges and extends grown edges', 
   assert.ok(inPlaceDown)
   assert.equal(inPlaceDown.top, '1px')
   assert.equal(inPlaceDown.bottom, '1px')
-  assert.equal(inPlaceDown.background, OPAQUE_CLICKABLE)
+  assert.equal(inPlaceDown.background, GROUP_BG)
   assert.ok(inPlaceDown.classes.includes('rounded-[inherit]'))
   assert.ok(inPlaceDown.classes.includes('opacity-0'))
   assert.ok(inPlaceDown.classes.includes('group-hover/page-chip:opacity-100'))

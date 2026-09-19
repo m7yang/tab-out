@@ -30,3 +30,10 @@ History paints it on the expanded surface while focus stays on its canonical
 interaction target. Child targets use the URL rows' fill-only active treatment
 and immediate hover feedback. URL action slots adopt the existing main-chip
 20px control size; their rail keeps the close icon centered on the favicon axis.
+
+Unframed Page Chips use the existing closed-page hover surface across Sources
+and liveness states. The light fill and stronger rim identify an interaction
+target consistently; title and favicon styling continue to communicate liveness.
+In-flow plain rows retain a translucent equivalent of that fill so adjacent
+frames remain visible. Current/active frames and child-target feedback keep
+their existing treatments.

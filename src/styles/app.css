@@ -33,6 +33,7 @@
   --color-muted: color-mix(in srgb, var(--card-bg) 92%, var(--accent-amber));
   --color-accent: color-mix(in srgb, var(--card-bg) 92%, var(--accent-amber));
   --color-accent-foreground: var(--color-foreground);
+  --radius-page-chip: 17px;
   /* Signature strong ease-out. The FLIP move module
      (src/extension/move-animation.ts) and reveal/removal surfaces play
      their transitions through this token or its exact literal value. */

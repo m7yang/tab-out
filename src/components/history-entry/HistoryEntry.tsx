@@ -39,17 +39,9 @@ import { startHistoryEntryRemoval, uniqueUrls, useHistoryEntryActions, workingSe
 import type { HistoryEntryProps } from './types.js'
 
 const HISTORY_ENTRY_INTERACTION_CLASSES = 'title-interaction:hover:bg-(--history-entry-interaction-bg) title-interaction:focus-within:bg-(--history-entry-interaction-bg) [&.history-entry-expanded-open]:bg-(--history-entry-interaction-bg) title-interaction:[&[data-context-menu-open]]:bg-(--history-entry-interaction-bg) title-interaction:hover:after:opacity-100 [&.history-entry-expanded-open]:after:opacity-100 title-interaction:[&[data-context-menu-open]]:after:opacity-100'
-// Every hoverable entry surface answers interaction with a 1px outline beside the
-// fill (chip-trim's hover-line recipe), across the same interaction states
-// the fill responds to. Focus keeps the amber ring instead. The outline
-// color rides a CSS var (set in entryBaseStyle) exactly like the chips'
-// --chip-hover-border — an arbitrary color-mix() class does not survive
-// Tailwind's extractor: closed rows (dead stack rows and recently-closed
-// ghosts) match closed-saved chips at 22% (their faint fill leaves the
-// line carrying the signal); open rows (2026-07-15) draw the quiet
-// interaction-fill rim instead — the same 10% mix as their clickable fill, laid
-// once more at the edge — because the darkened fill already carries the
-// open-hover emphasis.
+// Unframed rows share the closed-page fill and rim regardless of liveness.
+// Keyboard focus retains its stronger outer outline. Paint values use CSS
+// variables so Tailwind sees complete class literals for every selector.
 const HISTORY_ENTRY_HOVER_OUTLINE_CLASSES = 'title-interaction:hover:outline title-interaction:hover:outline-1 title-interaction:hover:-outline-offset-1 title-interaction:hover:outline-(--history-entry-hover-border) [&.history-entry-expanded-open]:outline [&.history-entry-expanded-open]:outline-1 [&.history-entry-expanded-open]:-outline-offset-1 [&.history-entry-expanded-open]:outline-(--history-entry-hover-border) title-interaction:[&[data-context-menu-open]]:outline title-interaction:[&[data-context-menu-open]]:outline-1 title-interaction:[&[data-context-menu-open]]:-outline-offset-1 title-interaction:[&[data-context-menu-open]]:outline-(--history-entry-hover-border)'
 const HISTORY_ENTRY_CLICKABLE_INTERACTION_CLASSES = `${HISTORY_ENTRY_INTERACTION_CLASSES} ${HISTORY_ENTRY_HOVER_OUTLINE_CLASSES}`
 const HISTORY_ENTRY_NON_CLICKABLE_INTERACTION_CLASSES = HISTORY_ENTRY_INTERACTION_CLASSES
@@ -379,21 +371,14 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
 
   const activeInOtherWindow = !!entry.activeInOtherWindow && !entry.current
   const isActiveEntry = entry.active || entry.activeInOtherWindow
-  // Closed rows (no open tab) mirror closed-saved page chips: muted title,
-  // dimmed favicon, and the group-style hover (lighter fill + outline).
-  // The closed branch outranks canActivateEntry — closed ghosts are
-  // activatable (reopen) but must not read as live clickable rows.
+  // Liveness controls title/icon dimming independently of the shared hover paint.
   const entryClosed = !entry.exists
   const plainClickableEntry = !entry.current && !activeInOtherWindow && !entryClosed && canActivateEntry
   const historyEntryInteractionBg = entry.current
     ? PAGE_CHIP_PAINT.currentBg
     : activeInOtherWindow
       ? PAGE_CHIP_PAINT.activeOtherInteractionBg
-      : entryClosed
-        ? PAGE_CHIP_PAINT.quietInteractionBg
-        : canActivateEntry
-          ? PAGE_CHIP_PAINT.openInteractionBg
-          : PAGE_CHIP_PAINT.quietInteractionBg
+      : PAGE_CHIP_PAINT.quietInteractionBg
   const historyEntryInteractionClasses = activeInOtherWindow
     ? HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_CLASSES
     : entryClosed
@@ -450,9 +435,9 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
     // Plain rows overlap their neighbors by 1px; keep those frames visible
     // through the raised hover fill, as on dashboard chips.
     '--history-entry-interaction-bg': plainClickableEntry
-      ? PAGE_CHIP_PAINT.openInteractionOverlayBg
+      ? PAGE_CHIP_PAINT.quietInteractionOverlayBg
       : historyEntryInteractionBg,
-    '--history-entry-hover-border': entryClosed ? PAGE_CHIP_PAINT.quietHoverBorder : PAGE_CHIP_PAINT.openHoverBorder,
+    '--history-entry-hover-border': PAGE_CHIP_PAINT.quietHoverBorder,
     '--history-entry-rest-bg': activeInOtherWindow ? PAGE_CHIP_PAINT.activeOtherRestBg : 'transparent',
   }
   const entryOverlayStyle: CSSVariableProperties = {
@@ -481,7 +466,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
         data-next-target={entry.nextTarget ? 'true' : undefined}
         aria-hidden={expanded ? true : undefined}
         className={cn(
-          "history-entry group/history-entry relative min-w-0 flex-auto rounded-[17px] border-0 bg-transparent text-tab-live [--history-entry-fade-bg:var(--card-bg)] [corner-shape:squircle] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-0 after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--history-entry-fade-bg)_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] group-has-[.history-entry-main:focus-visible]/history-row:outline-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-offset-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-(--accent-amber) focus-within:after:opacity-100",
+          "history-entry group/history-entry relative min-w-0 flex-auto rounded-page-chip border-0 bg-transparent text-tab-live [--history-entry-fade-bg:var(--card-bg)] [corner-shape:squircle] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-0 after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--history-entry-fade-bg)_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] group-has-[.history-entry-main:focus-visible]/history-row:outline-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-offset-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-(--accent-amber) focus-within:after:opacity-100",
           entryClosed && 'history-entry-closed text-tab-closed',
           titleExpanded && 'history-entry-expanded-open',
           // Keep the resting hit target, but paint the translucent rim only once.

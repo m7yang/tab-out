@@ -667,8 +667,8 @@ test('PageChip hover fade appears and clears without its own transition lag', ()
   // Plain chips fill with the TRANSLUCENT overlay (a bordered neighbour's
   // line on the overlapped seam row must show through), while the fade stays
   // the OPAQUE mix so it can hide chip text under the action rail.
-  assert.match(html, /--chip-interaction-bg:color-mix\(in srgb, var\(--color-neutral-600\) 10%, transparent\)/)
-  assert.match(html, /--chip-hover-fade-bg:color-mix\(in srgb, var\(--card-bg\) 90%, var\(--color-neutral-600\) 10%\)/)
+  assert.match(html, /--chip-interaction-bg:color-mix\(in srgb, var\(--color-neutral-600\) 3\.5%, transparent\)/)
+  assert.match(html, /--chip-hover-fade-bg:color-mix\(in srgb, var\(--card-bg\) 96\.5%, var\(--color-neutral-600\) 3\.5%\)/)
   assert.doesNotMatch(requiredAt(chipMatch, 1), /\bafter:transition-/)
   assert.doesNotMatch(requiredAt(chipMatch, 1), /\bafter:duration-/)
   assert.doesNotMatch(requiredAt(chipMatch, 1), /\bafter:ease-/)
@@ -693,7 +693,7 @@ test('PageChip keeps clickable hover background on expandable chips before expan
   assert.match(requiredAt(chipMatch, 1), /\bhover:bg-\(--chip-interaction-bg\)/)
   assert.match(requiredAt(chipMatch, 1), /page-chip-expanded\]:bg-\(--chip-interaction-bg\)/)
   assert.match(requiredAt(chipMatch, 1), /page-chip-tooltip-open\]:bg-\(--chip-interaction-bg\)/)
-  assert.match(html, /--chip-interaction-bg:color-mix\(in srgb, var\(--color-neutral-600\) 10%, transparent\)/)
+  assert.match(html, /--chip-interaction-bg:color-mix\(in srgb, var\(--color-neutral-600\) 3\.5%, transparent\)/)
   assert.match(requiredAt(chipMatch, 1), /:has\(\.chip-actions\):hover::after\]:opacity-100/)
 
   // Hover can paint the interaction before React opens the title. Once open,
@@ -1242,19 +1242,17 @@ test('PageChip drops the group outline once the variant-group chip is active', (
   assert.doesNotMatch(cls, /hover:not-focus-visible:not-data-\[tabout-filter-result-selected=true\]:outline-1/)
 })
 
-test('PageChip gives a plain open chip the interaction outline at the quiet open color', () => {
+test('PageChip gives a plain open chip the shared closed-page interaction outline', () => {
   const html = renderWithDomainCardContext(React.createElement(PageChip, { chip: makeChip({ sourceType: 'tab' }) }))
   const cls = pageChipClass(html)
   assert.match(cls, /hover:not-focus-visible:not-data-\[tabout-filter-result-selected=true\]:outline-1/)
   assert.match(cls, /hover:not-focus-visible:not-data-\[tabout-filter-result-selected=true\]:outline-\(--chip-hover-border\)/)
   assert.match(cls, /data-\[tabout-filter-result-selected=true\]:bg-\(--chip-interaction-bg\)/)
   assert.match(cls, /data-\[tabout-filter-result-selected=true\]:outline-\(--accent-amber\)/)
-  // The interaction-fill rim: same 10% mix as the interaction fill, laid once
-  // more at the edge — the darkened fill carries the open-hover emphasis.
-  assert.match(html, /--chip-hover-border:color-mix\(in srgb, var\(--color-neutral-600\) 10%, transparent\)/)
+  assert.match(html, /--chip-hover-border:color-mix\(in srgb, var\(--color-neutral-600\) 22%, transparent\)/)
 })
 
-test('PageChip gives read-only filter results the closed interaction fill without changing their outline', () => {
+test('PageChip gives read-only filter results the closed interaction fill and outline', () => {
   for (const sourceType of ['bookmark', 'history'] as const) {
     const html = renderWithDomainCardContext(
       React.createElement(PageChip, {
@@ -1267,7 +1265,7 @@ test('PageChip gives read-only filter results the closed interaction fill withou
     assert.match(cls, /data-\[tabout-filter-result-selected=true\]:bg-\(--chip-interaction-bg\)/)
     assert.match(cls, /data-\[tabout-filter-result-selected=true\]:outline-\(--accent-amber\)/)
     assert.match(html, /--chip-interaction-bg:color-mix\(in srgb, var\(--card-bg\) 96\.5%, var\(--color-neutral-600\) 3\.5%\)/)
-    assert.match(html, /--chip-hover-border:color-mix\(in srgb, var\(--color-neutral-600\) 10%, transparent\)/)
+    assert.match(html, /--chip-hover-border:color-mix\(in srgb, var\(--color-neutral-600\) 22%, transparent\)/)
   }
 })
 
@@ -2600,7 +2598,7 @@ test('TabHistoryPanel borrows current PageChip surface styling for the current e
   assert.ok(defaultEntry, 'default history entry should render')
   assert.match(defaultEntry, /\bborder-0\b/)
   assert.match(defaultEntry, /\bbg-transparent\b/)
-  assert.match(defaultEntry, /rounded-\[17px\]/)
+  assert.match(defaultEntry, /rounded-page-chip/)
   assert.match(defaultEntry, /hover:bg-\(--history-entry-interaction-bg\)/)
   assert.match(defaultEntry, /hover:after:opacity-100/)
   assert.doesNotMatch(defaultEntry, /hover:border-\(--accent-amber\)/)
