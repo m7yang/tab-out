@@ -70,12 +70,14 @@ export function buildHistoryPanelRows({ snapshot, workingSet, closedTabs, filter
   // into navigation order, while leaving gaps where ghost rows still interleave
   // by their own real timestamps. Each clamp depends on the previous one, so
   // this stays a sequential walk.
-  const stackCandidates: HistoryPanelRowCandidate[] = []
+  const activatedCandidates: HistoryPanelRowCandidate[] = []
+  const pendingCandidates: HistoryPanelRowCandidate[] = []
   let previousStackEffective = Number.POSITIVE_INFINITY
   for (const { entry, base } of rawStackCandidates) {
     const lastTouchedAt = Math.min(base, previousStackEffective - 1)
     previousStackEffective = lastTouchedAt
-    stackCandidates.push({
+    const candidates = entry.pending ? pendingCandidates : activatedCandidates
+    candidates.push({
       row: { kind: 'stack', entry, lastTouchedAt },
       identity: pageIdentityForWorkingSet(entry.url) || entry.url,
       allowDuplicate: !!entry.pending,
@@ -104,12 +106,13 @@ export function buildHistoryPanelRows({ snapshot, workingSet, closedTabs, filter
           identity: pageIdentityForWorkingSet(closed.url) || closed.url,
         }))
 
-  // The row budget is shared in priority order — navigation chain first, then
-  // Working Set ghosts, then recently-closed ghosts — while display order
-  // comes from the timestamp sort afterwards.
+  // Admit activated representatives before pending tabs so a nearer pending
+  // duplicate cannot suppress an activated target or consume its row budget.
+  // Both kinds suppress supplemental duplicates; their clamped timestamps
+  // still determine display order.
   const seen = new Set<string>()
   const rows: HistoryPanelRow[] = []
-  for (const { row, identity, allowDuplicate } of [...stackCandidates, ...openGhostCandidates, ...closedGhostCandidates]) {
+  for (const { row, identity, allowDuplicate } of [...activatedCandidates, ...pendingCandidates, ...openGhostCandidates, ...closedGhostCandidates]) {
     if (rows.length >= rowLimit) break
     if (!allowDuplicate && identity && seen.has(identity)) continue
     if (identity) seen.add(identity)

@@ -182,6 +182,128 @@ test('buildHistoryPanelRows keeps every pending tab indexed even when URLs match
   )
 })
 
+test('buildHistoryPanelRows preserves activated targets when matching pending tabs are closer to the cursor', () => {
+  const entries = ['shared', 'middle', 'current', 'shared', 'shared'].map((slug, index) => makeStackEntry({
+    index,
+    tabId: index + 1,
+    url: `https://example.test/${slug}`,
+    pending: index >= 3,
+  }))
+
+  for (const currentIndex of [0, 1, 2]) {
+    const rows = buildHistoryPanelRows({
+      snapshot: {
+        ...snapshotOf(entries),
+        stackSize: 3,
+        pendingSize: 2,
+        cursorIndex: currentIndex,
+        currentIndex,
+      },
+      workingSet: null,
+      closedTabs: [],
+      filter: '',
+    })
+
+    assert.deepEqual(
+      rows.flatMap((row) => row.kind === 'stack' ? [row.entry.tabId] : []).toSorted((a, b) => a - b),
+      [1, 2, 3, 4, 5],
+      `all physical targets remain visible at cursor ${currentIndex}`,
+    )
+    if (currentIndex === 2) {
+      assert.deepEqual(
+        rows.flatMap((row) => row.kind === 'stack' ? [row.entry.index - currentIndex] : []),
+        [0, -1, 1, -2, 2],
+      )
+    }
+  }
+})
+
+test('buildHistoryPanelRows keeps the nearest activated page representative independently of pending duplicates and filtering', () => {
+  const entries = ['shared#older', 'shared#nearer', 'middle', 'current', 'shared?utm_source=pending'].map((slug, index) => makeStackEntry({
+    index,
+    tabId: index + 1,
+    url: `https://example.test/${slug}`,
+    pending: index === 4,
+  }))
+
+  for (const filter of ['', 'shared']) {
+    const rows = buildHistoryPanelRows({
+      snapshot: {
+        ...snapshotOf(entries),
+        stackSize: 4,
+        pendingSize: 1,
+        cursorIndex: 3,
+        currentIndex: 3,
+      },
+      workingSet: null,
+      closedTabs: [],
+      filter,
+    })
+
+    assert.deepEqual(
+      rows.flatMap((row) => row.kind === 'stack' ? [row.entry.index] : []),
+      filter ? [4, 1] : [3, 2, 4, 1],
+    )
+  }
+})
+
+test('buildHistoryPanelRows still suppresses supplemental duplicates of activated and pending pages', () => {
+  const entries = ['shared', 'middle', 'current', 'shared', 'queued'].map((slug, index) => makeStackEntry({
+    index,
+    tabId: index + 1,
+    url: `https://example.test/${slug}`,
+    pending: index >= 3,
+  }))
+  const rows = buildHistoryPanelRows({
+    snapshot: {
+      ...snapshotOf(entries, 6),
+      stackSize: 3,
+      pendingSize: 2,
+      cursorIndex: 2,
+      currentIndex: 2,
+    },
+    workingSet: workingSetOf(['shared', 'queued', 'extra'].map((slug, index) => makeWorkingSetItem({
+      key: `https://example.test/${slug}`,
+      tabId: index + 10,
+      lastActivatedAt: 100,
+    }))),
+    closedTabs: ['shared', 'queued', 'closed'].map((slug) => makeClosed({
+      sessionId: slug,
+      url: `https://example.test/${slug}`,
+      lastClosedAt: 200,
+    })),
+    filter: '',
+  })
+
+  assert.equal(rows.length, 6)
+  assert.deepEqual(rows.flatMap((row) => row.kind === 'stack' ? [row.entry.index] : []), [2, 1, 3, 0, 4])
+  assert.deepEqual(rows.flatMap((row) => row.kind === 'open-ghost' ? [row.item.key] : []), ['https://example.test/extra'])
+  assert.equal(rows.some((row) => row.kind === 'closed-ghost'), false)
+})
+
+test('buildHistoryPanelRows reserves the row budget for activated history before closer pending tabs', () => {
+  const entries = ['oldest', 'middle', 'current', 'pending'].map((slug, index) => makeStackEntry({
+    index,
+    tabId: index + 1,
+    url: `https://example.test/${slug}`,
+    pending: index === 3,
+  }))
+  const rows = buildHistoryPanelRows({
+    snapshot: {
+      ...snapshotOf(entries, 3),
+      stackSize: 3,
+      pendingSize: 1,
+      cursorIndex: 2,
+      currentIndex: 2,
+    },
+    workingSet: null,
+    closedTabs: [],
+    filter: '',
+  })
+
+  assert.deepEqual(rows.flatMap((row) => row.kind === 'stack' ? [row.entry.index] : []), [2, 1, 0])
+})
+
 test('buildHistoryPanelRows hides closed-ghost when same URL exists as open-ghost', () => {
   const rows = buildHistoryPanelRows({
     snapshot: snapshotOf([]),
