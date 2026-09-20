@@ -262,3 +262,86 @@ test('a rejected browser read does not wedge later highlight requests', async ()
 
   assert.deepEqual(harness.calls, [{ windowId: 1, tabIndexes: [0, 2] }])
 })
+
+for (const targetId of [1, 2]) {
+  test(`clearing an already selected target (${targetId}) does not wedge later hovers`, async () => {
+    const tabs = [
+      fakeTab(1, 1, 0, { active: true }),
+      fakeTab(2, 1, 1, { highlighted: true }),
+      fakeTab(3, 1, 2),
+    ]
+    const harness = createHarness(tabs, [fakeWindow(1)])
+    const controller = createNativeTabHighlightController(harness.dependencies)
+
+    await controller.setTarget(targetId)
+    await controller.clear()
+    await controller.setTarget(3)
+
+    assert.deepEqual(highlightedIds(tabs, 1), [1, 2, 3])
+    await controller.clear()
+    assert.deepEqual(highlightedIds(tabs, 1), [1, 2])
+  })
+}
+
+test('closing the preview window does not block hovers in another window', async () => {
+  const tabs = [
+    fakeTab(1, 1, 0, { active: true }),
+    fakeTab(2, 1, 1),
+    fakeTab(10, 2, 0, { active: true }),
+    fakeTab(11, 2, 1),
+  ]
+  const windows = [fakeWindow(1), fakeWindow(2)]
+  const harness = createHarness(tabs, windows)
+  const controller = createNativeTabHighlightController(harness.dependencies)
+
+  await controller.setTarget(2)
+  tabs.splice(0, 2)
+  windows.splice(0, 1)
+  await controller.setTarget(11)
+
+  assert.deepEqual(highlightedIds(tabs, 2), [10, 11])
+  await controller.clear()
+  assert.deepEqual(highlightedIds(tabs, 2), [10])
+})
+
+test('a failed cleanup read retains ownership so a later clear can retry', async () => {
+  const tabs = [fakeTab(1, 1, 0, { active: true }), fakeTab(2, 1, 1)]
+  const harness = createHarness(tabs, [fakeWindow(1)])
+  let failRead = false
+  const controller = createNativeTabHighlightController({
+    ...harness.dependencies,
+    async queryTabsInWindowResult(windowId) {
+      return failRead ? { ok: false, value: [] } : harness.dependencies.queryTabsInWindowResult(windowId)
+    },
+  })
+
+  await controller.setTarget(2)
+  failRead = true
+  await controller.clear()
+  assert.deepEqual(highlightedIds(tabs, 1), [1, 2])
+  failRead = false
+  await controller.clear()
+  assert.deepEqual(highlightedIds(tabs, 1), [1])
+})
+
+test('clearing during a pending highlight removes the selection once Chrome applies it', async () => {
+  const tabs = [fakeTab(1, 1, 0, { active: true }), fakeTab(2, 1, 1)]
+  const harness = createHarness(tabs, [fakeWindow(1)])
+  const started = Promise.withResolvers<void>()
+  const finish = Promise.withResolvers<void>()
+  const controller = createNativeTabHighlightController({
+    ...harness.dependencies,
+    async highlightTabs(windowId, indexes) {
+      started.resolve()
+      await finish.promise
+      return harness.dependencies.highlightTabs(windowId, indexes)
+    },
+  })
+
+  const preview = controller.setTarget(2)
+  await started.promise
+  const clear = controller.clear()
+  finish.resolve()
+  await Promise.all([preview, clear])
+  assert.deepEqual(highlightedIds(tabs, 1), [1])
+})

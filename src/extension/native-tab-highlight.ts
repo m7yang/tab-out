@@ -165,6 +165,13 @@ export function createNativeTabHighlightController(
     if (!result.ok) return false
 
     const windowTabs = result.value.filter((tab) => tab.windowId === windowId)
+    // A closed window has no selection left to restore. Keep failed reads
+    // retryable above, but do not let a successful empty read block the next
+    // window's preview forever.
+    if (windowTabs.length === 0) {
+      displayedTarget = null
+      return true
+    }
     const activeTab = windowTabs.find((tab) => tab.active)
     const activeTabId = numericTabId(activeTab)
     const activeTabIndex = numericTabIndex(activeTab)
@@ -287,7 +294,9 @@ export function createNativeTabHighlightController(
     desiredTabId = nextTabId
     requestRevision += 1
     if (runner) return runner
-    runner = getAppRuntime().runPromise(runNativeTabHighlightRequests())
+    // Publish the flight before starting it: clearing an unowned selection can
+    // finish synchronously, including resetting runner inside the Effect.
+    runner = Promise.resolve().then(() => getAppRuntime().runPromise(runNativeTabHighlightRequests()))
     return runner
   }
 
