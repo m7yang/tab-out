@@ -178,16 +178,46 @@ test('buildHistoryPanelRows keeps every pending tab indexed even when URLs match
 
   assert.deepEqual(
     rows.map((row) => row.kind === 'stack' ? row.entry.index : -1),
-    [0, 1, 2],
+    [2, 1, 0],
   )
 })
 
-test('buildHistoryPanelRows preserves activated targets when matching pending tabs are closer to the cursor', () => {
+test('buildHistoryPanelRows shows every signed offset in descending order when indexed tabs share URLs', () => {
+  // This previously rendered 0, -1, +1, -4, -6, -7, -8, -9.
+  const entries = ['oldest', 'older', 'old', 'recent', 'shared', 'shared', 'current', 'previous', 'previous', 'current', 'pending']
+    .map((slug, index) => makeStackEntry({
+      index,
+      tabId: index + 1,
+      url: `https://example.test/${slug}`,
+      pending: index === 10,
+    }))
+  const currentIndex = 9
+  const rows = buildHistoryPanelRows({
+    snapshot: {
+      ...snapshotOf(entries),
+      stackSize: 10,
+      pendingSize: 1,
+      cursorIndex: currentIndex,
+      currentIndex,
+    },
+    workingSet: null,
+    closedTabs: [],
+    filter: '',
+  })
+
+  assert.deepEqual(
+    rows.flatMap((row) => row.kind === 'stack' ? [row.entry.index - currentIndex] : []),
+    [1, 0, -1, -2, -3, -4, -5, -6, -7, -8, -9],
+  )
+})
+
+test('buildHistoryPanelRows preserves signed order across cursor positions despite duplicate pending tabs and timestamps', () => {
   const entries = ['shared', 'middle', 'current', 'shared', 'shared'].map((slug, index) => makeStackEntry({
     index,
     tabId: index + 1,
     url: `https://example.test/${slug}`,
     pending: index >= 3,
+    lastActivatedAt: [500, 100, 800, 300, 200][index] ?? null,
   }))
 
   for (const currentIndex of [0, 1, 2]) {
@@ -209,16 +239,14 @@ test('buildHistoryPanelRows preserves activated targets when matching pending ta
       [1, 2, 3, 4, 5],
       `all physical targets remain visible at cursor ${currentIndex}`,
     )
-    if (currentIndex === 2) {
-      assert.deepEqual(
-        rows.flatMap((row) => row.kind === 'stack' ? [row.entry.index - currentIndex] : []),
-        [0, -1, 1, -2, 2],
-      )
-    }
+    assert.deepEqual(
+      rows.flatMap((row) => row.kind === 'stack' ? [row.entry.index - currentIndex] : []),
+      [4, 3, 2, 1, 0].map((index) => index - currentIndex),
+    )
   }
 })
 
-test('buildHistoryPanelRows keeps the nearest activated page representative independently of pending duplicates and filtering', () => {
+test('buildHistoryPanelRows keeps every indexed duplicate and preserves navigation offsets when filtering', () => {
   const entries = ['shared#older', 'shared#nearer', 'middle', 'current', 'shared?utm_source=pending'].map((slug, index) => makeStackEntry({
     index,
     tabId: index + 1,
@@ -241,8 +269,8 @@ test('buildHistoryPanelRows keeps the nearest activated page representative inde
     })
 
     assert.deepEqual(
-      rows.flatMap((row) => row.kind === 'stack' ? [row.entry.index] : []),
-      filter ? [4, 1] : [3, 2, 4, 1],
+      rows.flatMap((row) => row.kind === 'stack' ? [row.entry.index - 3] : []),
+      filter ? [1, -2, -3] : [1, 0, -1, -2, -3],
     )
   }
 })
@@ -276,7 +304,7 @@ test('buildHistoryPanelRows still suppresses supplemental duplicates of activate
   })
 
   assert.equal(rows.length, 6)
-  assert.deepEqual(rows.flatMap((row) => row.kind === 'stack' ? [row.entry.index] : []), [2, 1, 3, 0, 4])
+  assert.deepEqual(rows.flatMap((row) => row.kind === 'stack' ? [row.entry.index] : []), [4, 3, 2, 1, 0])
   assert.deepEqual(rows.flatMap((row) => row.kind === 'open-ghost' ? [row.item.key] : []), ['https://example.test/extra'])
   assert.equal(rows.some((row) => row.kind === 'closed-ghost'), false)
 })
@@ -295,6 +323,29 @@ test('buildHistoryPanelRows reserves the row budget for activated history before
       pendingSize: 1,
       cursorIndex: 2,
       currentIndex: 2,
+    },
+    workingSet: null,
+    closedTabs: [],
+    filter: '',
+  })
+
+  assert.deepEqual(rows.flatMap((row) => row.kind === 'stack' ? [row.entry.index] : []), [2, 1, 0])
+})
+
+test('buildHistoryPanelRows reserves remaining capacity for the earliest pending tabs', () => {
+  const entries = ['current', 'pending', 'pending', 'pending'].map((slug, index) => makeStackEntry({
+    index,
+    tabId: index + 1,
+    url: `https://example.test/${slug}`,
+    pending: index > 0,
+  }))
+  const rows = buildHistoryPanelRows({
+    snapshot: {
+      ...snapshotOf(entries, 3),
+      stackSize: 1,
+      pendingSize: 3,
+      cursorIndex: 0,
+      currentIndex: 0,
     },
     workingSet: null,
     closedTabs: [],
@@ -441,7 +492,7 @@ test('buildHistoryPanelRows sorts rows by recency descending', () => {
   )
 })
 
-test('buildHistoryPanelRows slots stack rows with null timestamp by cursor distance', () => {
+test('buildHistoryPanelRows keeps descending indexes with null timestamps', () => {
   const rows = buildHistoryPanelRows({
     snapshot: {
       stackSize: 3,
@@ -470,9 +521,9 @@ test('buildHistoryPanelRows slots stack rows with null timestamp by cursor dista
   assert.equal((rows[2] as { entry: TabHistoryEntry }).entry.tabId, 1)
 })
 
-test('buildHistoryPanelRows keeps stack rows in cursor order despite a fresher cross-tab timestamp on a back entry', () => {
-  // Reproduces the Image #11 bug: a back-history entry whose URL was recently
-  // visited in ANOTHER tab carries a fresh activity-log lastActivatedAt, which
+test('buildHistoryPanelRows keeps descending indexes despite a fresher cross-tab timestamp on a back entry', () => {
+  // A back-history entry whose URL was recently visited in another tab
+  // carries a fresh activity-log lastActivatedAt, which previously
   // floated it above closer entries (e.g. order 0, -1, -4, -2, -3).
   const rows = buildHistoryPanelRows({
     snapshot: {
@@ -487,9 +538,9 @@ test('buildHistoryPanelRows keeps stack rows in cursor order despite a fresher c
       activeWasInserted: false,
       entries: [
         makeStackEntry({ index: 0, tabId: 1, url: 'https://example.com/merge', lastActivatedAt: 950 }),
-        makeStackEntry({ index: 1, tabId: 2, url: 'https://example.com/mattpocock', lastActivatedAt: 400 }),
+        makeStackEntry({ index: 1, tabId: 2, url: 'https://example.com/guide', lastActivatedAt: 400 }),
         makeStackEntry({ index: 2, tabId: 3, url: 'https://example.com/dev-web', lastActivatedAt: 500 }),
-        makeStackEntry({ index: 3, tabId: 4, url: 'https://example.com/claude', lastActivatedAt: 900 }),
+        makeStackEntry({ index: 3, tabId: 4, url: 'https://example.com/notes', lastActivatedAt: 900 }),
         makeStackEntry({ index: 4, tabId: 5, url: 'https://example.com/newtab', lastActivatedAt: 1000 }),
       ],
     },
@@ -498,7 +549,7 @@ test('buildHistoryPanelRows keeps stack rows in cursor order despite a fresher c
     filter: '',
   })
 
-  // Cursor is index 4 (relative 0). Display must follow cursor distance:
+  // Cursor is index 4 (relative 0). Display must follow signed descending order:
   // 4 (0), 3 (-1), 2 (-2), 1 (-3), 0 (-4) — NOT recency order.
   assert.deepEqual(
     rows.map((r) => (r as { entry: TabHistoryEntry }).entry.index),
@@ -506,7 +557,7 @@ test('buildHistoryPanelRows keeps stack rows in cursor order despite a fresher c
   )
 })
 
-test('buildHistoryPanelRows dedupes utility-URL stack entries to the one closest to current', () => {
+test('buildHistoryPanelRows keeps distinct indexed tabs even for identical utility URLs', () => {
   const rows = buildHistoryPanelRows({
     snapshot: {
       stackSize: 3,
@@ -529,6 +580,5 @@ test('buildHistoryPanelRows dedupes utility-URL stack entries to the one closest
     filter: '',
   })
 
-  assert.equal(rows.length, 1)
-  assert.equal((rows[0] as { entry: TabHistoryEntry }).entry.tabId, 3)
+  assert.deepEqual(rows.flatMap((row) => row.kind === 'stack' ? [row.entry.tabId] : []), [3, 2, 1])
 })

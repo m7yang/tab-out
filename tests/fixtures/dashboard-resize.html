@@ -29,6 +29,7 @@
       const shortHistoryTitleCase = fixtureParams.has('shortHistoryTitle')
       const tallGlyphTitleCase = fixtureParams.has('tallGlyphTitle')
       const historyReorderMotionCase = fixtureParams.has('historyReorderMotion') || fixtureParams.has('historyHoverFrame')
+      const historyMarkerOrderCase = fixtureParams.has('historyMarkerOrder')
       const appLoadingFaviconCase = fixtureParams.has('appLoadingFavicon')
       const unicodeBionicTitleCase = fixtureParams.has('unicodeBionicTitle')
       const retainedFocusCase = fixtureParams.has('retainedFocus')
@@ -154,6 +155,35 @@
           }
         ]
       }
+      if (historyMarkerOrderCase) {
+        tabHistorySnapshot = {
+          stackSize: 10,
+          pendingSize: 1,
+          maxSize: 48,
+          cursorIndex: 9,
+          currentIndex: 9,
+          previousIndex: 8,
+          nextIndex: 10,
+          activeTabId: 9110,
+          activeWindowId: 1,
+          activeWasInserted: false,
+          entries: ['oldest', 'older', 'old', 'recent', 'shared', 'shared', 'current', 'previous', 'previous', 'current', 'pending']
+            .map((slug, index) => ({
+              ...historyReorderEntry({
+                index,
+                tabId: 9101 + index,
+                slug,
+                title: `History Marker ${slug} ${index}`,
+                lastActivatedAt: index === 10 ? null : 1800000020000 + index * 1000,
+                current: index === 9,
+                previousTarget: index === 8
+              }),
+              pending: index === 10,
+              nextTarget: index === 10,
+              ...(index === 10 ? { createdAt: 1800000030000 } : {})
+            }))
+        }
+      }
       function bookmarkTreeForCount(count = 0) {
         return [{
           id: 'root',
@@ -231,6 +261,19 @@
         ...(appLoadingFaviconCase ? [{ id: 2, type: 'app', focused: false }] : [])
       ]
       const tabs = [
+        ...(historyMarkerOrderCase
+          ? tabHistorySnapshot.entries.map((entry) => ({
+              id: entry.tabId,
+              url: entry.url,
+              title: entry.title,
+              favIconUrl: '',
+              windowId: 1,
+              active: entry.current,
+              pinned: false,
+              groupId: -1,
+              index: entry.index
+            }))
+          : []),
         ...(historyReorderMotionCase
           ? [
               {

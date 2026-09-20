@@ -1785,6 +1785,36 @@ test('Page Chip landmarks distinguish contexts and count an expanded history chi
   await expect(chip).toHaveCount(1)
 })
 
+test('Activation History markers descend without hiding indexed duplicate tabs and keep their offsets when filtered', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html?historyMarkerOrder')
+  const rows = page.locator('[data-tabout="activation-history-row"][data-tabout-layout-key^="stack:"]')
+  const markers = rows.locator('[data-tabout-part="history-entry-marker"]')
+  const expectedMarkers = ['+1', '0', '-1', '-2', '-3', '-4', '-5', '-6', '-7', '-8', '-9']
+  await expect(markers).toHaveText(expectedMarkers)
+  await expect(rows.locator('[data-tabout="page-chip"]')).toHaveCount(11)
+  await expect.poll(() => rows.evaluateAll((elements) => (
+    elements.map((element) => element.getAttribute('data-tabout-layout-key'))
+  ))).toEqual([
+    'stack:1:9111',
+    'stack:1:9110',
+    'stack:1:9109',
+    'stack:1:9108',
+    'stack:1:9107',
+    'stack:1:9106',
+    'stack:1:9105',
+    'stack:1:9104',
+    'stack:1:9103',
+    'stack:1:9102',
+    'stack:1:9101',
+  ])
+
+  const filter = page.locator('[data-tabout="filter-query"] input')
+  await filter.fill('shared')
+  await expect(markers).toHaveText(['-4', '-5'])
+  await filter.fill('')
+  await expect(markers).toHaveText(expectedMarkers)
+})
+
 test('Activation History restores its title fade after hover expansion closes', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html')
   await expect.poll(() => page.locator('[data-tabout="domain-card"]').count()).toBeGreaterThanOrEqual(12)

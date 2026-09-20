@@ -22,7 +22,6 @@ type HistoryPanelRowCandidate = {
   row: HistoryPanelRow
   /** Falsy identities skip dedupe but still consume a row slot. */
   identity: string
-  allowDuplicate?: boolean
 }
 
 const DEFAULT_HISTORY_PANEL_ROW_LIMIT = 48
@@ -43,9 +42,8 @@ export function buildHistoryPanelRows({ snapshot, workingSet, closedTabs, filter
   )
   const stackCursorIndex = snapshot?.currentIndex ?? stackEntries.length - 1
 
-  // Collect each stack entry with its cursor distance and a "base" timestamp:
-  // the real activity-log value when present, else a synthesized fallback
-  // derived from cursor distance.
+  // Descending indexes also give descending signed offsets from the cursor.
+  // Real timestamps (or a cursor-distance fallback) place supplemental rows.
   const rawStackCandidates = stackEntries
     .filter((entry) => !filterActive || tabMatchesFilter({ title: entry.title, url: entry.url, isTabOut: false }, filter))
     .map((entry) => {
@@ -55,21 +53,14 @@ export function buildHistoryPanelRows({ snapshot, workingSet, closedTabs, filter
         : -cursorDistance
       return {
         entry,
-        cursorDistance,
         base: entry.lastActivatedAt ?? entry.createdAt ?? synthesizedTouchedAt,
       }
     })
-    .toSorted((a, b) => a.cursorDistance - b.cursorDistance)
+    .toSorted((a, b) => b.entry.index - a.entry.index)
 
-  // These indexed entries form the current tab's linear navigation chain:
-  // activated back/forward history first, followed by pending background tabs.
-  // A back entry whose URL was recently touched in ANOTHER tab carries a fresh
-  // activity-log timestamp that would otherwise float it above closer entries
-  // (the Image 11 bug). Walking outward from the cursor and clamping each
-  // effective timestamp strictly below the previous one pins the indexed rows
-  // into navigation order, while leaving gaps where ghost rows still interleave
-  // by their own real timestamps. Each clamp depends on the previous one, so
-  // this stays a sequential walk.
+  // Cross-tab activity timestamps must not reorder indexed navigation targets.
+  // Clamp in display order so the final timestamp sort preserves signed order
+  // while supplemental rows can still interleave by their own timestamps.
   const activatedCandidates: HistoryPanelRowCandidate[] = []
   const pendingCandidates: HistoryPanelRowCandidate[] = []
   let previousStackEffective = Number.POSITIVE_INFINITY
@@ -80,7 +71,6 @@ export function buildHistoryPanelRows({ snapshot, workingSet, closedTabs, filter
     candidates.push({
       row: { kind: 'stack', entry, lastTouchedAt },
       identity: pageIdentityForWorkingSet(entry.url) || entry.url,
-      allowDuplicate: !!entry.pending,
     })
   }
 
@@ -106,15 +96,15 @@ export function buildHistoryPanelRows({ snapshot, workingSet, closedTabs, filter
           identity: pageIdentityForWorkingSet(closed.url) || closed.url,
         }))
 
-  // Admit activated representatives before pending tabs so a nearer pending
-  // duplicate cannot suppress an activated target or consume its row budget.
-  // Both kinds suppress supplemental duplicates; their clamped timestamps
-  // still determine display order.
+  // Every indexed physical tab keeps its own row, including duplicate URLs.
+  // Reserve capacity for activated history, then pending tabs in FIFO order.
+  // Both kinds suppress supplemental duplicates; admission does not determine
+  // the final display order.
   const seen = new Set<string>()
   const rows: HistoryPanelRow[] = []
-  for (const { row, identity, allowDuplicate } of [...activatedCandidates, ...pendingCandidates, ...openGhostCandidates, ...closedGhostCandidates]) {
+  for (const { row, identity } of [...activatedCandidates, ...pendingCandidates.toReversed(), ...openGhostCandidates, ...closedGhostCandidates]) {
     if (rows.length >= rowLimit) break
-    if (!allowDuplicate && identity && seen.has(identity)) continue
+    if (row.kind !== 'stack' && identity && seen.has(identity)) continue
     if (identity) seen.add(identity)
     rows.push(row)
   }

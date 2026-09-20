@@ -1,5 +1,9 @@
 # Preserve activated history when admitting pending tabs
 
+The representative selection and cursor-distance presentation below are
+superseded by [ADR 0037](0037-show-complete-history-in-signed-index-order.md).
+Activated-history capacity priority and supplemental deduplication still apply.
+
 The Activation History panel displays indexed rows by distance from its current
 position. Admitting rows in that same order let a pending `+1` claim a page
 identity before an activated `-2`. Opening a background link could therefore

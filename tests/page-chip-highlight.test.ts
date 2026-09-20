@@ -2317,7 +2317,7 @@ test('TabHistoryPanel keeps FLIP keys stable when stack indexes change', () => {
       entries: [baseEntry, secondEntry],
     }),
   })
-  assert.deepEqual(layoutKeys(twoRows), ['stack:1:101', 'stack:1:202'])
+  assert.deepEqual(layoutKeys(twoRows), ['stack:1:202', 'stack:1:101'])
 })
 
 test('TabHistoryPanel open-ghost rows do not receive data-working-set-priority attribute', () => {
