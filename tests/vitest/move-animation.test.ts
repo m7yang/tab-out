@@ -75,7 +75,7 @@ it('move animation inverts, plays on the motion token, and cleans up by timeout'
   assert.equal(item.style.transform, 'translate(-100px, -50px)')
   assert.equal(item.style.transition, 'none')
   assert.equal(item.classes.has('moving'), true)
-  assert.equal(item.style.willChange, 'transform')
+  assert.equal(item.style.willChange ?? '', '')
 
   await vi.advanceTimersByTimeAsync(25)
   assert.equal(item.style.transform, 'translate(0, 0)')
@@ -87,7 +87,7 @@ it('move animation inverts, plays on the motion token, and cleans up by timeout'
   assert.equal(item.classes.size, 0)
   assert.equal(item.style.transform, '')
   assert.equal(item.style.transition, '')
-  assert.equal(item.style.willChange, '')
+  assert.equal(item.style.willChange ?? '', '')
 })
 
 it('sub-pixel moves are skipped entirely', () => {

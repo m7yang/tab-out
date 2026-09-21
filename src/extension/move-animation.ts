@@ -128,7 +128,6 @@ export function createMoveAnimator(config: MoveAnimatorConfig): MoveAnimator {
     item.classList.remove(config.movingClass, config.activeClass)
     item.style.transform = ''
     item.style.transition = ''
-    item.style.willChange = ''
     if (config.moveZIndex) item.style.zIndex = ''
   }
 
@@ -199,7 +198,8 @@ export function createMoveAnimator(config: MoveAnimatorConfig): MoveAnimator {
       item.classList.add(config.movingClass)
       item.style.transition = 'none'
       item.style.transform = `translate(${dx}px, ${dy}px)`
-      item.style.willChange = 'transform'
+      // A temporary will-change layer changes rasterized edges at fractional
+      // zoom, making vertically moving chips twitch sideways at cleanup.
       if (config.moveZIndex) item.style.zIndex = config.moveZIndex
       return item
     })
@@ -215,7 +215,6 @@ export function createMoveAnimator(config: MoveAnimatorConfig): MoveAnimator {
         item.classList.remove(config.movingClass, config.activeClass)
         item.style.transform = ''
         item.style.transition = ''
-        item.style.willChange = ''
         if (config.moveZIndex) item.style.zIndex = ''
       }
       function cleanup() {
