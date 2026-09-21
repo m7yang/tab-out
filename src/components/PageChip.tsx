@@ -1093,6 +1093,9 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   } : undefined
   const chipExpandedMaxWidth = chipTextLayout.expansion.maxWidth > 0 ? `${chipTextLayout.expansion.maxWidth}px` : 'calc(100vw - 16px)'
   const chipExpandedWidth = chipTextLayout.expansion.width > 0 ? `${chipTextLayout.expansion.width}px` : chipExpandedMaxWidth
+  const chipExpansionOverflowsSlot = chipTextLayout.expansion.grewTaller ||
+    chipTextLayout.expansion.viewportConstrained ||
+    chipTextLayout.expansion.width > chipTextLayout.slotSize.width + 1
   const chipStyle: CSSVariableProperties = {
     ...style,
     ...(chipExpanded ? {
@@ -1793,7 +1796,8 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
         chipCursorClass,
         parentInteractive && 'clickable focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-2 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
         chipTooltipOpen && CHIP_TRIM_TOKENS.tooltipOpen,
-        chipExpanded && 'page-chip-expanded absolute z-30 min-w-0 max-w-(--page-chip-expanded-max-width) overflow-visible! transition-none! w-(--page-chip-expanded-width) [&.page-chip-expanded]:shadow-[0_3px_10px_rgba(10,10,10,0.055)]',
+        chipExpanded && 'page-chip-expanded absolute z-30 min-w-0 max-w-(--page-chip-expanded-max-width) overflow-visible! transition-none! w-(--page-chip-expanded-width)',
+        chipExpanded && chipExpansionOverflowsSlot && '[&.page-chip-expanded]:shadow-[0_3px_10px_rgba(10,10,10,0.055)]',
         chipExpanded && 'left-0',
         chipExpanded && (chipTextLayout.expansion.y === 'up' ? 'bottom-0' : 'top-0'),
         trim.chipClasses,

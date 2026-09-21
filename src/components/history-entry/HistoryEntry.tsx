@@ -426,6 +426,8 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
   } : undefined
   const entryExpandedMaxWidth = entryExpansionGeometry.maxWidth > 0 ? `${entryExpansionGeometry.maxWidth}px` : 'calc(100vw - 16px)'
   const entryExpandedWidth = entryExpansionGeometry.width > 0 ? `${entryExpansionGeometry.width}px` : entryExpandedMaxWidth
+  const entryExpansionOverflowsSlot = entryExpansionGeometry.viewportConstrained ||
+    entryExpansionGeometry.width > entrySlotSize.width + 1
   const entryExpandedTitleWidth = entryExpansionGeometry.titleWidth > 0 ? `${entryExpansionGeometry.titleWidth}px` : `${Math.max(1, titleMetrics.width)}px`
   const entryBaseStyle: CSSVariableProperties = {
     '--history-entry-fade-bg': historyEntryInteractionBg,
@@ -470,7 +472,8 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
           // Keep the resting hit target, but paint the translucent rim only once.
           titleExpanded && !expanded && 'opacity-0',
           !expanded && 'title-interaction:hover:z-4 focus-within:z-4 title-interaction:data-context-menu-open:z-4',
-          expanded && 'history-entry-expanded pointer-events-none absolute left-0 z-30 min-w-0 max-w-(--history-entry-expanded-max-width) select-none overflow-visible! transition-none! w-(--history-entry-expanded-width) shadow-[0_3px_10px_rgba(10,10,10,0.055)]',
+          expanded && 'history-entry-expanded pointer-events-none absolute left-0 z-30 min-w-0 max-w-(--history-entry-expanded-max-width) select-none overflow-visible! transition-none! w-(--history-entry-expanded-width)',
+          expanded && entryExpansionOverflowsSlot && 'shadow-[0_3px_10px_rgba(10,10,10,0.055)]',
           expanded && (entryExpansionGeometry.y === 'up' ? 'bottom-0' : 'top-0'),
           entry.current && PAGE_CHIP_CURRENT_CLASSES,
           !entry.current && historyEntryInteractionClasses,

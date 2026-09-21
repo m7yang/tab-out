@@ -1454,6 +1454,8 @@ test('Page Chip closes its expansion and interaction chrome as soon as the point
     }
   }
   const restingPaint = await chip.evaluate(readInteractionPaint)
+  const restingBounds = await chip.boundingBox()
+  expect(restingBounds).not.toBeNull()
   expect(await chip.evaluate((element) => getComputedStyle(element).transitionProperty.split(',').map((property) => property.trim()))).not.toContain('box-shadow')
 
   await chip.hover()
@@ -1463,11 +1465,13 @@ test('Page Chip closes its expansion and interaction chrome as soon as the point
   const hoveredPaint = await expandedChipElement!.evaluate(readInteractionPaint)
   expect(hoveredPaint.root).not.toEqual(restingPaint.root)
   expect(hoveredPaint.root.backgroundColor).not.toBe(restingPaint.root.backgroundColor)
-  expect(hoveredPaint.root.boxShadow).not.toBe(restingPaint.root.boxShadow)
+  expect(hoveredPaint.root.boxShadow).toBe(restingPaint.root.boxShadow)
   expect(hoveredPaint.expandedFillOpacity).toBe('1')
 
   const expandedBounds = await expandedChipElement!.boundingBox()
   expect(expandedBounds).not.toBeNull()
+  expect(Math.abs(expandedBounds!.width - restingBounds!.width)).toBeLessThanOrEqual(1)
+  expect(Math.abs(expandedBounds!.height - restingBounds!.height)).toBeLessThanOrEqual(1)
 
   await page.mouse.move(
     (expandedBounds?.x ?? 0) + (expandedBounds?.width ?? 0) + 2,
