@@ -586,7 +586,9 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
       data-loading={entry.loading ? 'true' : undefined}
       data-pending={entry.pending ? 'true' : undefined}
       className={cn(
-        'history-entry-row group/history-row flex w-full min-w-0 flex-none items-start gap-2 font-[inherit] [.history-entry-row+&]:-mt-px [&.closing]:pointer-events-none',
+        // Cover crossing titles and index markers only while rows are moving.
+        'history-entry-row group/history-row flex w-full min-w-0 flex-none items-start gap-2 font-[inherit] [.history-entry-row+&]:-mt-px [&.closing]:pointer-events-none [&.history-entry-layout-moving]:z-2 [&.history-entry-layout-moving]:bg-tab-card',
+        entry.current && '[&.history-entry-layout-moving]:z-3',
         titleExpanded && 'history-entry-row-expanded-open',
       )}
       onFocus={onMouseEnter}

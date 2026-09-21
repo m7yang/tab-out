@@ -22,7 +22,7 @@ const historyEntryMoveAnimator = createMoveAnimator({
   movingClass: 'history-entry-layout-moving',
   activeClass: 'history-entry-layout-moving-active',
   coordinateSpace: 'root',
-  moveZIndex: '2',
+  // HistoryEntry owns the move layers so the current row stays above crossings.
 })
 
 function shouldReduceHistoryMotion() {
