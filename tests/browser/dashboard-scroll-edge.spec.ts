@@ -1,6 +1,41 @@
 import { expect, test } from '@playwright/test'
 
 for (const width of [1420, 760]) {
+  test(`bottom cue covers the complete history-matched card outline at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 600 })
+    await page.goto('/tests/fixtures/dashboard-resize.html')
+    const card = page.locator('[data-tabout="domain-card"][data-tabout-domain="contentful.com"]')
+    const historyChip = page.locator('[data-tabout-context="activation-history"]').getByRole('button', {
+      name: 'Hover Handoff Title dev2 extra context', exact: true,
+    })
+    const blur = page.locator('[data-tabout-part="scroll-bottom-blur"]')
+    await expect(page.locator('#openTabsMissions')).toHaveClass(/is-packed/)
+    await card.evaluate((element) => {
+      const scroller = element.closest<HTMLElement>('.scroll-region')!
+      scroller.scrollTop += element.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom + 12
+    })
+    await historyChip.hover()
+    await expect(blur).toHaveCSS('opacity', '1')
+    const coverage = await card.evaluate((element) => {
+      const outline = getComputedStyle(element, '::after')
+      const cardRect = element.getBoundingClientRect()
+      const blurRect = document.querySelector('[data-tabout-part="scroll-bottom-blur"]')!.getBoundingClientRect()
+      return {
+        opacity: outline.opacity,
+        left: cardRect.left + Number.parseFloat(outline.left) - blurRect.left,
+        right: blurRect.right - cardRect.right + Number.parseFloat(outline.right),
+        bottom: cardRect.bottom - Number.parseFloat(outline.bottom),
+        blurTop: blurRect.top,
+        blurBottom: blurRect.bottom,
+      }
+    })
+    expect(coverage.opacity).toBe('1')
+    expect(coverage.bottom).toBeGreaterThan(coverage.blurTop)
+    expect(coverage.bottom).toBeLessThanOrEqual(coverage.blurBottom)
+    expect(coverage.left).toBeGreaterThanOrEqual(0)
+    expect(coverage.right).toBeGreaterThanOrEqual(0)
+  })
+
   test(`bottom cue follows the actual end and changing content at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 700 })
     await page.goto('/tests/fixtures/dashboard-resize.html?largeTabs=20')

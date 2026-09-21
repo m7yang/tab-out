@@ -110,16 +110,16 @@ function HistoryScrollEdges({ scrollbar }: { scrollbar: HistoryScrollbar }) {
   return (
     // The list extends across the dashboard for title expansion. Keep the cues
     // within the history column, below expanded titles and the scrollbar.
-    <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 right-(--dashboard-scrollbar-size) z-3 max-[980px]:left-(--dashboard-history-edge-gutter) max-[980px]:right-[calc(var(--dashboard-edge-bleed)-var(--dashboard-scrollbar-inset))]">
+    <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 right-(--dashboard-scrollbar-size) z-3 [--history-scroll-edge-feather:0px] min-[981px]:[--history-scroll-edge-feather:12px] max-[980px]:left-(--dashboard-history-edge-gutter) max-[980px]:right-[calc(var(--dashboard-edge-bleed)-var(--dashboard-scrollbar-inset))]">
       <div
         data-tabout-part="history-scroll-top-blur"
         data-visible={scrollbar.metrics.canScrollUp ? '' : undefined}
-        className="absolute inset-x-0 top-0 h-(--dashboard-scroll-edge-height) bg-linear-to-t from-transparent to-(--paper) opacity-0 backdrop-blur-xs transition-opacity duration-160 ease-out mask-[linear-gradient(to_top,transparent,#000)] data-visible:opacity-100"
+        className="absolute inset-x-0 top-0 h-(--dashboard-scroll-edge-height) bg-linear-to-t from-transparent to-(--paper) opacity-0 backdrop-blur-xs transition-opacity duration-160 ease-out mask-[linear-gradient(to_top,transparent,#000),linear-gradient(to_left,transparent,#000_var(--history-scroll-edge-feather))] mask-intersect data-visible:opacity-100"
       />
       <div
         data-tabout-part="history-scroll-bottom-blur"
         data-visible={scrollbar.metrics.canScrollDown ? '' : undefined}
-        className="absolute inset-x-0 bottom-0 h-(--dashboard-scroll-edge-height) bg-linear-to-b from-transparent to-(--paper) opacity-0 backdrop-blur-xs transition-opacity duration-160 ease-out mask-[linear-gradient(to_bottom,transparent,#000)] data-visible:opacity-100"
+        className="absolute inset-x-0 bottom-0 h-(--dashboard-scroll-edge-height) bg-linear-to-b from-transparent to-(--paper) opacity-0 backdrop-blur-xs transition-opacity duration-160 ease-out mask-[linear-gradient(to_bottom,transparent,#000),linear-gradient(to_left,transparent,#000_var(--history-scroll-edge-feather))] mask-intersect data-visible:opacity-100"
       />
     </div>
   )

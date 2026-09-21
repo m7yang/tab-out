@@ -388,7 +388,10 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
         data-tabout-reorder-placement={reorderFeedback.targetPlacement ?? undefined}
         data-tabout-reorder-noop={reorderFeedback.targetKeepsOrder ? 'true' : undefined}
         className={cn(
-          'domain-block group/domain-block relative flex flex-col gap-1 data-[tabout-reorder-source=true]:opacity-65 [.missions.is-packed_&.layout-moving]:z-3 [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transition-[opacity,transform] [&.closing]:duration-200 [&.closing]:ease-swift [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none',
+          'domain-block group/domain-block relative flex flex-col gap-1 pt-1 data-[tabout-reorder-source=true]:opacity-65 [.missions.is-packed_&.layout-moving]:z-3 [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transition-[opacity,transform] [&.closing]:duration-200 [&.closing]:ease-swift [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none',
+          // History matches already include folded and collapsed pages. Frame
+          // their owning card, including its header, without changing layout.
+          "after:pointer-events-none after:absolute after:-inset-2 after:rounded-[40px] after:border after:border-neutral-600/35 after:opacity-0 after:[corner-shape:squircle] after:content-[''] has-[.page-chip-hover-match,.page-chip-overflow-hover-match]:after:opacity-100",
           // The pinned-domain drag controller publishes reorder feedback to
           // the domain-reorder-feedback store; this card renders its share as
           // the data attributes above, and the indicator bar with its

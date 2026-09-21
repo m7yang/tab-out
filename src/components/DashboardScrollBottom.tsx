@@ -33,7 +33,7 @@ export function DashboardScrollBottom({ scrollRegionRef }: { scrollRegionRef: Re
         <div
           data-tabout-part="scroll-bottom-blur"
           data-visible={canScrollDown ? '' : undefined}
-          className="absolute inset-x-0 bottom-0 h-(--dashboard-scroll-edge-height) bg-linear-to-b from-transparent to-(--paper) opacity-0 backdrop-blur-xs transition-opacity duration-160 ease-out mask-[linear-gradient(to_bottom,transparent,#000)] data-visible:opacity-100"
+          className="absolute -left-(--dashboard-card-shadow-bleed) -right-2.5 bottom-0 h-(--dashboard-scroll-edge-height) bg-linear-to-b from-transparent to-(--paper) opacity-0 backdrop-blur-xs transition-opacity duration-160 ease-out mask-[linear-gradient(to_bottom,transparent,#000),linear-gradient(to_right,transparent,#000_var(--dashboard-scroll-edge-feather))] mask-intersect data-visible:opacity-100"
         />
       </div>
     </>

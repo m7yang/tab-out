@@ -930,6 +930,13 @@ for (const scenario of [
 
     const header = page.locator('.pinned-top')
     const scrollRegion = page.locator('[data-tabout-part="scroll-region"]')
+    const headerBounds = await header.boundingBox()
+    const scrollBounds = await scrollRegion.boundingBox()
+    expect(headerBounds).not.toBeNull()
+    expect(scrollBounds).not.toBeNull()
+    if (!headerBounds || !scrollBounds) throw new Error('Expected header and scroll region bounds')
+    // Scrolling card content must never enter the transparent header band.
+    expect(scrollBounds.y).toBeGreaterThanOrEqual(headerBounds.y + headerBounds.height)
     const readShadow = () => header.evaluate((element) => {
       const style = getComputedStyle(element, '::after')
       return {
