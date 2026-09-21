@@ -60,6 +60,15 @@ type DirectPointerEntry = FirstPointerEntry & {
 const HISTORY_REORDER_INITIAL_KEYS = ['stack:1:9103', 'stack:1:9102', 'stack:1:9101']
 const HISTORY_REORDER_NEXT_KEYS = ['stack:1:9101', 'stack:1:9103', 'stack:1:9102']
 
+// Expansion replaces the pointer target during entry, so target the measured
+// coordinates without asking Playwright to keep hovering the transparent copy.
+async function hoverHistoryEntry(page: Page, target: Locator) {
+  await target.scrollIntoViewIfNeeded()
+  const rect = await target.boundingBox()
+  if (!rect) throw new Error('History entry hover target is missing')
+  await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2)
+}
+
 async function installMergeSurfaceRecorder(
   page: Page,
 ): Promise<void> {
@@ -1363,7 +1372,7 @@ test('hover-revealed close actions keep a stable pointer on direct entry', async
   const expandedHistoryRow = page.locator('[data-tabout="activation-history-row"]').filter({
     hasText: 'Low score history item with enough tooltip text',
   }).first()
-  await expandedHistoryRow.locator('.history-entry-title').first().hover()
+  await hoverHistoryEntry(page, expandedHistoryRow.locator('.history-entry-title').first())
   const expandedHistory = expandedHistoryRow.locator('.history-entry-expanded')
   await expect(expandedHistory).toHaveCount(1)
   await expectStablePointerEntry({
@@ -1782,7 +1791,7 @@ test('Page Chip landmarks distinguish contexts and count an expanded history chi
   await expect(marker).toHaveCount(1)
 
   await chip.scrollIntoViewIfNeeded()
-  await chip.locator('.history-entry-title').hover()
+  await hoverHistoryEntry(page, chip.locator('.history-entry-title'))
   const overlay = row.locator('[data-tabout-part="expanded-surface"]')
   await expect(overlay).toBeVisible()
   await expect(overlay).toHaveAttribute('aria-hidden', 'true')
@@ -1836,7 +1845,7 @@ test('Activation History restores its title fade after hover expansion closes', 
   await title.scrollIntoViewIfNeeded()
   await expectCollapsedTitleFade(title, 'history-entry-title-truncated')
 
-  await title.hover()
+  await hoverHistoryEntry(page, title)
   await expect(page.locator('.history-entry-expanded')).toHaveCount(1)
   await page.mouse.move(2, 2)
   await expect(page.locator('.history-entry-expanded')).toHaveCount(0)
@@ -1857,7 +1866,7 @@ test('Activation History closes its title expansion as soon as the pointer leave
   }).first()
   const title = row.locator('.history-entry-title').first()
   await title.scrollIntoViewIfNeeded()
-  await title.hover()
+  await hoverHistoryEntry(page, title)
   await expect(row.locator('.history-entry-expanded')).toHaveCount(1)
 
   const collapsedByNextFrame = await row.evaluate(async (element) => {
@@ -1887,7 +1896,7 @@ test('Activation History expands a faded two-line title on hover', async ({ page
   await title.scrollIntoViewIfNeeded()
   await expectCollapsedTitleFade(title, 'history-entry-title-truncated')
 
-  await title.hover()
+  await hoverHistoryEntry(page, title)
   await expect(row.locator('.history-entry-expanded')).toHaveCount(1)
 })
 
@@ -1941,8 +1950,9 @@ test('Activation History hover begins at the visible entry surface', async ({ pa
   if (!geometry?.surface) throw new Error('History entry surface geometry is unavailable')
   await page.mouse.move(geometry.surface.x, geometry.surface.y)
   await expect(urlPreview).toHaveAttribute('aria-hidden', 'false')
-  await expect.poll(() => surface.evaluate((element) => element.matches(':hover'))).toBe(true)
-  await expect.poll(() => surface.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid')
+  const expandedSurface = row.locator('[data-tabout-part="expanded-surface"]')
+  await expect.poll(() => expandedSurface.evaluate((element) => element.matches(':hover'))).toBe(true)
+  await expect.poll(() => expandedSurface.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid')
   await expect(marker).toHaveCSS('color', 'rgba(64, 64, 64, 0.76)')
 })
 
@@ -1977,7 +1987,7 @@ test('Activation History marker stays aligned with the favicon and first title l
   expect(Math.abs(geometry?.faviconOffset ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(0.5)
   expect(Math.abs(geometry?.markerOffset ?? Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(0.5)
 
-  await title.hover()
+  await hoverHistoryEntry(page, title)
   await expect(page.locator('.history-entry-expanded')).toHaveCount(1)
   const expandedMarkerTop = await row.locator('[data-tabout-part="history-entry-marker"]').evaluate((element) => (
     element.getBoundingClientRect().top

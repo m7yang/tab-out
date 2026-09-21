@@ -134,6 +134,8 @@
           {
             index: 0,
             tabId: 9001,
+            audible: fixtureParams.has('historyAudio'),
+            muted: fixtureParams.get('historyAudio') === 'muted',
             windowId: appLoadingFaviconCase ? 2 : 1,
             exists: true,
             active: false,
@@ -431,6 +433,8 @@
           : []),
         {
           id: 9001,
+          audible: fixtureParams.has('historyAudio'),
+          mutedInfo: { muted: fixtureParams.get('historyAudio') === 'muted' },
           url: appLoadingFaviconCase ? 'https://app.example.test/inbox' : 'chrome://settings/appearance',
           title: appLoadingFaviconCase ? appLoadingTitle : historyTitle,
           favIconUrl: '',

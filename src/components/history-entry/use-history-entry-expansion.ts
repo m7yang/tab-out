@@ -207,12 +207,16 @@ export function useHistoryEntryExpansion(contextMenuOpenRef: RefObject<boolean>,
     titleExpansionController.close()
   }
 
+  function getInteractionSurface() {
+    return entrySlotRef.current?.querySelector<HTMLElement>('[data-tabout-part="expanded-surface"]')
+      ?? entryRef.current
+  }
+
   useCloseOnOutsideActivity({
     expanded: titleExpanded,
     controller: titleExpansionController,
-    // Leaving the original entry slot closes immediately, vetoed inside
-    // the controller while the row menu holds the expansion.
-    getPointerRegion: () => entrySlotRef.current?.getBoundingClientRect(),
+    // The revealed surface owns hover, including overflow beyond the resting row.
+    getPointerRegion: () => getInteractionSurface()?.getBoundingClientRect(),
   })
 
   // Unlike PageChip (which force-opens the title expansion when its menu opens),
@@ -223,7 +227,7 @@ export function useHistoryEntryExpansion(contextMenuOpenRef: RefObject<boolean>,
     contextMenuOpenRef.current = open
     menuHoldRef.current?.()
     menuHoldRef.current = open ? titleExpansionController.hold('context-menu') : null
-    if (!open && !isOutsidePressInsideElement(details, entryRef.current)) closeTitleExpansion()
+    if (!open && !isOutsidePressInsideElement(details, getInteractionSurface())) closeTitleExpansion()
   }
 
   function onHistoryEntryPointerEnter() {

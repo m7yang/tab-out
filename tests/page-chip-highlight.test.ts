@@ -2159,9 +2159,9 @@ test('TabHistoryPanel uses PageChip-style fade truncation and in-place title exp
   assert.doesNotMatch(tabHistoryPanelSource, /cursor-grabbing/)
   assert.match(tabHistoryPanelSource, /onPointerDown=\{onThumbPointerDown\}/)
   assert.match(tabHistoryPanelSource, /--history-entry-scrollbar-thumb-height/)
-  assert.match(historyEntryComponentSource, /className="history-entry-slot relative min-w-0 flex-auto"[\s\S]*\{historyEntrySurface\(false\)\}[\s\S]*\{expandedEntryElement\}/)
+  assert.match(historyEntryComponentSource, /className="history-entry-slot group\/history-slot relative min-w-0 flex-auto"[\s\S]*\{historyEntrySurface\(false\)\}[\s\S]*\{expandedEntryElement\}/)
   // The expansion no longer collapses on scroll; it stays open until the pointer
-  // leaves the entry's slot (or window blur / tab hidden).
+  // leaves the expanded surface (or window blur / tab hidden).
   assert.doesNotMatch(historySurfacesSource, /closeExpandedHistoryEntryBeforeNativeScroll/)
   assert.doesNotMatch(historySurfacesSource, /closeExpandedHistoryEntryOnNativeScroll/)
   assert.doesNotMatch(historySurfacesSource, /onWheelCapture=/)
@@ -2176,12 +2176,7 @@ test('TabHistoryPanel uses PageChip-style fade truncation and in-place title exp
   assert.doesNotMatch(historySurfacesSource, /historyWheelGestureActive/)
   assert.doesNotMatch(historySurfacesSource, /onWheel=\{/)
   assert.doesNotMatch(historySurfacesSource, /scrollTop\s*=/)
-  assert.match(historyEntryComponentSource, /history-entry-expanded pointer-events-none absolute left-0 z-30/)
-  assert.doesNotMatch(historyEntryComponentSource, /history-entry-expanded pointer-events-auto/)
-  assert.match(historyEntryComponentSource, /data-tabout-part="history-scrollbar-input-shield"/)
-  assert.match(historyEntryComponentSource, /history-entry-scrollbar-input-shield pointer-events-auto absolute top-0 bottom-0 z-3/)
-  assert.match(historyEntryComponentSource, /scrollbarShieldLeft/)
-  assert.match(historyEntryComponentSource, /scrollbarShieldWidth/)
+  assert.match(historyEntryComponentSource, /history-entry-expanded pointer-events-auto absolute left-0 z-30/)
   assert.doesNotMatch(historyEntryComponentSource, /history-entry-expanded fixed z-30/)
   assert.match(historyEntryComponentSource, /shadow-\[0_3px_10px_rgba\(10,10,10,0\.055\)\]/)
   assert.doesNotMatch(historySurfacesSource, /\[text-wrap:balance\]/)

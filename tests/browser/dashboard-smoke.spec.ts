@@ -2121,8 +2121,7 @@ async function measureHistoryEntryExpansionWheelScroll(harness: DashboardHarness
     x: expandedOnlyPoint.x,
     y: expandedOnlyPoint.y,
   })
-  await waitForNoHistoryEntryExpansion(harness)
-  const afterOriginalSlotLeave = null
+  const afterOriginalSlotLeave = await waitForHistoryEntryExpansionRect(harness, HISTORY_SMOKE_ENTRY_LABEL)
 
   await harness.session.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
@@ -2197,11 +2196,6 @@ function assertHistoryScrollbarLayering(result: Awaited<ReturnType<typeof measur
     `expanded history entry should own its scrollbar overlap under production pointer events: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    overlap.hitInputShield,
-    true,
-    `expanded history entry should expose its narrow scrollbar input shield at the overlap: ${JSON.stringify(overlap)}`,
-  )
-  assert.equal(
     overlap.hitInsideHistoryList,
     true,
     `wheel input over the covered scrollbar band should stay in the history scroller event path: ${JSON.stringify(overlap)}`,
@@ -2221,14 +2215,9 @@ function assertHistoryScrollbarLayering(result: Awaited<ReturnType<typeof measur
     `the moving expanded entry should carry the scrollbar redaction with it: ${JSON.stringify(overlap)}`,
   )
   assert.equal(
-    overlap.shiftedHitInputShield,
-    true,
-    `the moving expanded entry should carry its scrollbar input shield with it: ${JSON.stringify(overlap)}`,
-  )
-  assert.equal(
     overlap.shiftedHitInsideHistoryList,
     true,
-    `the shifted scrollbar input shield should remain in the history scroller event path: ${JSON.stringify(overlap)}`,
+    `the shifted expanded surface should remain in the history scroller event path: ${JSON.stringify(overlap)}`,
   )
 }
 
@@ -3452,18 +3441,17 @@ test('dashboard cards repack when the viewport resizes', async ({ page }) => {
   )
   assert.equal(
     historyPopupWheelScroll.expandedOnlyHitTarget.hitInsideExpanded,
-    false,
-    `expanded history entry should stay pointer-transparent so wheel input reaches the scroll list: ${JSON.stringify(historyPopupWheelScroll)}`,
+    true,
+    `expanded history entry should own pointer input while native wheel input reaches its scroll-list ancestor: ${JSON.stringify(historyPopupWheelScroll)}`,
   )
   assert.equal(
     historyPopupWheelScroll.expandedOnlyClipCheck.hitInsideExpanded,
     true,
     `expanded history entry should remain visibly hit-testable outside the clipped history list when pointer events are enabled for measurement: ${JSON.stringify(historyPopupWheelScroll)}`,
   )
-  assert.equal(
+  assert.ok(
     historyPopupWheelScroll.afterOriginalSlotLeave,
-    null,
-    `history entry should collapse when the pointer leaves the original entry slot, even inside the grown bounds: ${JSON.stringify(historyPopupWheelScroll)}`,
+    `history entry should stay expanded when the pointer leaves the original slot inside the grown bounds: ${JSON.stringify(historyPopupWheelScroll)}`,
   )
   assert.notEqual(
     historyPopupWheelScroll.target.titleWebkitLineClamp,

@@ -38,11 +38,11 @@ import { useHistoryEntryExpansion } from './use-history-entry-expansion.js'
 import { startHistoryEntryRemoval, uniqueUrls, useHistoryEntryActions, workingSetUrls } from './use-history-entry-actions.js'
 import type { HistoryEntryProps } from './types.js'
 
-const HISTORY_ENTRY_INTERACTION_CLASSES = 'title-interaction:hover:bg-(--history-entry-interaction-bg) title-interaction:focus-within:bg-(--history-entry-interaction-bg) [&.history-entry-expanded-open]:bg-(--history-entry-interaction-bg) title-interaction:[&[data-context-menu-open]]:bg-(--history-entry-interaction-bg) title-interaction:hover:after:opacity-100 [&.history-entry-expanded-open]:after:opacity-100 title-interaction:[&[data-context-menu-open]]:after:opacity-100'
+const HISTORY_ENTRY_INTERACTION_CLASSES = 'title-interaction:hover:bg-(--history-entry-interaction-bg) title-interaction:focus-within:bg-(--history-entry-interaction-bg) [&.history-entry-expanded-open]:bg-(--history-entry-interaction-bg) title-interaction:group-data-context-menu-open/history-slot:bg-(--history-entry-interaction-bg) title-interaction:hover:after:opacity-100 [&.history-entry-expanded-open]:after:opacity-100 title-interaction:group-data-context-menu-open/history-slot:after:opacity-100'
 // Unframed rows share the closed-page fill and rim regardless of liveness.
 // Keyboard focus retains its stronger outer outline. Paint values use CSS
 // variables so Tailwind sees complete class literals for every selector.
-const HISTORY_ENTRY_HOVER_OUTLINE_CLASSES = 'title-interaction:hover:outline title-interaction:hover:outline-1 title-interaction:hover:-outline-offset-1 title-interaction:hover:outline-(--history-entry-hover-border) [&.history-entry-expanded-open]:outline [&.history-entry-expanded-open]:outline-1 [&.history-entry-expanded-open]:-outline-offset-1 [&.history-entry-expanded-open]:outline-(--history-entry-hover-border) title-interaction:[&[data-context-menu-open]]:outline title-interaction:[&[data-context-menu-open]]:outline-1 title-interaction:[&[data-context-menu-open]]:-outline-offset-1 title-interaction:[&[data-context-menu-open]]:outline-(--history-entry-hover-border)'
+const HISTORY_ENTRY_HOVER_OUTLINE_CLASSES = 'title-interaction:hover:outline title-interaction:hover:outline-1 title-interaction:hover:-outline-offset-1 title-interaction:hover:outline-(--history-entry-hover-border) [&.history-entry-expanded-open]:outline [&.history-entry-expanded-open]:outline-1 [&.history-entry-expanded-open]:-outline-offset-1 [&.history-entry-expanded-open]:outline-(--history-entry-hover-border) title-interaction:group-data-context-menu-open/history-slot:outline title-interaction:group-data-context-menu-open/history-slot:outline-1 title-interaction:group-data-context-menu-open/history-slot:-outline-offset-1 title-interaction:group-data-context-menu-open/history-slot:outline-(--history-entry-hover-border)'
 const HISTORY_ENTRY_OUTLINED_INTERACTION_CLASSES = `${HISTORY_ENTRY_INTERACTION_CLASSES} ${HISTORY_ENTRY_HOVER_OUTLINE_CLASSES}`
 const HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_CLASSES = `bg-(--history-entry-rest-bg) text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.04)] ${HISTORY_ENTRY_INTERACTION_CLASSES}`
 
@@ -469,10 +469,10 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
           entryCursorClass,
           entryClosed && 'history-entry-closed text-tab-closed',
           titleExpanded && 'history-entry-expanded-open',
-          // Keep the resting hit target, but paint the translucent rim only once.
+          // Keep the canonical keyboard target, but paint the translucent rim only once.
           titleExpanded && !expanded && 'opacity-0',
-          !expanded && 'title-interaction:hover:z-4 focus-within:z-4 title-interaction:data-context-menu-open:z-4',
-          expanded && 'history-entry-expanded pointer-events-none absolute left-0 z-30 min-w-0 max-w-(--history-entry-expanded-max-width) select-none overflow-visible! transition-none! w-(--history-entry-expanded-width)',
+          !expanded && 'title-interaction:hover:z-4 focus-within:z-4 title-interaction:group-data-context-menu-open/history-slot:z-4',
+          expanded && 'history-entry-expanded pointer-events-auto absolute left-0 z-30 min-w-0 max-w-(--history-entry-expanded-max-width) select-none overflow-visible! transition-none! w-(--history-entry-expanded-width)',
           expanded && entryExpansionOverflowsSlot && 'shadow-[0_3px_10px_rgba(10,10,10,0.055)]',
           expanded && (entryExpansionGeometry.y === 'up' ? 'bottom-0' : 'top-0'),
           entry.current && PAGE_CHIP_CURRENT_CLASSES,
@@ -482,19 +482,6 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
         )}
         style={expanded ? entryOverlayStyle : entryBaseStyle}
         ref={expanded ? undefined : entryRef}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-        onPointerEnter={onHistoryEntryPointerEnter}
-        onPointerMove={onHistoryEntryPointerMove}
-        onPointerLeave={onHistoryEntryPointerLeave}
-        onFocus={(e) => {
-          if (expanded) onMouseEnter()
-          onHistoryEntryFocus(e)
-        }}
-        onBlur={(e) => {
-          if (expanded) onMouseLeave()
-          onHistoryEntryBlur(e)
-        }}
       >
         {expanded && plainClickableEntry && (
           <span
@@ -513,19 +500,8 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
               'active-history-entry-frame pointer-events-none absolute inset-0 z-2 rounded-[inherit] [corner-shape:squircle]',
               entry.current
                 ? 'shadow-[inset_0_0_0_1px_rgba(82,82,82,0.48)]'
-                : 'shadow-[inset_0_0_0_1px_rgba(115,115,115,0.2)] title-interaction:group-hover/history-entry:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] group-[.history-entry-expanded-open]/history-entry:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] title-interaction:group-data-context-menu-open/history-entry:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)]',
+                : 'shadow-[inset_0_0_0_1px_rgba(115,115,115,0.2)] title-interaction:group-hover/history-entry:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] group-[.history-entry-expanded-open]/history-entry:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] title-interaction:group-data-context-menu-open/history-slot:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)]',
             )}
-            aria-hidden="true"
-          />
-        )}
-        {expanded && entryExpansionGeometry.scrollbarShieldWidth > 0 && (
-          <span
-            data-tabout-part="history-scrollbar-input-shield"
-            className="history-entry-scrollbar-input-shield pointer-events-auto absolute top-0 bottom-0 z-3"
-            style={{
-              left: `${entryExpansionGeometry.scrollbarShieldLeft}px`,
-              width: `${entryExpansionGeometry.scrollbarShieldWidth}px`,
-            }}
             aria-hidden="true"
           />
         )}
@@ -535,10 +511,18 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
           tabIndex={!expanded && canActivateEntry ? 0 : -1}
           data-tabout-part="focus-button"
           aria-label={entryLabel}
-          aria-disabled={!canActivateEntry || expanded}
+          aria-disabled={!canActivateEntry}
           aria-busy={entry.loading ? true : undefined}
           className={cn('history-entry-main flex w-full items-start gap-2 border-0 bg-transparent px-2.25 py-1.25 text-left text-[13px] font-normal text-inherit font-[inherit] leading-tight outline-none focus-visible:outline-none', entryCursorClass)}
-          onClick={!expanded && canActivateEntry ? activateHistoryEntry : undefined}
+          onClick={canActivateEntry ? activateHistoryEntry : undefined}
+          onMouseDownCapture={expanded ? (event) => {
+            // Capture before nested controls stop propagation: only the canonical
+            // surface may own focus after this painted copy collapses.
+            event.preventDefault()
+            if (event.target instanceof Element && event.target.closest('[data-tabout-part="audio-toggle"]')) {
+              entryRef.current?.querySelector<HTMLButtonElement>('[data-tabout-part="audio-toggle"]')?.focus({ preventScroll: true })
+            }
+          } : undefined}
           onMouseDown={!expanded && canActivateEntry ? onEntryMouseDown : undefined}
           onKeyDown={expanded ? undefined : onEntryKeyDown}
         >
@@ -595,16 +579,23 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
       onBlur={onMouseLeave}
     >
       <HistoryEntryMarkerCell indexLabel={indexLabel} />
-      <div
-        className="history-entry-slot relative min-w-0 flex-auto"
-        style={entrySlotStyle}
-        ref={entrySlotRef}
-      >
-        <HistoryEntryContextMenu entry={entry} savedKeys={savedKeys} retainedPageSurfaceMatches={retainedPageSurfaceMatches} onOpenChange={onHistoryEntryMenuOpenChange}>
+      <HistoryEntryContextMenu entry={entry} savedKeys={savedKeys} retainedPageSurfaceMatches={retainedPageSurfaceMatches} onOpenChange={onHistoryEntryMenuOpenChange}>
+        <div
+          className="history-entry-slot group/history-slot relative min-w-0 flex-auto"
+          style={entrySlotStyle}
+          ref={entrySlotRef}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+          onPointerEnter={onHistoryEntryPointerEnter}
+          onPointerMove={onHistoryEntryPointerMove}
+          onPointerLeave={onHistoryEntryPointerLeave}
+          onFocus={onHistoryEntryFocus}
+          onBlur={onHistoryEntryBlur}
+        >
           {historyEntrySurface(false)}
-        </HistoryEntryContextMenu>
-        {expandedEntryElement}
-      </div>
+          {expandedEntryElement}
+        </div>
+      </HistoryEntryContextMenu>
     </div>
   )
 }

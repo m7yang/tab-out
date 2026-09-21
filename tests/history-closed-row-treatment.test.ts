@@ -95,7 +95,7 @@ test('a row active in another window strengthens its permanent frame on interact
   assert.match(html, /active-history-entry-frame\b[^"]*shadow-\[inset_0_0_0_1px_rgba\(115,115,115,0\.2\)\]/)
   assert.match(html, /group-hover\/history-entry:shadow-\[inset_0_0_0_1px_rgba\(38,38,38,0\.55\)\]/)
   assert.match(html, /group-\[\.history-entry-expanded-open\]\/history-entry:shadow-\[inset_0_0_0_1px_rgba\(38,38,38,0\.55\)\]/)
-  assert.match(html, /group-data-context-menu-open\/history-entry:shadow-\[inset_0_0_0_1px_rgba\(38,38,38,0\.55\)\]/)
+  assert.match(html, /group-data-context-menu-open\/history-slot:shadow-\[inset_0_0_0_1px_rgba\(38,38,38,0\.55\)\]/)
 })
 
 test('a closed history row keeps the shared line color', () => {

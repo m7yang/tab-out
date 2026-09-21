@@ -15,7 +15,7 @@ test.describe('history hover beside an active frame', () => {
         if (!rect || !neighborRect) throw new Error('Adjacent history rows are missing')
         // Verify the intended shared edge, rather than trusting fixture order.
         expect(side === 'above' ? neighborRect.y + neighborRect.height - rect.y : rect.y + rect.height - neighborRect.y).toBeCloseTo(1, 4)
-        await neighbor.hover()
+        await page.mouse.move(neighborRect.x + neighborRect.width / 2, neighborRect.y + neighborRect.height / 2)
         if (expanded) await expect(page.locator('.history-entry-expanded')).toBeVisible()
         const clip = {
           x: rect.x + rect.width / 2,

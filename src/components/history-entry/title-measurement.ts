@@ -17,8 +17,6 @@ export const HISTORY_ENTRY_EXPANDED_TAIL_LINE_CLASS_NAME = 'history-entry-expand
 export const DEFAULT_HISTORY_ENTRY_EXPANSION_GEOMETRY: HistoryEntryExpansionGeometry = {
   lineHtml: [],
   maxWidth: 0,
-  scrollbarShieldLeft: 0,
-  scrollbarShieldWidth: 0,
   titleWidth: 0,
   viewportConstrained: false,
   width: 0,
@@ -64,8 +62,6 @@ const DEFAULT_HISTORY_TITLE_METRICS: HistoryTitleMetrics = {
 export type HistoryEntryExpansionGeometry = {
   lineHtml: string[]
   maxWidth: number
-  scrollbarShieldLeft: number
-  scrollbarShieldWidth: number
   titleWidth: number
   viewportConstrained: boolean
   width: number
@@ -389,16 +385,10 @@ export function getHistoryEntryExpansionGeometry(entryEl: HTMLElement | null, ti
     Math.max(metrics.width, metrics.expandedTextWidth + HISTORY_ENTRY_EXPANDED_WIDTH_GUARD_PX),
   )
   const width = Math.min(maxWidth, Math.max(rect.width, horizontalInset + expandedContentWidth))
-  const scrollbarTrack = entryEl.closest('.tab-history-panel')?.querySelector<HTMLElement>('.history-entry-scrollbar-track')
-  const scrollbarRect = scrollbarTrack?.getBoundingClientRect()
-  const scrollbarOverlapLeft = scrollbarRect ? Math.max(rect.left, scrollbarRect.left) : 0
-  const scrollbarOverlapRight = scrollbarRect ? Math.min(rect.left + width, scrollbarRect.right) : 0
 
   return {
     lineHtml: metrics.expandedLineHtml,
     maxWidth,
-    scrollbarShieldLeft: Math.max(0, scrollbarOverlapLeft - rect.left),
-    scrollbarShieldWidth: Math.max(0, scrollbarOverlapRight - scrollbarOverlapLeft),
     titleWidth: expandedContentWidth,
     viewportConstrained: metrics.expandedViewportConstrained,
     width,
@@ -428,8 +418,6 @@ export function historyEntryExpansionGeometryEqual(left: HistoryEntryExpansionGe
     left.y === right.y &&
     left.viewportConstrained === right.viewportConstrained &&
     Math.abs(left.maxWidth - right.maxWidth) < 0.1 &&
-    Math.abs(left.scrollbarShieldLeft - right.scrollbarShieldLeft) < 0.1 &&
-    Math.abs(left.scrollbarShieldWidth - right.scrollbarShieldWidth) < 0.1 &&
     Math.abs(left.titleWidth - right.titleWidth) < 0.1 &&
     Math.abs(left.width - right.width) < 0.1
   )

@@ -245,13 +245,11 @@ export function probeScrollbarOverlap(params: { label: string }) {
       visibleThumbHitScrollbar: false,
       hitScrollbar: null as boolean | null,
       hitExpanded: false,
-      hitInputShield: false,
       hitInsideHistoryList: false,
       shiftedEntryTop: Number.NaN,
       shiftedOverlapPoint: null as { x: number, y: number } | null,
       shiftedHitScrollbar: false,
       shiftedHitExpanded: false,
-      shiftedHitInputShield: false,
       shiftedHitInsideHistoryList: false,
     }
   }
@@ -301,13 +299,11 @@ export function probeScrollbarOverlap(params: { label: string }) {
     visibleThumbHitScrollbar: within(visibleThumbNode, '.history-entry-scrollbar'),
     hitScrollbar: within(overlapNode, '.history-entry-scrollbar') as boolean | null,
     hitExpanded: within(overlapNode, '.history-entry-expanded'),
-    hitInputShield: within(overlapNode, '.history-entry-scrollbar-input-shield'),
     hitInsideHistoryList: within(overlapNode, '.history-entry-list'),
     shiftedEntryTop: shiftedEntryRect.top,
     shiftedOverlapPoint,
     shiftedHitScrollbar: within(shiftedNode, '.history-entry-scrollbar'),
     shiftedHitExpanded: within(shiftedNode, '.history-entry-expanded'),
-    shiftedHitInputShield: within(shiftedNode, '.history-entry-scrollbar-input-shield'),
     shiftedHitInsideHistoryList: within(shiftedNode, '.history-entry-list'),
   }
 }
