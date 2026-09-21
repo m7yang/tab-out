@@ -16,7 +16,7 @@ export function DashboardErrorFallback({ error }: FallbackProps) {
           The dashboard crashed while rendering. Reloading usually recovers it.
         </p>
         {message && (
-          <pre className="mt-3 overflow-x-auto rounded-lg bg-[rgba(115,115,115,0.08)] p-2 text-xs leading-4 whitespace-pre-wrap text-muted-foreground">{message}</pre>
+          <pre className="mt-3 overflow-x-auto rounded-lg [corner-shape:squircle] bg-[rgba(115,115,115,0.08)] p-2 text-xs leading-4 whitespace-pre-wrap text-muted-foreground">{message}</pre>
         )}
         <button
           type="button"
