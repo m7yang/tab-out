@@ -76,7 +76,10 @@ export function readExpandedVariantLabels(params: { label: string }) {
 }
 
 type PlainVariantSurfaces = {
-  slotOnlyDefaultSurface?: Point
+  topLeftCorner: Point
+  topRightCorner: Point
+  bottomLeftCorner: Point
+  bottomRightCorner: Point
   labelRightEdge: Point
   leftGutter: Point
   titleRightEdge: Point
@@ -132,27 +135,6 @@ export function findPlainVariantChipTarget(): Promise<PlainVariantTarget | Plain
         labelRects.every((rect) => rect.width > 0 && rect.height > 8) &&
         overflowingLabels > 0
       if (usable) {
-        // Serialized by source text: the slot probe has to live inside.
-        const slotOnlyPoint = (() => {
-          const slot = chip.closest('[data-tabout-part="slot"]')
-          if (!(slot instanceof HTMLElement)) return null
-          const slotRect = slot.getBoundingClientRect()
-          const points = [
-            { x: chipRect.left + 1, y: chipRect.top + 1 },
-            { x: chipRect.right - 1, y: chipRect.top + 1 },
-            { x: chipRect.left + 1, y: chipRect.bottom - 1 },
-            { x: chipRect.right - 1, y: chipRect.bottom - 1 },
-            { x: chipRect.left + 2, y: chipRect.top + 2 },
-            { x: chipRect.right - 2, y: chipRect.top + 2 },
-            { x: chipRect.left + 2, y: chipRect.bottom - 2 },
-            { x: chipRect.right - 2, y: chipRect.bottom - 2 },
-          ]
-          return points.find((point) => {
-            if (point.x < slotRect.left || point.x > slotRect.right || point.y < slotRect.top || point.y > slotRect.bottom) return false
-            const hit = document.elementFromPoint(point.x, point.y)
-            return hit instanceof Element && slot.contains(hit) && !chip.contains(hit)
-          }) || null
-        })()
         const titleRect = chip.querySelector('.chip-title-row')?.getBoundingClientRect()
         const titleCenterY = Math.round((titleRect?.top || chipRect.top) + (titleRect?.height || chipRect.height) / 2)
         resolve({
@@ -166,9 +148,10 @@ export function findPlainVariantChipTarget(): Promise<PlainVariantTarget | Plain
           overflowingLabels,
           viewportRight: window.innerWidth,
           surfaces: {
-            ...(slotOnlyPoint
-              ? { slotOnlyDefaultSurface: { x: Math.round(slotOnlyPoint.x), y: Math.round(slotOnlyPoint.y) } }
-              : {}),
+            topLeftCorner: { x: chipRect.left + 1, y: chipRect.top + 1 },
+            topRightCorner: { x: chipRect.right - 1, y: chipRect.top + 1 },
+            bottomLeftCorner: { x: chipRect.left + 1, y: chipRect.bottom - 1 },
+            bottomRightCorner: { x: chipRect.right - 1, y: chipRect.bottom - 1 },
             labelRightEdge: {
               x: Math.round(chipRect.right - 4),
               y: Math.round(targetLabelRect.top + targetLabelRect.height / 2),

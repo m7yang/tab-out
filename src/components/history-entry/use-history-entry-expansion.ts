@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { FocusEvent, PointerEvent, RefObject, SetStateAction } from 'react'
-import { createTitleExpansionLane, syncClampedTitleFadeEnd, syncTruncatedTitleFadeEnd, useCloseOnOutsideActivity, useTitleExpansionController } from '../title-expansion'
+import { createTitleExpansionLane, pointerWithinExpansionSurface, syncClampedTitleFadeEnd, syncTruncatedTitleFadeEnd, useCloseOnOutsideActivity, useTitleExpansionController } from '../title-expansion'
 import { isOutsidePressInsideElement } from '../context-menu-outside-press'
 import type { ContextMenuChangeEventDetails } from '../context-menu-outside-press'
 import { subscribeFontMetricsInvalidation } from '../font-metrics-invalidation.js'
@@ -216,7 +216,7 @@ export function useHistoryEntryExpansion(contextMenuOpenRef: RefObject<boolean>,
     expanded: titleExpanded,
     controller: titleExpansionController,
     // The revealed surface owns hover, including overflow beyond the resting row.
-    getPointerRegion: () => getInteractionSurface()?.getBoundingClientRect(),
+    getPointerSurface: getInteractionSurface,
   })
 
   // Unlike PageChip (which force-opens the title expansion when its menu opens),
@@ -236,16 +236,8 @@ export function useHistoryEntryExpansion(contextMenuOpenRef: RefObject<boolean>,
 
   function onHistoryEntryPointerMove(e: PointerEvent<HTMLDivElement>) {
     if (titleExpandedRef.current) return
-    const slotRect = entrySlotRef.current?.getBoundingClientRect()
-    if (
-      slotRect &&
-      (e.clientX < slotRect.left ||
-        e.clientX > slotRect.right ||
-        e.clientY < slotRect.top ||
-        e.clientY > slotRect.bottom)
-    ) {
-      return
-    }
+    const slot = entrySlotRef.current
+    if (slot && !pointerWithinExpansionSurface(e, slot)) return
     openTitleExpansion()
   }
 

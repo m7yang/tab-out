@@ -1,5 +1,5 @@
 import { useDocumentEvent, useWindowEvent } from '../../hooks/useGlobalEvent'
-import { pointWithinRect } from '../pointer-position'
+import { pointerWithinExpansionSurface } from './pointer-region'
 import type { TitleExpansionController } from './controller'
 
 export type CloseOnOutsideActivityOptions = {
@@ -10,7 +10,7 @@ export type CloseOnOutsideActivityOptions = {
    * The pointer region that keeps the expansion open. Returning nothing keeps
    * the current pointer position from closing it.
    */
-  getPointerRegion: () => DOMRect | undefined
+  getPointerSurface: () => HTMLElement | null | undefined
 }
 
 /**
@@ -18,15 +18,15 @@ export type CloseOnOutsideActivityOptions = {
  * window blurs, or the page hides. Owners describe their region; the
  * controller still vetoes closes while a menu or keyboard focus holds them.
  */
-export function useCloseOnOutsideActivity({ expanded, controller, getPointerRegion }: CloseOnOutsideActivityOptions): void {
+export function useCloseOnOutsideActivity({ expanded, controller, getPointerSurface }: CloseOnOutsideActivityOptions): void {
   useWindowEvent('blur', () => {
     controller.closeNow()
   }, { enabled: expanded })
 
   useWindowEvent('pointermove', (event) => {
-    const region = getPointerRegion()
-    if (!region) return
-    if (!pointWithinRect({ x: event.clientX, y: event.clientY }, region)) controller.close()
+    const surface = getPointerSurface()
+    if (!surface) return
+    if (!pointerWithinExpansionSurface(event, surface)) controller.close()
   }, { capture: true, enabled: expanded })
 
   useDocumentEvent('visibilitychange', () => {

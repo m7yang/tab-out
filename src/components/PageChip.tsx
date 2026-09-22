@@ -38,7 +38,7 @@ import { createBionicTitleTextRenderer, isUrlLikeTitle } from './bionic-title-te
 import { highlightTermsForFilter, highlightedTextNodes } from './filter-highlight-text'
 import { titleSuppressionChipHighlightClass, titleSuppressionMarkerClass, titleSuppressionToneForText } from './title-suppression'
 import type { TitleSuppressionTone } from './title-suppression'
-import { createTitleExpansionLane, useCloseOnOutsideActivity, useTitleExpansionController } from './title-expansion'
+import { createTitleExpansionLane, pointerWithinExpansionSurface, useCloseOnOutsideActivity, useTitleExpansionController } from './title-expansion'
 import { chipTrim, CHIP_TRIM_TOKENS } from './chip-trim'
 import { faviconLivenessClassName, VARIANT_LABEL_DIM_CLASS_NAME } from './liveness-dim'
 import type { DashboardChipData } from './types'
@@ -603,9 +603,9 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     // at the border before the revealed content could be reached. The expanded
     // bounding box is the complete pointer region; leaving it closes immediately,
     // vetoed inside the controller while a menu or root keyboard focus holds it.
-    getPointerRegion: () => {
+    getPointerSurface: () => {
       const expandedChipEl = chipSlotRef.current?.querySelector<HTMLElement>('.page-chip')
-      return expandedChipEl?.getBoundingClientRect() ?? chipSlotRef.current?.getBoundingClientRect()
+      return expandedChipEl ?? chipSlotRef.current
     },
   })
 
@@ -660,14 +660,8 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   }
 
   function isPointerInsideChipSlot(e: PointerEvent<HTMLDivElement>) {
-    const slotRect = chipSlotRef.current?.getBoundingClientRect()
-    if (!slotRect) return true
-    return (
-      e.clientX >= slotRect.left &&
-      e.clientX <= slotRect.right &&
-      e.clientY >= slotRect.top &&
-      e.clientY <= slotRect.bottom
-    )
+    const slot = chipSlotRef.current
+    return !slot || pointerWithinExpansionSurface(e, slot)
   }
 
   function onChipPointerMove(e: PointerEvent<HTMLDivElement>) {
@@ -1719,7 +1713,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   const chipTextElement = (
     <span
       className={cn(
-        "chip-text block min-w-0 flex-1 overflow-clip [overflow-clip-margin:2px] hyphens-auto break-normal max-h-[calc(2lh)] [hyphenate-character:''] [&.chip-text-truncated]:mask-(--title-fade-mask)",
+        "chip-text relative block min-w-0 flex-1 overflow-clip [overflow-clip-margin:2px] hyphens-auto break-normal max-h-[calc(2lh)] [hyphenate-character:''] [&.chip-text-truncated]:mask-(--title-fade-mask)",
         hasFilter && !isClosedSavedPage && 'text-[color-mix(in_srgb,var(--color-tab-live)_72%,var(--color-muted-foreground))]',
         chip.pathSuffix && 'max-h-[calc(3lh)]',
         isTitleVariantGroup && 'max-h-none overflow-visible!',
@@ -1817,6 +1811,10 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       onPointerLeave={onChipPointerLeave}
       {...chipInteractionProps}
     >
+      {/* Fill rounded-corner hit gaps; positioned content and controls stay above this surface. */}
+      {!chip.iconOnly && (
+        <span data-tabout-part="pointer-surface" className="absolute inset-0" aria-hidden="true" />
+      )}
       {trim.expandedFill && (
         <span
           aria-hidden="true"
@@ -1854,7 +1852,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
         <TabAudioButton
           state={chip.audioState}
           onToggle={onToggleChipAudio}
-          className="mt-px self-start"
+          className="relative mt-px self-start"
         />
       )}
       {!chip.iconOnly && chip.chromePinned && (

@@ -1459,13 +1459,13 @@ test('PageChip expands same-title URL variant groups in place', () => {
   // capture phase, closing the moment the pointer leaves that region.
   const outsideActivitySource = readFileSync(new URL('../src/components/title-expansion/use-close-on-outside-activity.ts', import.meta.url), 'utf8')
   assert.match(outsideActivitySource, /useWindowEvent\('pointermove', \(event\) => \{[\s\S]*?\}, \{ capture: true, enabled: expanded \}\)/)
-  assert.match(outsideActivitySource, /if \(!pointWithinRect\(\{ x: event\.clientX, y: event\.clientY \}, region\)\) controller\.close\(\)/)
+  assert.match(outsideActivitySource, /if \(!pointerWithinExpansionSurface\(event, surface\)\) controller\.close\(\)/)
   // The chip's region must measure the EXPANDED chip, not the original slot —
   // the expanded chip floats wider/taller than its 1:1 slot, so testing the slot
   // rect collapsed the chip the instant the pointer reached the revealed overflow
   // (the blink-at-the-border bug). It keeps the chip open across the whole
   // expanded surface so the pointer can reach the URL, then closes at its edge.
-  assert.match(pageChipSource, /useCloseOnOutsideActivity\(\{[\s\S]*?controller: chipExpansionController,[\s\S]*?getPointerRegion: \(\) => \{[\s\S]*?chipSlotRef\.current\?\.querySelector<HTMLElement>\('\.page-chip'\)[\s\S]*?\?\? chipSlotRef\.current\?\.getBoundingClientRect\(\)/)
+  assert.match(pageChipSource, /useCloseOnOutsideActivity\(\{[\s\S]*?controller: chipExpansionController,[\s\S]*?getPointerSurface: \(\) => \{[\s\S]*?chipSlotRef\.current\?\.querySelector<HTMLElement>\('\.page-chip'\)[\s\S]*?\?\? chipSlotRef\.current/)
   assert.doesNotMatch(pageChipSource, /window\.addEventListener\('pointermove'/)
   assert.doesNotMatch(pageChipSource, /PAGE_CHIP_EXPANDED_POINTER_LEAVE_TOLERANCE_PX/)
   // Pointer departure always requests the close; an open menu or root

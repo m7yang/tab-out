@@ -2625,8 +2625,8 @@ async function measurePlainTitleVariantEdgeExpansion(harness: DashboardHarness) 
 
     await harness.session.send('Input.dispatchMouseEvent', {
       type: 'mouseMoved',
-      x: (point as { x: number, y: number }).x,
-      y: (point as { x: number, y: number }).y,
+      x: point.x,
+      y: point.y,
     })
     const expansion = await waitForPageChipExpansionRect(harness, 'Plain Title Variant')
     const expandedVariantLabels = await evaluateInPage(harness, titleVariantsPage.readExpandedVariantLabels, { label: 'Plain Title Variant' })
@@ -2717,6 +2717,35 @@ function focusUpdateTargets(
 function alignedWithin(left: number | null, right: number | null): boolean {
   return left !== null && right !== null && Math.abs(left - right) <= 1
 }
+
+test('same-title chip corners own hover and expand within the viewport', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html')
+  const harness = await createDashboardHarness(page)
+
+  const plainTitleVariantEdgeExpansion = await measurePlainTitleVariantEdgeExpansion(harness)
+  assert.ok(
+    plainTitleVariantEdgeExpansion.target.overflowingLabels > 0,
+    `plain same-title variant smoke should start with a clipped URL distinguisher: ${JSON.stringify(plainTitleVariantEdgeExpansion)}`,
+  )
+  const cornerSurfaces = plainTitleVariantEdgeExpansion.surfaceResults.filter((surface) => surface.surface.endsWith('Corner'))
+  assert.equal(cornerSurfaces.length, 4, 'plain same-title variant smoke should exercise every corner')
+  assert.ok(
+    cornerSurfaces.every((surface) => surface.preHoverState.hitInsideSlot && surface.preHoverState.hitInsideChip),
+    `plain same-title variant corners should belong to the rectangular chip hit surface: ${JSON.stringify(plainTitleVariantEdgeExpansion)}`,
+  )
+  assert.ok(
+    plainTitleVariantEdgeExpansion.surfaceResults.every((surface) => surface.expansion),
+    `plain same-title variant chip should expand from every highlighted hover surface: ${JSON.stringify(plainTitleVariantEdgeExpansion)}`,
+  )
+  assert.ok(
+    plainTitleVariantEdgeExpansion.surfaceResults.every((surface) =>
+      surface.expansion &&
+      surface.expansion.left >= plainTitleVariantEdgeExpansion.target.chipLeft - 1 &&
+      surface.expansion.right <= plainTitleVariantEdgeExpansion.target.viewportRight - 12,
+    ),
+    `plain same-title variant chip should clamp to right-side room instead of growing left: ${JSON.stringify(plainTitleVariantEdgeExpansion)}`,
+  )
+})
 
 test('dashboard cards repack when the viewport resizes', async ({ page }) => {
   test.setTimeout(180_000)
@@ -3639,32 +3668,6 @@ test('dashboard cards repack when the viewport resizes', async ({ page }) => {
   assert.ok(
     compactTitleVariantExpansion.expandedVariantLabels.every((label: { clientWidth: number, scrollWidth: number }) => label.scrollWidth - label.clientWidth <= 1),
     `compact same-title variant chip expansion should keep its URL variant labels untruncated when viewport room allows: ${JSON.stringify(compactTitleVariantExpansion)}`,
-  )
-  const plainTitleVariantEdgeExpansion = await measurePlainTitleVariantEdgeExpansion(harness)
-  assert.ok(
-    plainTitleVariantEdgeExpansion.target.surfaces.slotOnlyDefaultSurface,
-    `plain same-title variant smoke should find a slot-only default surface outside the rounded chip: ${JSON.stringify(plainTitleVariantEdgeExpansion)}`,
-  )
-  assert.ok(
-    plainTitleVariantEdgeExpansion.target.overflowingLabels > 0,
-    `plain same-title variant smoke should start with a clipped URL distinguisher: ${JSON.stringify(plainTitleVariantEdgeExpansion)}`,
-  )
-  const slotOnlyTitleVariantSurface = plainTitleVariantEdgeExpansion.surfaceResults.find((surface: { surface: string }) => surface.surface === 'slotOnlyDefaultSurface')
-  assert.ok(
-    slotOnlyTitleVariantSurface?.preHoverState?.hitInsideSlot && !slotOnlyTitleVariantSurface?.preHoverState?.hitInsideChip,
-    `plain same-title variant slot-only surface should hover the slot without entering the rounded chip: ${JSON.stringify(plainTitleVariantEdgeExpansion)}`,
-  )
-  assert.ok(
-    plainTitleVariantEdgeExpansion.surfaceResults.every((surface: { expansion: unknown }) => surface.expansion),
-    `plain same-title variant chip should expand from every highlighted hover surface: ${JSON.stringify(plainTitleVariantEdgeExpansion)}`,
-  )
-  assert.ok(
-    plainTitleVariantEdgeExpansion.surfaceResults.every((surface: { expansion: { left: number, right: number } | null }) =>
-      surface.expansion &&
-      surface.expansion.left >= plainTitleVariantEdgeExpansion.target.chipLeft - 1 &&
-      surface.expansion.right <= plainTitleVariantEdgeExpansion.target.viewportRight - 12,
-    ),
-    `plain same-title variant chip should clamp to right-side room instead of growing left: ${JSON.stringify(plainTitleVariantEdgeExpansion)}`,
   )
   const wrappedTitleVariantExpansion = await measureWrappedTitleVariantExpansion(harness)
   assert.equal(
