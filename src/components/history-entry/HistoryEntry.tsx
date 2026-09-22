@@ -314,6 +314,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
   const contextMenuOpenRef = useRef(false)
   const titleClampKey = JSON.stringify([entry.title, highlightTerms])
   const {
+    entryExpansionId,
     entrySlotRef,
     entryRef,
     titleRef,
@@ -339,7 +340,8 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
   const canRemoveEntry = canCloseEntry || canForgetClosedGhost
   const canActivateEntry = entry.exists || (kind === 'closed-ghost' && !!closedTab)
 
-  const { activateHistoryEntry, onEntryKeyDown, onEntryMouseDown, onCloseEntry, onMouseEnter, onMouseLeave } = useHistoryEntryActions({
+  const { activateHistoryEntry, onEntryKeyDown, onEntryMouseDown, onCloseEntry, onMouseEnter, onMouseLeave, clearHover } = useHistoryEntryActions({
+    hoverOwner: entryExpansionId,
     entry,
     kind,
     workingSetItem,
@@ -363,7 +365,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
       await waitForHistoryEntryMoves()
       onHistoryLayoutSettled?.()
     }
-    onHoverUrlChange?.('')
+    clearHover()
     onForgetClosedGhost?.(closedTab)
   }
 
@@ -416,7 +418,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
     if (open) {
       onMouseEnter()
     } else {
-      onHoverUrlChange?.('')
+      clearHover()
     }
   }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useUrlPreview } from './useUrlPreview'
 import { createNativeTabHighlightController } from '../extension/native-tab-highlight.js'
 import { createHoverStateStore, type HoverUrlSource } from '../lib/hover-state.js'
@@ -12,9 +12,12 @@ export function useHoverMatch() {
   const { urlPreviewStore, setUrlPreview, clearUrlPreviewNow } = useUrlPreview()
   const [hoverStateStore] = useState(createHoverStateStore)
   const [nativeTabHighlightController] = useState(createNativeTabHighlightController)
+  const hoverOwnerRef = useRef<string | undefined>(undefined)
 
-  const handleHoverUrlChange = useCallback(function handleHoverUrlChange(url: string, source: HoverUrlSource = 'chip', matchUrls?: readonly string[], tabId?: number) {
+  const handleHoverUrlChange = useCallback(function handleHoverUrlChange(url: string, source: HoverUrlSource = 'chip', matchUrls?: readonly string[], tabId?: number, owner?: string) {
     const nextUrl = url || ''
+    if (!nextUrl && owner !== undefined && hoverOwnerRef.current !== owner) return
+    hoverOwnerRef.current = nextUrl ? owner : undefined
     const nextUrls = nextUrl
       ? [...new Set((matchUrls && matchUrls.length > 0 ? matchUrls : [nextUrl]).filter(Boolean))]
       : []
@@ -25,6 +28,7 @@ export function useHoverMatch() {
   }, [hoverStateStore, nativeTabHighlightController, setUrlPreview])
 
   const clearHoverUrlNow = useCallback(function clearHoverUrlNow() {
+    hoverOwnerRef.current = undefined
     hoverStateStore.setSnapshot({ url: '', urls: [], source: null })
     clearUrlPreviewNow()
     return nativeTabHighlightController.clear()

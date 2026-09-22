@@ -1,5 +1,7 @@
 export type HoverUrlSource = 'chip' | 'history' | 'working-set'
-export type HoverUrlChangeHandler = (url: string, source?: HoverUrlSource, matchUrls?: readonly string[], tabId?: number) => void | Promise<void>
+// An owner scopes departure/cleanup to the interaction that published the
+// preview. Calls without an owner still support dashboard-wide clears.
+export type HoverUrlChangeHandler = (url: string, source?: HoverUrlSource, matchUrls?: readonly string[], tabId?: number, owner?: string) => void | Promise<void>
 
 export type HoverState = {
   url: string

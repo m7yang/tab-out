@@ -33,6 +33,7 @@ export function uniqueUrls(urls: readonly string[]) {
 }
 
 type HistoryEntryActionsOptions = {
+  hoverOwner: string
   entry: TabHistoryEntry
   kind: HistoryEntryKind
   workingSetItem: WorkingSetItem | null
@@ -46,7 +47,11 @@ type HistoryEntryActionsOptions = {
   onTabsChange?: TabsChangeHandler
 }
 
-export function useHistoryEntryActions({ entry, kind, workingSetItem, closedTab, canActivateEntry, entrySlotRef, contextMenuOpenRef, onSnapshotChange, onHistoryLayoutSettled, onHoverUrlChange, onTabsChange }: HistoryEntryActionsOptions) {
+export function useHistoryEntryActions({ hoverOwner, entry, kind, workingSetItem, closedTab, canActivateEntry, entrySlotRef, contextMenuOpenRef, onSnapshotChange, onHistoryLayoutSettled, onHoverUrlChange, onTabsChange }: HistoryEntryActionsOptions) {
+  function clearHover() {
+    return onHoverUrlChange?.('', undefined, undefined, undefined, hoverOwner)
+  }
+
   function focusChangedActiveTab(result: ExistingTabFocusResult): boolean {
     const message = tabFocusResultToastMessage(result.status)
     if (message) showToast(message)
@@ -98,6 +103,8 @@ export function useHistoryEntryActions({ entry, kind, workingSetItem, closedTab,
   }
 
   async function activateHistoryEntry(e?: MouseEvent<HTMLDivElement> | KeyboardEvent<HTMLDivElement>) {
+    // Activation must cancel and await even another row's native highlight,
+    // whose pending selection could otherwise reactivate the previous tab.
     await onHoverUrlChange?.('')
     const mode = chipActivationMode(e)
     const hasLiveTab = !!workingSetItem || entry.exists
@@ -159,7 +166,7 @@ export function useHistoryEntryActions({ entry, kind, workingSetItem, closedTab,
       await waitForHistoryEntryMoves()
       onHistoryLayoutSettled?.()
     }
-    onHoverUrlChange?.('')
+    clearHover()
     await refreshAfterMutation()
   }
 
@@ -171,13 +178,13 @@ export function useHistoryEntryActions({ entry, kind, workingSetItem, closedTab,
       ...workingSetUrls(workingSetItem ?? undefined),
     ])
     const tabId = workingSetItem?.tabId ?? (entry.exists ? entry.tabId : undefined)
-    onHoverUrlChange?.(hoverUrl, hoverSource, hoverUrls, tabId)
+    onHoverUrlChange?.(hoverUrl, hoverSource, hoverUrls, tabId, hoverOwner)
   }
 
   function onMouseLeave() {
     if (contextMenuOpenRef.current) return
-    onHoverUrlChange?.('')
+    clearHover()
   }
 
-  return { activateHistoryEntry, onEntryKeyDown, onEntryMouseDown, onCloseEntry, onMouseEnter, onMouseLeave }
+  return { activateHistoryEntry, onEntryKeyDown, onEntryMouseDown, onCloseEntry, onMouseEnter, onMouseLeave, clearHover }
 }
