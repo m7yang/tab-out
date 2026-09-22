@@ -1,5 +1,8 @@
 # Nested radius audit — 2026-09-21
 
+Historical audit. The [September 22 audit and applied corrections](nested-radius-audit-2026-09-22.md)
+record the current 9px range-picker radius and 6.5px title-variant spacing.
+
 Scope: radius declarations in runtime components, shared UI primitives, chip
 paint helpers, and the base stylesheet. This is a source audit plus local
 Chromium layout evidence, not a claim that every live extension state was tested.
@@ -16,6 +19,9 @@ For matching, unclamped squircle corners with equal box-edge gaps, the ideal
 midpoint estimate is `R ≈ r + 1.8409g`. This supplies candidates; it does not
 account for painted borders or optimize the complete curve. The audit compared
 the baseline with nearby tokens using the same geometry and stroke styles.
+The [rendered calibration](nested-radius-calibration.md) distinguishes this
+midpoint estimate from a full-corner fit and includes inward stroke corrections.
+Neither calculation imposes a mandatory spacing token.
 
 The control comparisons rasterized native CSS at eight pixels per CSS pixel.
 Clearance was measured from five inner-corner samples to the nearest outer
@@ -42,12 +48,38 @@ differences smaller than approximately 0.25px should not be treated as precise.
 | Expanded chip/history fill and action fades | These are layered paint for one surface. Their small vertical seam insets protect adjacent outlines; changing them to a nested-radius model would change seam behavior. |
 | Dialog, toast, and error shells | Their action buttons are independent controls in a padded content layout. Increasing entire shells to fit one button's corner would substantially alter their silhouettes without establishing a uniform band across the other content. Existing padding keeps content clear. |
 | Favicon rings and duplicate stacks | Rings wrap images whose artwork has no guaranteed inner contour. Duplicate layers are translated copies, not concentric nested surfaces. |
-| Environment pills, title variants, suppression/path labels, and text highlights | These follow text flow inside Page Chips and can wrap or move. They do not track the parent corner with a fixed equal inset. |
+| Environment pills, inline title variants, suppression/path labels, and text highlights | These follow text flow inside Page Chips and can wrap or move. They do not track the parent corner with a fixed equal inset. Full-width title-variant lists are a separate case; see the follow-up below. |
 | Circular close/pin/saved/count badges and scrollbars | Preserve circular or pill geometry; most badges overlap rather than nest. |
 | Tooltips, empty states, URL preview, and toolbar popup rows | No separate child surface forms a matching nested corner band. |
 | Uncustomized shared Select/Tabs variants | Product callers supply the audited styles. Preserve the shared primitives' other supported variants instead of changing unused upstream geometry. |
 
-## Verification
+## Follow-up — title-variant list corners
+
+The last highlighted row in a full-width title-variant list does follow the
+Page Chip's bottom-right corner. The original 9px right and bottom box-edge
+gaps paired a 17px outer squircle with a 6px row squircle; excluding all title
+variants from the contour comparison was too broad.
+
+The initial adjustment kept both radii and reduced those gaps to 6px. The list contributes 2px right
+padding and 1px bottom padding on top of the Page Chip's 4px right and 5px
+bottom padding. Apply the same spacing to cloned expansion measurement markup.
+The midpoint estimate gives `(17 - 6) / 1.8409 ≈ 6px`; it is a fitting guide,
+not an exact constant-width offset curve. The indented left edge does not form
+a concentric band. The shared Page Chip radius and Domain Card match frame
+radius remain unchanged.
+
+Subsequent [calibration](nested-radius-calibration.md) found a full-corner fit
+around 6.7–6.8px when the 1px inward outline is included. The 6px implementation
+remains in place; it should not be described as a canonical nesting requirement.
+Changing it again is a separate visual decision.
+
+A local Chromium fixture measured 6px right and bottom gaps at rest, expanded,
+hovered, and focused, with computed radii of 17px and 6px. Hover and focus
+screenshots showed the row and focus outline clear of the outer edge. This is
+harness evidence; the live Chrome new-tab surface was not available through
+the browser connector.
+
+## Verification of the original audit
 
 The rebuilt switch indicator and focus frame report 8px radii, with 5px box-edge
 clearance at the first and last options. The range picker reports 8px items,

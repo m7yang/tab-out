@@ -33,7 +33,7 @@ export function hydrateClonedExpandedChipFragment(document: Document, fragment: 
   }
 
   for (const list of fragment.querySelectorAll('.chip-title-variant-list')) {
-    list.className = 'chip-title-variant-list inline-flex max-w-full flex-col items-stretch pr-[5px] pb-1 align-top'
+    list.className = 'chip-title-variant-list inline-flex max-w-full flex-col items-stretch pr-[2.5px] pb-[1.5px] align-top'
   }
 
   for (const shell of fragment.querySelectorAll('.chip-title-variant-shell')) {

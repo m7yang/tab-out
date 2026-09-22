@@ -1570,7 +1570,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   function titleVariantListNode(mode: ChipTextRenderMode) {
     if (!isTitleVariantGroup) return null
     return (
-      <span className="chip-title-variant-list flex w-full max-w-full flex-col items-stretch pr-1.25 pb-1">
+      <span className="chip-title-variant-list flex w-full max-w-full flex-col items-stretch pr-[2.5px] pb-[1.5px]">
         {sameTitleRows.map((row, index) => titleVariantNode(row, index, mode))}
       </span>
     )

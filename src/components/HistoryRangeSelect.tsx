@@ -39,7 +39,7 @@ export function HistoryRangeSelect({
               key={option.value}
               value={option.value}
               label={option.label}
-              className="rounded-lg text-(length:--header-control-font-size) leading-(--header-control-line-height) [corner-shape:squircle]"
+              className="rounded-[9px] text-(length:--header-control-font-size) leading-(--header-control-line-height) [corner-shape:squircle]"
             >
               {option.label}
             </SelectItem>
