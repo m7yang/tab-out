@@ -82,6 +82,7 @@
 - For other sites, **Website Path Sections** may use the first path segment such as `/resource`, but singleton generic segments stay flat.
 - A **Filter Query** is the app-owned matching contract for eligible **Dashboard Items** from the selected **Dashboard View** and enabled **Companion Results**.
 - A **Dashboard Item's** first-pass searchable text is its title and URL.
+- Domain Cards and **Activation History** match Tab Out pages using the title without its echoed Filter Query and the URL without query parameters, preventing self-matches. Tab Out pages remain searchable by their underlying title and URL; clearing the filter restores their normal visibility without changing Activation History state.
 - Unquoted multi-word **Filter Queries** use tokenized AND semantics, so each term must appear somewhere in the Dashboard Item's searchable text.
 - Quoted terms inside a **Filter Query** are exact contiguous phrase matches against a Dashboard Item's searchable text.
 - Spaces and hyphens are equivalent separators inside a contiguous **Filter Query** term or phrase, so `tab out` and `tab-out` can match the same text.

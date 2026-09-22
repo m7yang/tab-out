@@ -3,6 +3,7 @@ import type { TabHistoryEntry, TabHistorySnapshot, WorkingSetItem, WorkingSetSna
 import type { ClosedTabEntry } from '../extension/closed-tabs.js'
 import { isClosedGhostDismissed, type ClosedGhostDismissals } from '../extension/closed-ghost-dismissals.js'
 import { tabMatchesFilter } from '../extension/filter-match.js'
+import { isTabOutPageUrl } from '../extension/tab-out-url.js'
 import { pageIdentityForWorkingSet } from '../extension/working-set.js'
 
 export type HistoryPanelRow =
@@ -45,7 +46,7 @@ export function buildHistoryPanelRows({ snapshot, workingSet, closedTabs, filter
   // Descending indexes also give descending signed offsets from the cursor.
   // Real timestamps (or a cursor-distance fallback) place supplemental rows.
   const rawStackCandidates = stackEntries
-    .filter((entry) => !filterActive || tabMatchesFilter({ title: entry.title, url: entry.url, isTabOut: false }, filter))
+    .filter((entry) => !filterActive || tabMatchesFilter({ title: entry.title, url: entry.url, isTabOut: isTabOutPageUrl(entry.url) }, filter))
     .map((entry) => {
       const cursorDistance = Math.abs(entry.index - stackCursorIndex)
       const synthesizedTouchedAt = stackBaseTimestamp > 0
@@ -75,7 +76,7 @@ export function buildHistoryPanelRows({ snapshot, workingSet, closedTabs, filter
   }
 
   const openGhostCandidates: HistoryPanelRowCandidate[] = (workingSet?.items ?? [])
-    .filter((item) => !filterActive || tabMatchesFilter({ title: item.title, url: item.tabUrl, isTabOut: false }, filter))
+    .filter((item) => !filterActive || tabMatchesFilter({ title: item.title, url: item.tabUrl, isTabOut: isTabOutPageUrl(item.tabUrl) }, filter))
     .map((item) => ({
       row: { kind: 'open-ghost', item, lastTouchedAt: item.lastActivatedAt },
       identity: item.key || item.tabUrl,
@@ -89,7 +90,7 @@ export function buildHistoryPanelRows({ snapshot, workingSet, closedTabs, filter
   const closedGhostCandidates: HistoryPanelRowCandidate[] = dismissedClosedGhosts === null
     ? []
     : closedTabs
-        .filter((closed) => !filterActive || tabMatchesFilter({ title: closed.title, url: closed.url, isTabOut: false }, filter))
+        .filter((closed) => !filterActive || tabMatchesFilter({ title: closed.title, url: closed.url, isTabOut: isTabOutPageUrl(closed.url) }, filter))
         .filter((closed) => !isClosedGhostDismissed(dismissedClosedGhosts, closed))
         .map((closed) => ({
           row: { kind: 'closed-ghost', closed, lastTouchedAt: closed.lastClosedAt },

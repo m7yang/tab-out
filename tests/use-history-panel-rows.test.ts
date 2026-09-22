@@ -137,6 +137,44 @@ test('buildHistoryPanelRows hides open-ghost when same URL exists as stack', () 
   assert.equal(row.kind, 'stack')
 })
 
+test('history filtering ignores echoed Tab Out queries while preserving genuine matches and history', (t) => {
+  const previousChrome = Object.getOwnPropertyDescriptor(globalThis, 'chrome')
+  Object.defineProperty(globalThis, 'chrome', { configurable: true, value: { runtime: { id: 'tab-out' } } })
+  t.after(() => {
+    if (previousChrome) Object.defineProperty(globalThis, 'chrome', previousChrome)
+    else Reflect.deleteProperty(globalThis, 'chrome')
+  })
+
+  for (const url of [
+    'chrome-extension://tab-out/index.html?filter=urlneedle',
+    'chrome://newtab/',
+    'https://example.test/index.html?filter=urlneedle',
+    'chrome-extension://other-extension/index.html?filter=urlneedle',
+  ]) {
+    const title = 'titleneedle - Tab Out'
+    const entry = makeStackEntry({ index: 4, tabId: 5, url, title, current: true })
+    const sources = [
+      { snapshot: snapshotOf([entry]), workingSet: null, closedTabs: [] },
+      { snapshot: null, workingSet: workingSetOf([makeWorkingSetItem({ key: url, tabId: 5, title })]), closedTabs: [] },
+      { snapshot: null, workingSet: null, closedTabs: [makeClosed({ sessionId: 'closed', url, title, lastClosedAt: 1 })] },
+    ]
+    const isTabOut = url.startsWith('chrome-extension://tab-out/') || url === 'chrome://newtab/'
+
+    for (const source of sources) {
+      const originalRows = buildHistoryPanelRows({ ...source, filter: '' })
+      assert.equal(originalRows.length, 1)
+      assert.equal(buildHistoryPanelRows({ ...source, filter: 'titleneedle' }).length, isTabOut ? 0 : 1, url)
+      assert.equal(buildHistoryPanelRows({ ...source, filter: 'urlneedle' }).length, isTabOut ? 0 : 1, url)
+      assert.deepEqual(buildHistoryPanelRows({ ...source, filter: 'Tab Out' }), originalRows)
+      assert.deepEqual(buildHistoryPanelRows({ ...source, filter: '' }), originalRows)
+    }
+    assert.equal(entry.index, 4)
+    assert.equal(entry.current, true)
+    assert.equal(entry.title, title)
+    assert.equal(entry.url, url)
+  }
+})
+
 test('buildHistoryPanelRows keeps every pending tab indexed even when URLs match', () => {
   const entries = [
     makeStackEntry({

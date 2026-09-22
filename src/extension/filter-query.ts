@@ -93,6 +93,7 @@ export function compileFilterQuery(input = ''): CompiledFilterQuery {
 }
 
 function searchablePartsForDashboardItem(tab: Pick<DashboardTab, 'title' | 'url' | 'isTabOut'>): DashboardItemSearchableParts {
+  // Prevent the dashboard from matching the filter echoed in its title or URL.
   const rawTitle = tab.title || ''
   const title = tab.isTabOut ? rawTitle.replace(/^.+ - Tab Out$/i, 'Tab Out') : rawTitle
   let url = tab.url || ''
