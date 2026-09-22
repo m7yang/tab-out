@@ -53,6 +53,20 @@
   }
 }
 
+/* Multiple matches retain their local frames; a unique match uses the shared
+   traveling frame in the same scroller and below the existing scroll cue. */
+[data-history-match-frame] [data-tabout="domain-card"]::after {
+  opacity: 0;
+}
+
+[data-history-page-match-frame] .page-chip-hover-match-outline {
+  visibility: hidden;
+}
+
+[data-history-page-match-frame] .page-chip-overflow-hover-match {
+  outline-color: transparent;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-chips-overflow-reveal .chip-slot {
     transition:

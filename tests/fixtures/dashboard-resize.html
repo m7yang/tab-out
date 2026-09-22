@@ -832,6 +832,10 @@
           historyReorderEntry({ index: 3, tabId: 9104, slug: 'delta', title: 'History Delta', lastActivatedAt: 1800000024000 })
         ].map((entry) => ({
           ...entry,
+          ...(fixtureParams.has('historyFrameMotion') ? {
+            url: `https://${entry.index < 2 ? 'alpha' : entry.index === 2 ? 'bravo' : 'charlie'}.test/page-${entry.index}`,
+            displayUrl: `page-${entry.index}`
+          } : {}),
           windowId: entry.index === 1 ? 2 : 1,
           active: entry.index === 1 || entry.index === 3,
           activeInOtherWindow: entry.index === 1,

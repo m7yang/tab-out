@@ -34,6 +34,7 @@ import { DesktopWindowMergeHost } from './DesktopWindowMergeHost'
 import { DashboardActionsProvider, HoverStateProvider } from './DashboardInteractionContext'
 import { DashboardPinnedTop } from './DashboardPinnedTop'
 import { DashboardScrollBottom } from './DashboardScrollBottom'
+import { HistoryMatchFrame } from './HistoryMatchFrame'
 import { useStartupOrderDebug } from './use-startup-order-debug'
 import { cn } from '@/lib/utils'
 import type {
@@ -447,6 +448,8 @@ function DashboardShell({
               onRetryHistorySearch={onRetryHistorySearch}
               sections={missionSections}
             />
+            <HistoryMatchFrame scrollRegionRef={scrollRegionRef} />
+            <HistoryMatchFrame scrollRegionRef={scrollRegionRef} kind="page-chip" />
             <DashboardScrollBottom scrollRegionRef={scrollRegionRef} />
           </div>
         </main>

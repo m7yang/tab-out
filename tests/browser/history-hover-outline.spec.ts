@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 
 test('keyboard history activation waits for another row’s pending native highlight', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?historyHoverFrame&historyHoverFrameExpanded=above')
@@ -49,6 +49,16 @@ test('keyboard history activation waits for another row’s pending native highl
   await expect.poll(() => page.evaluate(() => Reflect.get(window, '__historyHoverActivated'))).toEqual([9101])
 })
 
+async function expectCardFrame(card: Locator, visible: boolean) {
+  await expect.poll(() => card.evaluate((element) => {
+    const root = element.closest('[data-tabout-part="scroll-region"]')
+    if (root?.hasAttribute('data-history-match-frame')) {
+      return !!root.querySelector('[data-tabout-part="history-match-frame"]:not([hidden])')
+    }
+    return getComputedStyle(element, '::after').opacity === '1'
+  })).toBe(visible)
+}
+
 for (const departingOwner of ['focus', 'pointer']) {
   test(`a departing ${departingOwner} owner cannot clear a newer history match`, async ({ page }) => {
     await page.goto('/tests/fixtures/dashboard-resize.html?historyHoverFrame&historyHoverFrameExpanded=above')
@@ -65,17 +75,17 @@ for (const departingOwner of ['focus', 'pointer']) {
     await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2)
     if (departingOwner === 'pointer') await focusRow.locator('.history-entry-main').first().focus()
     await expect(match).toHaveCount(1)
-    await expect.poll(() => card.evaluate((element) => getComputedStyle(element, '::after').opacity)).toBe('1')
+    await expectCardFrame(card, true)
 
     if (departingOwner === 'focus') await page.locator('input').first().focus()
     else await page.mouse.move(2, 2)
 
     await expect(match).toHaveCount(1)
-    await expect.poll(() => card.evaluate((element) => getComputedStyle(element, '::after').opacity)).toBe('1')
+    await expectCardFrame(card, true)
     if (departingOwner === 'focus') await page.mouse.move(2, 2)
     else await page.locator('input').first().focus()
     await expect(card.locator('.page-chip-hover-match')).toHaveCount(0)
-    await expect.poll(() => card.evaluate((element) => getComputedStyle(element, '::after').opacity)).toBe('0')
+    await expectCardFrame(card, false)
   })
 }
 
@@ -91,7 +101,7 @@ test('history card outline follows the expanded surface through menu dismissal a
   const expanded = row.locator('[data-tabout-part="expanded-surface"]')
   await expect(expanded).toBeVisible()
   await expect(card.locator('.page-chip-hover-match')).toHaveCount(1)
-  await expect.poll(() => card.evaluate((element) => getComputedStyle(element, '::after').opacity)).toBe('1')
+  await expectCardFrame(card, true)
   const bounds = await expanded.boundingBox()
   if (!rest || !bounds) throw new Error('History surfaces are missing')
   const point = { x: Math.min(bounds.x + bounds.width - 4, rest.x + rest.width + 16), y: rest.y + rest.height / 2 }
@@ -105,10 +115,10 @@ test('history card outline follows the expanded surface through menu dismissal a
   await expect(page.locator('[data-slot="context-menu-content"]')).toHaveCount(0)
   await expect(expanded).toBeVisible()
   await expect(card.locator('.page-chip-hover-match')).toHaveCount(1)
-  await expect.poll(() => card.evaluate((element) => getComputedStyle(element, '::after').opacity)).toBe('1')
+  await expectCardFrame(card, true)
   await page.mouse.move(2, 2)
   await expect(card.locator('.page-chip-hover-match')).toHaveCount(0)
-  await expect.poll(() => card.evaluate((element) => getComputedStyle(element, '::after').opacity)).toBe('0')
+  await expectCardFrame(card, false)
 })
 
 test.describe('history hover beside an active frame', () => {
