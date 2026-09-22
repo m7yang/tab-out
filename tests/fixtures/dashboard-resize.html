@@ -1056,6 +1056,28 @@
           historyReorderEvents.length = 0
           tabHistorySnapshot = nextHistoryReorderSnapshot()
         }
+        window.__tabOutSmokeRemoveHistoryEntry = (tabId) => {
+          const entries = tabHistorySnapshot.entries
+            .filter((entry) => entry.tabId !== tabId)
+            .map((entry, index) => ({ ...entry, index }))
+          tabHistorySnapshot = {
+            ...tabHistorySnapshot,
+            entries,
+            stackSize: entries.length,
+            cursorIndex: entries.findIndex((entry) => entry.cursor),
+            currentIndex: entries.findIndex((entry) => entry.current),
+            previousIndex: entries.findIndex((entry) => entry.previousTarget),
+            nextIndex: entries.findIndex((entry) => entry.nextTarget)
+          }
+        }
+        window.__tabOutSmokeSetHistoryEntryUrl = (tabId, url) => {
+          tabHistorySnapshot = {
+            ...tabHistorySnapshot,
+            entries: tabHistorySnapshot.entries.map((entry) => entry.tabId === tabId
+              ? { ...entry, url, rawUrl: url, displayUrl: url }
+              : entry)
+          }
+        }
         window.__tabOutSmokeDispatchPassiveHistoryRefresh = () => {
           tabActivatedListeners.dispatch({ tabId: 9101, windowId: 1 })
         }

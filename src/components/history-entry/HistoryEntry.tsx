@@ -1,11 +1,11 @@
-import { useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import { EyeOff, X } from 'lucide-react'
 import { audioStateForTab, nextMutedForAudioState } from '../../extension/tab-audio.js'
 import { duplicateTabTarget, reloadTabTarget, setHistoryEntryMuted, suspendHistoryEntry } from '../../extension/tab-actions'
 import { savePageTarget, removeSavedPageTarget } from '../../extension/saved-page-actions.js'
 import { historyEntrySaveTarget, historyEntrySaved, historyEntrySavedPageKey, isHistoryEntrySaveEligible } from '../../extension/history-saved-page.js'
-import { pageTargetMatchesHover, pageTargetMatchUrls } from '../../extension/page-target.js'
+import { pageTargetMatchesHover, pageTargetMatchUrls, pageTargetUrl } from '../../extension/page-target.js'
 import { showToast } from '../../extension/toast.js'
 import { waitForHistoryEntryMoves } from '../../extension/history-entry-move-animation.js'
 import { PageChipContextMenu } from '../PageChipContextMenu'
@@ -390,6 +390,17 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
     ...pageTargetMatchUrls(entry),
     ...workingSetUrls(workingSetItem ?? undefined),
   ])
+  // Passive snapshots replace objects, but only a changed target invalidates
+  // ownership. Titles, favicons, and activation times may update in place.
+  const hoverIdentity = JSON.stringify([
+    hoverSource,
+    pageTargetUrl(workingSetItem ?? entry),
+    matchUrls,
+    workingSetItem?.tabId ?? (entry.exists ? entry.tabId : undefined),
+  ])
+  useLayoutEffect(() => () => {
+    void onHoverUrlChange?.('', undefined, undefined, undefined, entryExpansionId)
+  }, [hoverIdentity, entryExpansionId, onHoverUrlChange])
   const hoverMatched = useHoverStateSelector((state) => (
     !!state.source && state.source !== hoverSource && (
       pageTargetMatchesHover(entry, state.url, state.urls) ||

@@ -239,6 +239,9 @@ test('hovering during a card pin flight keeps both outlines local until the card
     expect(sample.pageVisibility).toBe('visible')
     expect(sample.pageOffset).toBeLessThan(1)
   }
+  // The scroller's temporary overflow allowance outlives the card's FLIP.
+  // Its cleanup changes the overlay coordinate origin without resizing chips.
+  await expect(page.locator('[data-tabout-part="scroll-region"]')).not.toHaveClass(/card-motion-bleed/)
   await expectAligned(page.locator(frameSelector), card)
   await expectAligned(page.locator(pageFrameSelector), dashboardChip(page, 'History Delta'), 0)
   for (const selector of [frameSelector, pageFrameSelector]) {

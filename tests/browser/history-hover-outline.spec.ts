@@ -1,5 +1,71 @@
 import { expect, test, type Locator } from '@playwright/test'
 
+for (const input of ['pointer', 'keyboard']) {
+  test(`a passive refresh preserves the ${input} history preview and both outlines`, async ({ page }) => {
+    await page.goto('/tests/fixtures/dashboard-resize.html?historyHoverFrame&historyFrameMotion')
+    const history = page.locator('[data-tabout-context="activation-history"][data-tabout="page-chip"]').filter({ hasText: 'History Alpha' })
+    if (input === 'pointer') await history.hover()
+    else await history.locator('.history-entry-main').focus()
+    await expect(page.locator('.page-chip-hover-match')).toHaveText('History Alpha')
+
+    // A different tab changing its favicon schedules a real passive refresh.
+    // Keep the current input in place; re-entering the chip would mask the bug.
+    await page.evaluate(async () => {
+      await Reflect.get(window, '__tabOutSmokeSetTabFavicon')(9103, 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E')
+    })
+    await expect(page.locator('[data-tabout-domain="bravo.test"] img').first()).toHaveAttribute('src', /data:image\/svg/)
+    await expect(page.locator('.page-chip-hover-match')).toHaveText('History Alpha')
+    for (const part of ['history-match-frame', 'history-page-match-frame']) {
+      await expect(page.locator(`[data-tabout-part="${part}"]`)).toBeVisible()
+    }
+    await expect(page.locator('.url-preview')).toHaveText('https://alpha.test/page-0')
+
+    // Explicit filter changes still invalidate the old preview.
+    await page.locator('[data-tabout="filter-query"] input').fill('no-matching-page')
+    await expect(page.locator('.page-chip-hover-match')).toHaveCount(0)
+    await expect(page.locator('[data-tabout-part="history-match-frame"]')).toBeHidden()
+    await expect(page.locator('.url-preview')).toHaveCSS('opacity', '0')
+  })
+}
+
+for (const change of ['removed', 'replaced']) {
+  test(`a ${change} history target releases its preview during a passive refresh`, async ({ page }) => {
+    await page.goto('/tests/fixtures/dashboard-resize.html?historyHoverFrame&historyFrameMotion')
+    const title = change === 'removed' ? 'History Delta' : 'History Alpha'
+    const tabId = change === 'removed' ? 9104 : 9101
+    const row = page.locator(`[data-tabout="activation-history-row"][data-tabout-layout-key="stack:1:${tabId}"]`)
+    await row.locator('.history-entry-main').focus()
+    await expect(page.locator('.page-chip-hover-match')).toHaveText(title)
+    // Keep the original dashboard tab available to expose stale matches.
+    // Replacement preserves row order and focus, so blur cannot mask cleanup.
+    await page.evaluate(({ change, tabId }) => {
+      if (change === 'removed') Reflect.get(window, '__tabOutSmokeRemoveHistoryEntry')(tabId)
+      else Reflect.get(window, '__tabOutSmokeSetHistoryEntryUrl')(tabId, 'https://replacement.test/page')
+      Reflect.get(window, '__tabOutSmokeDispatchPassiveHistoryRefresh')()
+    }, { change, tabId })
+    if (change === 'removed') await expect(row).toHaveCount(0)
+    await expect(page.locator('.page-chip-hover-match')).toHaveCount(0)
+    await expect(page.locator('[data-tabout-part="history-match-frame"]')).toBeHidden()
+    await expect(page.locator('.url-preview')).toHaveCSS('opacity', '0')
+    if (change === 'replaced') await expect(row.locator('.history-entry-main')).toBeFocused()
+  })
+}
+
+test('removing an older history owner does not clear the newer focused preview', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html?historyHoverFrame')
+  for (const title of ['History Delta', 'History Alpha']) {
+    await page.locator('[data-tabout="activation-history-row"]').filter({ hasText: title }).locator('.history-entry-main').focus()
+    await expect(page.locator('.page-chip-hover-match')).toHaveText(title)
+  }
+  await page.evaluate(() => {
+    Reflect.get(window, '__tabOutSmokeRemoveHistoryEntry')(9104)
+    Reflect.get(window, '__tabOutSmokeDispatchPassiveHistoryRefresh')()
+  })
+  await expect(page.locator('[data-tabout="activation-history-row"][data-tabout-layout-key="stack:1:9104"]')).toHaveCount(0)
+  await expect(page.locator('.page-chip-hover-match')).toHaveText('History Alpha')
+  await expect(page.locator('[data-tabout-part="history-match-frame"]')).toBeVisible()
+})
+
 test('keyboard history activation waits for another row’s pending native highlight', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?historyHoverFrame&historyHoverFrameExpanded=above')
   const focused = page.locator('[data-tabout-layout-key="stack:1:9101"] .history-entry-main')

@@ -611,8 +611,15 @@ export function App() {
   useLayoutEffect(() => {
     if (!isReady) return
     clearHoverUrlNow()
+  }, [visibleDashboardView, filter, source, isReady, historyFilterEnabled, clearHoverUrlNow])
+
+  useLayoutEffect(() => {
+    if (!isReady) return
+    // History owns its preview across passive snapshots. Its row releases
+    // ownership when removed or replaced; dashboard chips may move on refresh.
+    if (hoverStateStore.getSnapshot().source === 'chip') clearHoverUrlNow()
     getCardMoves().commitDashboardLayout({ pack: () => packMissionsMasonryNow({ unpin: true }) })
-  }, [visibleDashboard, visibleDashboardView, filter, source, isReady, historyFilterEnabled, clearHoverUrlNow, packMissionsMasonryNow, getCardMoves])
+  }, [visibleDashboard, visibleDashboardView, filter, source, isReady, historyFilterEnabled, hoverStateStore, clearHoverUrlNow, packMissionsMasonryNow, getCardMoves])
 
   useLayoutEffect(() => {
     animateQueuedPageChipRefreshMoves()

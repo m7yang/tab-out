@@ -138,8 +138,9 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
     resizeObserver.observe(root)
     const mutations = new MutationObserver((records) => {
       // The overlay's own animation and geometry writes cannot feed back into
-      // the observer. Existing match markers remain the only target resolver.
-      if (records.some((record) => record.target !== root &&
+      // the observer. Root class/style changes do matter: card-motion-bleed
+      // cleanup shifts its coordinate origin without resizing the content box.
+      if (records.some((record) =>
         !(record.target instanceof Element && record.target.matches('[data-tabout-part="history-match-frame"], [data-tabout-part="history-page-match-frame"]')))) schedule()
     })
     mutations.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style'] })

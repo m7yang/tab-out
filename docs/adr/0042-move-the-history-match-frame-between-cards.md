@@ -37,6 +37,9 @@ pointer transparency, scroller clipping, and scroll-cue stacking from ADR 0039.
 The existing matched-page and collapsed-overflow markers resolve its target.
 Mutation and resize observers reconcile presentation once per animation frame;
 they do not create a second URL resolver or change preview ownership.
+Root class and style changes also trigger reconciliation: removing the temporary
+card-motion overflow allowance shifts the frame's coordinate origin without
+changing the observed content-box size.
 
 ## Rationale
 
