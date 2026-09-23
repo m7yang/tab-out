@@ -41,7 +41,7 @@ export function hydrateClonedExpandedChipFragment(document: Document, fragment: 
   }
 
   for (const variant of fragment.querySelectorAll('.chip-title-variant')) {
-    variant.className = 'chip-title-variant inline-flex max-w-full min-w-0 items-center gap-1 rounded-md bg-transparent px-1.5 py-[3px] [font-size:inherit] leading-tight font-normal text-neutral-600 [corner-shape:squircle]'
+    variant.className = 'chip-title-variant inline-flex max-w-full min-w-0 items-center gap-1 rounded-[7px] bg-transparent px-1.5 py-[3px] [font-size:inherit] leading-tight font-normal text-neutral-600 [corner-shape:squircle]'
   }
 
   for (const marker of fragment.querySelectorAll('.chip-title-suppression-marker')) {

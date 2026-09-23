@@ -23,7 +23,7 @@ Read this guide when changing React components/hooks, shared primitives, styling
 - Do not mass-retrofit UI anchors across untouched surfaces. Add or adjust anchors when changing or debugging that surface; a focused pass is acceptable only for frequently referenced top-level landmarks such as the dashboard shell, Dashboard View, filter, Domain Card, Page Chip, Activation History, Working Set, tooltip content, or menu content.
 - Add `corner-shape: squircle` to non-round UI elements that use `border-radius`.
 - Do not add squircle styling to true circles or pills such as `border-radius: 50%` or `999px`.
-- Squircle corners read less rounded than ordinary rounded corners. As a visual rule of thumb, a `4px` squircle looks similar to a `2px` non-squircle corner.
+- Nested radii and perceived roundness: follow Tab Out's recorded patterns and reuse constraints in the [nested-radius audit](../nested-radius-audit-2026-09-22.md). When a local Fleet checkout is available, consult its `agent-tools/guides/nested-corners.md` for new calculations. Otherwise preserve existing component geometry; for new components, use established project tokens and note that a geometric fit is unestablished.
 
 ## Page Chip Landmarks
 

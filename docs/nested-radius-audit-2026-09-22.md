@@ -116,7 +116,7 @@ short and tall chips and an 82.25px frame; it does not exhaust dynamic card size
 The browser connector did not expose the live extension surface. These results
 are fixture and native-renderer evidence, not live-extension acceptance.
 
-## Applied corrections
+## Initial applied corrections
 
 The range-picker item radius is now 9px. Title-variant lists use explicit 2.5px
 right and 1.5px bottom padding in both rendering and expansion measurement,
@@ -138,3 +138,27 @@ staging. The layout suite passed 109 of 110 checks; the exit-ghost animation che
 failed to observe its opacity keyframe during the suite and passed on an isolated
 rerun. Targeted geometry and focus inspection passed. Live-extension acceptance
 remains unverified.
+
+## Optical adjustment — 7px title-variant corners
+
+After the geometric correction, the inner highlight still looked too square to
+the user relative to the outer corner. A native fixture comparison of 6px, 7px
+and 8px inner radii held the 17px outer radius and 6.5px spacing fixed. The chosen
+7px radius gives a restrained softening. Full-width rows and their expansion
+clones share this value; independent inline labels retain their existing shape.
+
+This is a component-specific optical choice, not a new geometric coefficient or
+a perceptually calibrated optimum. The native paint model gives hover clearance
+of about 5.43–5.74px against a 5.5px straight band, increasing maximum error from
+0.14px to 0.24px. With the existing focus outline, minimum clearance improves
+from about 1.90px to 2.12px against a 2.5px straight band. The small hover flare
+is accepted to soften the highlight while keeping spacing and outer silhouettes
+stable. Reuse the 7px row radius with this pattern's 17px parent, 6.5px gaps and
+existing stroke styles. For other patterns, follow the
+[UI guide's radius policy](agents/ui.md#components-anchors-and-styling).
+
+Verification: expanded/focused fixture geometry reports 7px inner radius with
+6.5px right/bottom gaps. Five relevant layout checks passed. The base pipeline's
+checks through bundle validation passed; after updating the old radius assertion,
+test-file lint and all 1,718 unit tests passed. Visual inspection used the fixture;
+live-extension acceptance remains unverified.
