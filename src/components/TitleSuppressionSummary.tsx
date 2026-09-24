@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { attachCapsuleBorder } from './capsule-border'
 import { cn } from '@/lib/utils'
 import { closeExactTabTargets, suspendExactTabTargets } from '../extension/tab-actions'
 import { pointerIsOverElement, startPointerPositionTracking } from './pointer-position'
@@ -46,10 +47,19 @@ export function TitleSuppressionSummary({
         const tokenButton = (
           <button
             key={part.text}
-            ref={(el) => { const map = tokenButtonsRef.current; if (el) map.set(part.text, el); else map.delete(part.text) }}
+            ref={(el) => {
+              if (!el) return
+              const map = tokenButtonsRef.current
+              map.set(part.text, el)
+              const detach = attachCapsuleBorder(el)
+              return () => {
+                map.delete(part.text)
+                detach?.()
+              }
+            }}
             type="button"
             className={cn(
-              'title-suppression-token inline-flex h-5 items-center gap-1 rounded-md border border-transparent bg-neutral-100 px-1.5 py-0 text-xs leading-none font-medium text-muted-foreground transition-[background,border-color,color,box-shadow] duration-150 [corner-shape:squircle] hover:border-yellow-200 hover:bg-yellow-50 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-yellow-400',
+              'title-suppression-token inline-flex h-5 items-center gap-1 border border-transparent bg-neutral-100 px-1.5 py-0 text-xs leading-none font-medium text-muted-foreground transition-[background,border-color,color,box-shadow] duration-150 hover:border-yellow-200 hover:bg-yellow-50 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-yellow-400',
               titleSuppressionTokenToneClass(toneIndex, useSuppressionTokenTones, active),
             )}
             aria-label={label}

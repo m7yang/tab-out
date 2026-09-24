@@ -31,6 +31,7 @@ import { SavedPageIcon } from './SavedPageIcon'
 import { TabAudioButton } from './TabAudioButton'
 import { TabLoadingIndicator } from './TabLoadingIndicator'
 import { ProgressiveFoldedEnvList } from './ProgressiveFoldedEnvList'
+import { attachCapsuleBorder } from './capsule-border'
 import { cn } from '@/lib/utils'
 import { omitUndefined } from '@/lib/omit-undefined'
 import type { CSSVariableProperties } from '@/lib/css-properties'
@@ -38,7 +39,7 @@ import { createBionicTitleTextRenderer, isUrlLikeTitle } from './bionic-title-te
 import { highlightTermsForFilter, highlightedTextNodes } from './filter-highlight-text'
 import { titleSuppressionChipHighlightClass, titleSuppressionMarkerClass, titleSuppressionToneForText } from './title-suppression'
 import type { TitleSuppressionTone } from './title-suppression'
-import { createTitleExpansionLane, pointerWithinExpansionSurface, useCloseOnOutsideActivity, useTitleExpansionController } from './title-expansion'
+import { createTitleExpansionLane, expansionLineNodesFromHtml, pointerWithinExpansionSurface, useCloseOnOutsideActivity, useTitleExpansionController } from './title-expansion'
 import { chipTrim, CHIP_TRIM_TOKENS } from './chip-trim'
 import { faviconLivenessClassName, VARIANT_LABEL_DIM_CLASS_NAME } from './liveness-dim'
 import type { DashboardChipData } from './types'
@@ -49,6 +50,21 @@ import { chipTextHasExpandableContent, useChipTextLayout, PAGE_CHIP_TOOLTIP_STRU
 
 const PAGE_CHIP_TARGET_INTERACTION_BG = 'color-mix(in oklab, var(--color-neutral-600) 14%, transparent)'
 const DESTRUCTIVE_ICON_ACTION_CLASS_NAME = 'title-interaction:hover:bg-destructive/10 title-interaction:hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive'
+
+function rebuildCapturedCapsuleLabel(element: Element, key: string) {
+  if (!element.classList.contains('chip-pathgroup') && !element.classList.contains('chip-strip-indicator')) return undefined
+  return (
+    <span
+      key={key}
+      ref={attachCapsuleBorder}
+      className={element.className}
+      aria-label={element.getAttribute('aria-label') || undefined}
+      aria-hidden={element.getAttribute('aria-hidden') === 'true' ? true : undefined}
+    >
+      {expansionLineNodesFromHtml(element.innerHTML, `${key}-label`)}
+    </span>
+  )
+}
 
 function pageChipTargetCursorClass(target: Pick<DashboardChipEnv, 'tabId' | 'tabUrl' | 'sourceType' | 'closedSaved'> | undefined) {
   if (!target?.tabUrl) return 'cursor-default'
@@ -1127,8 +1143,9 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     const marker = (
       <span
         key={key}
+        ref={attachCapsuleBorder}
         className={cn(
-          'chip-title-suppression-marker inline-flex h-3.5 min-w-3.5 shrink-0 items-center justify-center rounded-[7px] border border-transparent bg-[rgba(115,115,115,0.08)] px-0.75 text-[12px] leading-3 text-muted-foreground align-middle [corner-shape:squircle] group-[.page-chip-expanded]/page-chip:h-auto group-[.page-chip-expanded]/page-chip:max-w-full group-[.page-chip-expanded]/page-chip:items-baseline group-[.page-chip-expanded]/page-chip:rounded-lg group-[.page-chip-expanded]/page-chip:border-0 group-[.page-chip-expanded]/page-chip:px-1 group-[.page-chip-expanded]/page-chip:leading-[inherit] group-[.page-chip-expanded]/page-chip:font-medium group-[.page-chip-expanded]/page-chip:align-baseline group-[.page-chip-expanded]/page-chip:[box-decoration-break:clone]',
+          'chip-title-suppression-marker inline-flex h-3.5 min-w-3.5 shrink-0 items-center justify-center border border-transparent bg-[rgba(115,115,115,0.08)] px-0.75 text-[12px] leading-3 text-muted-foreground align-middle group-[.page-chip-expanded]/page-chip:h-auto group-[.page-chip-expanded]/page-chip:max-w-full group-[.page-chip-expanded]/page-chip:items-baseline group-[.page-chip-expanded]/page-chip:border-0 group-[.page-chip-expanded]/page-chip:px-1 group-[.page-chip-expanded]/page-chip:leading-[inherit] group-[.page-chip-expanded]/page-chip:font-medium group-[.page-chip-expanded]/page-chip:align-baseline group-[.page-chip-expanded]/page-chip:[box-decoration-break:clone]',
           markerClassName,
           titleSuppressionMarkerClass(tone, active),
         )}
@@ -1147,6 +1164,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       return (
         <span
           key={key}
+          ref={attachCapsuleBorder}
           className={cn(
             PAGE_CHIP_TOOLTIP_SUPPRESSION_MARKER_CLASS_NAME,
             markerClassName,
@@ -1202,7 +1220,8 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     const marker = (
       <span
         key={key}
-        className="chip-strip-indicator inline-flex size-4 items-center justify-center rounded-full bg-[rgba(115,115,115,0.1)] text-xs leading-none font-medium text-muted-foreground align-baseline group-[.page-chip-expanded]/page-chip:h-auto group-[.page-chip-expanded]/page-chip:w-auto group-[.page-chip-expanded]/page-chip:max-w-full group-[.page-chip-expanded]/page-chip:rounded-lg group-[.page-chip-expanded]/page-chip:px-1.5 group-[.page-chip-expanded]/page-chip:leading-[inherit] group-[.page-chip-expanded]/page-chip:[corner-shape:squircle]"
+        ref={attachCapsuleBorder}
+        className="chip-strip-indicator inline-flex size-4 items-center justify-center rounded-full bg-[rgba(115,115,115,0.1)] text-xs leading-none font-medium text-muted-foreground align-baseline group-[.page-chip-expanded]/page-chip:h-auto group-[.page-chip-expanded]/page-chip:w-auto group-[.page-chip-expanded]/page-chip:max-w-full group-[.page-chip-expanded]/page-chip:px-1.5 group-[.page-chip-expanded]/page-chip:leading-[inherit]"
         aria-hidden={hiddenLabel ? undefined : true}
         aria-label={hiddenLabel || undefined}
       >
@@ -1219,6 +1238,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       return (
         <span
           key={key}
+          ref={attachCapsuleBorder}
           className={PAGE_CHIP_TOOLTIP_STRUCTURAL_MARKER_CLASS_NAME}
           aria-label={hiddenLabel}
         >
@@ -1333,7 +1353,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     return (
       <>
         {target.pathGroupLabel && (
-          <span className="chip-pathgroup mr-1.5 inline-block rounded-lg bg-[rgba(115,115,115,0.1)] px-1.5 text-xs font-medium text-muted-foreground align-baseline [corner-shape:squircle]">
+          <span ref={attachCapsuleBorder} className="chip-pathgroup mr-1.5 inline-block bg-[rgba(115,115,115,0.1)] px-1.5 text-xs font-medium text-muted-foreground align-baseline">
             {highlightedTextNodes(pathGroupDisplayLabel(target.pathGroupLabel), highlightTerms, `${keyPrefix}-pathgroup`)}
           </span>
         )}
@@ -1572,7 +1592,15 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
 
   function expandedTitleContentNode(keyPrefix: string) {
     if (!chipExpanded) return null
-    return chipTextLayout.expandedLines(keyPrefix)
+    return chipTextLayout.expandedLines(keyPrefix, (element, key) => {
+      const capsuleLabel = rebuildCapturedCapsuleLabel(element, key)
+      if (capsuleLabel !== undefined) return capsuleLabel
+      if (!element.classList.contains('chip-title-suppression-marker')) return undefined
+      const part = (element.getAttribute('aria-label') || '').replace(/^Suppressed title text:\s*/, '')
+      if (!part) return undefined
+      const spacing = element.classList.contains('ml-1') ? 'ml-1' : element.classList.contains('ml-0.5') ? 'ml-0.5' : ''
+      return suppressionMarkerNode(part, 'tooltip', key, spacing)
+    })
   }
 
   function titleRowContentNode(mode: ChipTextRenderMode, keyPrefix: string) {
@@ -1622,7 +1650,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     }
 
     if (mode === 'chip' && !chipExpanded) {
-      const clampedLines = chipTextLayout.clampedLines(hasTitleSuppressionMarkers ? rebuildClampedChipMarker : undefined)
+      const clampedLines = chipTextLayout.clampedLines(hasTitleSuppressionMarkers || hasStructuralPlaceholders || chip.pathGroupLabel ? rebuildClampedChipMarker : undefined)
       if (clampedLines) return clampedLines
     }
 
@@ -1635,6 +1663,8 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   // would drop their SVG glyph and freeze the context-driven hover tone. The
   // trailing-marker spacing class rides along from the captured element.
   function rebuildClampedChipMarker(element: Element, key: string) {
+    const capsuleLabel = rebuildCapturedCapsuleLabel(element, key)
+    if (capsuleLabel !== undefined) return capsuleLabel
     if (!element.classList.contains('chip-title-suppression-marker')) return undefined
     const part = (element.getAttribute('aria-label') || '').replace(/^Suppressed title text:\s*/, '')
     if (!part) return undefined

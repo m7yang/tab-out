@@ -7,6 +7,7 @@ import { SectionPinButton } from './SectionPinButton'
 import { TitleSuppressionSummary } from './TitleSuppressionSummary'
 import { TooltipAnchor } from './ui/tooltip'
 import { subscribeFontMetricsInvalidation } from './font-metrics-invalidation.js'
+import { attachCapsuleBorder } from './capsule-border'
 import { cn } from '@/lib/utils'
 import type { Dispatch, SetStateAction } from 'react'
 import type { TitleSuppressionTone } from './title-suppression'
@@ -147,7 +148,12 @@ export function PathgroupSection({ domain = '', subdomainKey = '', websitePathKe
   // identity would only re-run detach and attach, never change the result.
   const observePathgroupLabel = (labelEl: HTMLSpanElement | null) => {
     if (!labelEl) return undefined
-    return attachPathgroupLabelTruncation(labelEl, setPathgroupLabelTruncated)
+    const detachTruncation = attachPathgroupLabelTruncation(labelEl, setPathgroupLabelTruncated)
+    const detachCapsule = attachCapsuleBorder(labelEl)
+    return () => {
+      detachTruncation()
+      detachCapsule?.()
+    }
   }
   const { activeSuppressedTitle, setActiveSuppressedTitle } = useDomainCardContext()
   const displayLabel = pathGroupDisplayLabel(label)
@@ -195,12 +201,12 @@ export function PathgroupSection({ domain = '', subdomainKey = '', websitePathKe
         )}
       >
         <TooltipAnchor content={pathgroupLabelTooltipContent}>
-          <span ref={observePathgroupLabel} className="chip-pathgroup inline-block min-w-0 overflow-hidden rounded-lg bg-[rgba(115,115,115,0.1)] px-1.5 text-ellipsis whitespace-nowrap text-xs font-medium text-muted-foreground align-baseline [corner-shape:squircle]">
+          <span ref={observePathgroupLabel} className="chip-pathgroup inline-block min-w-0 overflow-hidden bg-[rgba(115,115,115,0.1)] px-1.5 text-ellipsis whitespace-nowrap text-xs font-medium text-muted-foreground align-baseline">
             {displayLabel}
           </span>
         </TooltipAnchor>
         {isPR && (
-          <span className="chip-pathgroup chip-pathgroup-pr -ml-0.5 inline-block rounded-lg bg-[rgba(115,115,115,0.18)] px-1.25 text-xs font-semibold text-foreground align-baseline [corner-shape:squircle]">
+          <span ref={attachCapsuleBorder} className="chip-pathgroup chip-pathgroup-pr -ml-0.5 inline-block bg-[rgba(115,115,115,0.18)] px-1.25 text-xs font-semibold text-foreground align-baseline">
             PRs
           </span>
         )}

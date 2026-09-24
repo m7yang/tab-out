@@ -4,6 +4,7 @@ import { resolveSameTitlePageChip } from '../extension/same-title-page-chip-plan
 import { useDomainCardContext } from './DomainCardContext'
 import { useDashboardActions, useHoverStateSelector, type HoverState } from './DashboardInteractionContext'
 import { PageChip } from './PageChip'
+import { attachCapsuleBorder } from './capsule-border'
 import { cn } from '@/lib/utils'
 import { TITLE_SUPPRESSION_MARKER_SYMBOL, countHiddenSuppressedTitleMatches, titleSuppressionBadgeClass, titleSuppressionOverflowHighlightClass, titleSuppressionToneForText } from './title-suppression'
 import type { TitleSuppressionTone } from './title-suppression'
@@ -24,7 +25,7 @@ interface PageChipOverflowOptions {
 }
 
 const OVERFLOW_BUTTON_CLASS_NAME =
-  "page-chip page-chip-overflow clickable relative flex cursor-pointer items-start gap-2 rounded-[13px] border-0 bg-transparent py-[5px] pr-1 text-left text-[13px] leading-tight tabular-nums text-muted-foreground [font-family:inherit] [corner-shape:squircle] transition-[color,box-shadow,opacity] duration-100 ease-swift before:pointer-events-none before:absolute before:top-[7px] before:bottom-[7px] before:left-1 before:w-0.5 before:rounded-[1px] before:bg-(--group-color,transparent) before:[corner-shape:squircle] before:content-[''] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-[72px] after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,color-mix(in_srgb,var(--card-bg)_92%,rgb(82_82_82))_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] hover:bg-[rgba(82,82,82,0.08)] [&:has(.chip-actions):hover::after]:opacity-100"
+  "page-chip page-chip-overflow clickable relative flex cursor-pointer items-start gap-2 border-0 bg-transparent py-[5px] pr-1 text-left text-[13px] leading-tight tabular-nums text-muted-foreground [font-family:inherit] transition-[color,box-shadow,opacity] duration-100 ease-swift before:pointer-events-none before:absolute before:top-[7px] before:bottom-[7px] before:left-1 before:w-0.5 before:rounded-[1px] before:bg-(--group-color,transparent) before:[corner-shape:squircle] before:content-[''] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-[72px] after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,color-mix(in_srgb,var(--card-bg)_92%,rgb(82_82_82))_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] hover:bg-[rgba(82,82,82,0.08)] [&:has(.chip-actions):hover::after]:opacity-100"
 
 function resolveClassName(className: OverflowContainerClassName | undefined, expanded: boolean) {
   return typeof className === 'function' ? className({ expanded }) : className
@@ -126,6 +127,7 @@ export function usePageChipOverflow({
         <button
           type="button"
           data-tabout-part="overflow-expander"
+          ref={attachCapsuleBorder}
           className={cn(
             OVERFLOW_BUTTON_CLASS_NAME,
             expansionPhase === 'fading' && 'pointer-events-none opacity-0',

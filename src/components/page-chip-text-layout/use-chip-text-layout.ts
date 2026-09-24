@@ -12,7 +12,7 @@ export type ChipTextLayoutView = {
   /** Captured clamp rows as nodes; null unless a valid multi-line clamp exists. */
   clampedLines: (rebuildElement?: ClampedMarkerRebuilder) => ReactNode | null
   /** Expanded overlay rows as nodes; null until expansion geometry captured lines. */
-  expandedLines: (keyPrefix: string) => ReactNode | null
+  expandedLines: (keyPrefix: string, rebuildElement?: ClampedMarkerRebuilder) => ReactNode | null
   expansion: Omit<ChipExpansionGeometry, 'lineHtml'>
   hasClampedLines: boolean
   hasExpandableContent: boolean
@@ -84,12 +84,13 @@ export function useChipTextLayout({ clampEligible, contentKey, expanded, slotRef
         ? clampedTitleLineNodes(clamp.lineHtml, 'chip-text', rebuildElement)
         : null
     ),
-    expandedLines: (keyPrefix: string) => (
+    expandedLines: (keyPrefix: string, rebuildElement?: ClampedMarkerRebuilder) => (
       expansionLineHtml.length === 0
         ? null
         : expansionLineNodesFromHtml(
             chipExpansionLineMarkup(expansionLineHtml, expansion.viewportConstrained),
             keyPrefix,
+            rebuildElement,
           )
     ),
     expansion,

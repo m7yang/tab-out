@@ -203,3 +203,15 @@
     }
   }
 }
+
+/* Measured capsule borders keep existing paint, focus offsets, and box metrics.
+   Pills also cover prerender, inline fragments, and the profile's narrow regime. */
+[data-tabout-part="overflow-expander"],
+.open-tabs-badge,
+.title-suppression-token,
+.chip-title-suppression-marker,
+.chip-pathgroup,
+.chip-strip-indicator {
+  border-radius: 999px;
+  corner-shape: round;
+}

@@ -2,8 +2,8 @@ import { cn } from '@/lib/utils'
 import { expansionLineMarkup, fragmentHtml, unwrapClampedTitleLines, type ExpansionLineClasses } from '../title-expansion'
 import { carriedExpandedMarkerSpacingClass, carriedExpandedMarkerToneClass } from './policy.js'
 
-export const PAGE_CHIP_TOOLTIP_SUPPRESSION_MARKER_CLASS_NAME = 'chip-title-suppression-marker inline rounded-lg border-0 bg-[rgba(115,115,115,0.08)] px-1 text-[12px] leading-[inherit] font-medium whitespace-nowrap text-muted-foreground align-baseline [corner-shape:squircle] [box-decoration-break:clone]'
-export const PAGE_CHIP_TOOLTIP_STRUCTURAL_MARKER_CLASS_NAME = 'chip-strip-indicator inline-block max-w-full rounded-lg bg-[rgba(115,115,115,0.1)] px-1.5 text-xs font-medium whitespace-nowrap text-muted-foreground align-baseline [corner-shape:squircle]'
+export const PAGE_CHIP_TOOLTIP_SUPPRESSION_MARKER_CLASS_NAME = 'chip-title-suppression-marker inline border-0 bg-[rgba(115,115,115,0.08)] px-1 text-[12px] leading-[inherit] font-medium whitespace-nowrap text-muted-foreground align-baseline [box-decoration-break:clone]'
+export const PAGE_CHIP_TOOLTIP_STRUCTURAL_MARKER_CLASS_NAME = 'chip-strip-indicator inline-block max-w-full bg-[rgba(115,115,115,0.1)] px-1.5 text-xs font-medium whitespace-nowrap text-muted-foreground align-baseline'
 // Expanded chips reveal the full path suffix, so the cloned/measured copy must
 // wrap (and break long, space-free query strings) instead of staying on the
 // single nowrap line it uses while collapsed — otherwise it overflows the chip.

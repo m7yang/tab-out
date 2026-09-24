@@ -18,6 +18,7 @@ import { CardActionsMenu } from './CardActionsMenu'
 import { SavedPageIcon } from './SavedPageIcon'
 import { TitleSuppressionSummary } from './TitleSuppressionSummary'
 import { TooltipAnchor } from './ui/tooltip'
+import { attachCapsuleBorder } from './capsule-border'
 import { cn } from '@/lib/utils'
 import { startPointerDrag } from '@/lib/pointer-drag'
 import { domainCardCloseRemovesAllItems } from './domain-card-close-policy.js'
@@ -109,9 +110,10 @@ function TabBadge({
 
   return (
     <span
+      ref={attachCapsuleBorder}
       aria-label={accessibleLabel}
       className={cn(
-        'open-tabs-badge tab-count-badge inline-flex h-5.5 box-border items-center rounded-md bg-[rgba(82,82,82,0.08)] px-2 py-0 text-[12px] font-medium tabular-nums text-(--accent-amber) [corner-shape:squircle]',
+        'open-tabs-badge tab-count-badge inline-flex h-5.5 box-border items-center bg-[rgba(82,82,82,0.08)] px-2 py-0 text-[12px] font-medium tabular-nums text-(--accent-amber)',
         isFiltered && 'tab-count-badge-filtered',
       )}
     >

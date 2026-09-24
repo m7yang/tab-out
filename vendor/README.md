@@ -20,6 +20,17 @@ spacing, and animation remain app-owned. The selection is measured during its
 width transition rather than stretching a fixed SVG. CSS pills provide the
 prerender and unsupported-size fallback; no material or shadow is added.
 
+Overflow expanders, open-tab count badges, title-suppression tokens, chip
+suppression markers, path-group labels (including PR badges), and structural
+strip indicators apply the measured path through CSS `border-shape`. This
+keeps their existing backgrounds, borders, inset highlights, shadows, and focus
+outlines app-owned, including the original outline offsets. The adapter observes
+size and content changes; expanded and clamped captured labels are rebuilt with
+live refs.
+Narrow/circular dimensions and fragmented inline labels retain CSS pill rounding.
+Chrome's half-border-box origin supplies the path's half-stroke inset. No content
+clipping or extra paint layer is introduced.
+
 Geometry changes belong in Fleet. See its
 `agent-tools/guides/continuous-capsules.md` and
 `agent-tools/guides/continuous-capsules-react.md`; the local checkout is
