@@ -40,6 +40,53 @@
   --ease-swift: cubic-bezier(0.2, 0, 0, 1);
 }
 
+.dashboard-view-capsule {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+  fill: none;
+}
+
+.dashboard-view-capsule-frame {
+  top: -1px;
+  left: -1px;
+  stroke: var(--warm-gray);
+}
+
+.source-switch-root:has(> .dashboard-view-capsule-frame[data-capsule-ready]) {
+  border-color: transparent;
+}
+
+.dashboard-view-capsule-selection {
+  inset: 0;
+  fill: rgba(115, 115, 115, 0.12);
+}
+
+.source-switch-indicator:has(> [data-capsule-ready]) {
+  background: transparent;
+}
+
+.dashboard-view-capsule-focus {
+  top: 4px;
+  left: 0;
+  stroke: var(--accent-amber);
+  visibility: hidden;
+}
+
+.source-switch-option:focus-visible .dashboard-view-capsule-focus {
+  visibility: visible;
+}
+
+.source-switch-option:has(> [data-capsule-ready])::before {
+  display: none;
+}
+
+@media (forced-colors: active) {
+  .dashboard-view-capsule-frame { stroke: ButtonText; }
+  .dashboard-view-capsule-selection { fill: Canvas; }
+  .dashboard-view-capsule-focus { stroke: CanvasText; }
+}
+
 /* The CSS capsule also paints the prerendered shell and unsupported sizes. */
 .tab-filter {
   border-color: var(--color-input);

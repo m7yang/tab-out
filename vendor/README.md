@@ -14,6 +14,12 @@ until its dimensions change. The generated shell and unsupported dimensions use
 a CSS capsule with the same blue border and shadow. Theme colors remain owned
 by Tab Out; the package's separate offset focus path is intentionally unused.
 
+Dashboard View uses the same profile for its 34px outer frame, 24px sliding
+selection, and each tab's keyboard-focus contour. Border, fill, focus color,
+spacing, and animation remain app-owned. The selection is measured during its
+width transition rather than stretching a fixed SVG. CSS pills provide the
+prerender and unsupported-size fallback; no material or shadow is added.
+
 Geometry changes belong in Fleet. See its
 `agent-tools/guides/continuous-capsules.md` and
 `agent-tools/guides/continuous-capsules-react.md`; the local checkout is

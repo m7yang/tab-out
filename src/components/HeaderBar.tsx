@@ -3,6 +3,7 @@ import { Tabs as TabsPrimitive } from '@base-ui/react/tabs'
 import { useWindowEvent } from '../hooks/useGlobalEvent'
 import { HeaderStats } from './HeaderStats'
 import { HeaderFilterSurface } from './HeaderFilterSurface'
+import { DashboardViewSurface } from './DashboardViewSurface'
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs'
 import { dashboardViewOptionId, type DashboardView } from '../extension/dashboard-view.js'
 import { isHistoryFilterEnabled } from '../extension/history-range.js'
@@ -58,9 +59,10 @@ function DashboardViewSwitch({ dashboardView, onDashboardViewChange }: Dashboard
     <Tabs
       value={dashboardView}
       data-tabout="dashboard-view"
-      className="source-switch-root inline-flex box-border h-(--header-control-height) rounded-(--header-control-radius) border border-(--warm-gray) [corner-shape:squircle]"
+      className="source-switch-root relative inline-flex box-border h-(--header-control-height) rounded-full border border-(--warm-gray)"
       onValueChange={handleDashboardViewChange}
     >
+      <DashboardViewSurface variant="frame" />
       <TabsList
         variant="line"
         className="source-switch relative z-0 flex h-full box-border items-center gap-1 rounded-none px-1 py-0"
@@ -72,15 +74,18 @@ function DashboardViewSwitch({ dashboardView, onDashboardViewChange }: Dashboard
             id={dashboardViewOptionId(option.value)}
             value={option.value}
             data-tabout-part="dashboard-view-option"
-            className="source-switch-option relative z-1 inline-flex h-8 flex-none box-border cursor-pointer select-none items-center justify-center whitespace-nowrap border-0 bg-transparent px-2 py-0 text-(length:--header-control-font-size) leading-(--header-control-line-height) font-normal text-muted-foreground outline-none font-[inherit] [transition:color_0.15s_ease] after:hidden before:pointer-events-none before:absolute before:inset-x-0 before:inset-y-1 before:rounded-lg before:outline-2 before:-outline-offset-1 before:outline-transparent before:[corner-shape:squircle] before:content-[''] hover:text-foreground focus-visible:ring-0 focus-visible:outline-none focus-visible:before:outline-(--accent-amber) data-active:bg-transparent data-active:text-foreground data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-transparent"
+            className="source-switch-option relative z-1 inline-flex h-8 flex-none box-border cursor-pointer select-none items-center justify-center whitespace-nowrap border-0 bg-transparent px-2 py-0 text-(length:--header-control-font-size) leading-(--header-control-line-height) font-normal text-muted-foreground outline-none font-[inherit] [transition:color_0.15s_ease] after:hidden before:pointer-events-none before:absolute before:inset-x-0 before:inset-y-1 before:rounded-full before:outline-2 before:-outline-offset-1 before:outline-transparent before:content-[''] hover:text-foreground focus-visible:ring-0 focus-visible:outline-none focus-visible:before:outline-(--accent-amber) data-active:bg-transparent data-active:text-foreground data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-transparent"
             aria-controls="dashboardMissions"
             aria-describedby={option.value === 'all-tabs' ? ALL_TABS_DESCRIPTION_ID : undefined}
           >
+            <DashboardViewSurface variant="focus" />
             {option.label}
           </TabsTrigger>
         ))}
-        {/* Animates width (not scaleX): scaling would distort the squircle corners mid-slide. */}
-        <TabsPrimitive.Indicator className="source-switch-indicator absolute top-1/2 left-0 z-0 h-6 w-(--active-tab-width) rounded-lg bg-[rgba(115,115,115,0.12)] [corner-shape:squircle] transform-[translateX(var(--active-tab-left))_translateY(-50%)] transition-[width,transform] duration-200 ease-swift motion-reduce:transition-none" />
+        {/* Measure the animated width so the capsule ends keep their shape mid-slide. */}
+        <TabsPrimitive.Indicator className="source-switch-indicator absolute top-1/2 left-0 z-0 h-6 w-(--active-tab-width) rounded-full bg-[rgba(115,115,115,0.12)] transform-[translateX(var(--active-tab-left))_translateY(-50%)] transition-[width,transform] duration-200 ease-swift motion-reduce:transition-none">
+          <DashboardViewSurface variant="selection" />
+        </TabsPrimitive.Indicator>
       </TabsList>
       <span id={ALL_TABS_DESCRIPTION_ID} className="sr-only">Includes retained pages</span>
     </Tabs>
