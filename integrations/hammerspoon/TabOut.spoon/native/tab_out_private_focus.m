@@ -654,39 +654,30 @@ static NSDictionary *copyCorrelatedChromeInventory(
   NSMutableArray<NSDictionary *> *browserRecords = [NSMutableArray array];
   @try {
     if (!prepareScriptingEvent(application, delegate, deadline, errorMessage)) return nil;
-    for (SBObject *windowReference in windows) {
-      NSString *readError = nil;
-      NSNumber *browserWindowID = positiveBrowserWindowID(copyScriptingProperty(
-        application,
-        delegate,
-        windowReference,
-        kChromeIdentifierProperty,
-        deadline,
-        @"Chrome's process-targeted window identity read failed",
-        &readError
-      ));
-      if (readError) {
-        *errorMessage = readError;
+    // One event returns each ID and bounds in the same record. Separate positional
+    // batches can mix windows if focus reorders them between reads (even if the
+    // order changes back before a final ID check).
+    id properties = [windows arrayByApplyingSelector:@selector(properties)];
+    if (deadlineError(deadline) || delegate.lastError) {
+      *errorMessage = deadlineError(deadline)
+        ?: scriptingFailure(delegate, @"Chrome's process-targeted window enumeration failed");
+      return nil;
+    }
+    if (![properties isKindOfClass:[NSArray class]]) {
+      *errorMessage = @"Chrome's process-targeted window properties are unavailable";
+      return nil;
+    }
+    for (id record in properties) {
+      if (![record isKindOfClass:[NSDictionary class]]) {
+        *errorMessage = @"Chrome's process-targeted window properties are malformed";
         return nil;
       }
-      if (!browserWindowID) {
-        continue;
-      }
-      // Enumeration references are positional; focus can reorder Chrome's windows.
+      NSNumber *browserWindowID = positiveBrowserWindowID(record[@"id"]);
+      id boundsValue = record[@"bounds"];
+      if (!browserWindowID || ![boundsValue isKindOfClass:[NSValue class]]) continue;
+      // Active documents and retained references still target the exact window ID.
       SBObject *window = [windows objectWithID:browserWindowID];
-      id boundsValue = copyScriptingProperty(
-        application,
-        delegate,
-        window,
-        kChromeBoundsProperty,
-        deadline,
-        @"Chrome's process-targeted window bounds read failed",
-        &readError
-      );
-      if (readError) {
-        *errorMessage = readError;
-        return nil;
-      }
+      NSString *readError = nil;
       SBObject *activeTab = [window propertyWithClass:tabClass code:kChromeActiveTabProperty];
       id documentValue = copyScriptingProperty(
         application,
@@ -701,9 +692,7 @@ static NSDictionary *copyCorrelatedChromeInventory(
         *errorMessage = readError;
         return nil;
       }
-      if (![boundsValue isKindOfClass:[NSValue class]]
-        || ![documentValue isKindOfClass:[NSString class]]
-      ) {
+      if (![documentValue isKindOfClass:[NSString class]]) {
         continue;
       }
       NSString *fingerprint = windowFingerprint(

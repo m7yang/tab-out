@@ -22,6 +22,10 @@ static NSTimeInterval testAXReadDelay;
 static NSTimeInterval testAXWindowIDDelay;
 static NSMapTable<id, NSNumber *> *testAXTimeouts;
 static NSUInteger testMutations;
+static NSUInteger testScriptingReads;
+static BOOL testReorderAfterProperties;
+static BOOL testMalformedProperties;
+static NSTimeInterval testPropertiesDelay;
 
 @class TestElementArray;
 @interface TestScriptingObject : NSObject
@@ -39,6 +43,7 @@ static NSUInteger testMutations;
 
 @interface TestElementArray : NSMutableArray
 - (TestScriptingObject *)objectWithID:(id)identifier;
+- (NSArray *)arrayByApplyingSelector:(SEL)selector;
 @end
 
 @interface TestScriptingApplication : NSObject
@@ -74,6 +79,26 @@ static void reportTestScriptingError(NSInteger code) {
 }
 
 @implementation TestElementArray
+- (NSArray *)arrayByApplyingSelector:(SEL)selector {
+  if (![NSStringFromSelector(selector) isEqualToString:@"properties"]) {
+    [NSException raise:NSInvalidArgumentException format:@"unexpected batch selector"];
+  }
+  testScriptingReads += 1;
+  testClock += testPropertiesDelay;
+  if (testEnumerationError) {
+    reportTestScriptingError(testEnumerationError);
+    return nil;
+  }
+  if (testMalformedProperties) return @[@"invalid"];
+  NSMutableArray *properties = [NSMutableArray array];
+  for (NSDictionary *window in testWindows) {
+    NSMutableDictionary *record = [@{ @"id": [window[@"browserID"] stringValue] } mutableCopy];
+    if (!testMissingWindowBounds) record[@"bounds"] = window[@"bounds"];
+    [properties addObject:record];
+  }
+  if (testReorderAfterProperties) testWindows = [[testWindows reverseObjectEnumerator] allObjects];
+  return properties;
+}
 - (NSUInteger)count {
   if (testEnumerationError) {
     reportTestScriptingError(testEnumerationError);
@@ -95,6 +120,7 @@ static void reportTestScriptingError(NSInteger code) {
 
 @implementation TestScriptingObject
 - (id)get {
+  testScriptingReads += 1;
   if (testReadError) {
     reportTestScriptingError(testReadError);
     return nil;
@@ -324,6 +350,10 @@ static void resetFixture(void) {
   testReorderAfterNativeSnapshot = NO;
   testAXReadError = kAXErrorSuccess;
   testMutations = 0;
+  testScriptingReads = 0;
+  testReorderAfterProperties = NO;
+  testMalformedProperties = NO;
+  testPropertiesDelay = 0;
 }
 
 static void beginCall(lua_State *L, const char *method) {
@@ -383,12 +413,38 @@ int main(void) {
 
     resetFixture();
     NSString *token = inventoryAuthority(L);
+    check(testScriptingReads == testWindows.count + 1,
+      "inventory batches window metadata into one scripting read");
     testWindows = @[testWindows[1], testWindows[0]];
     testFocusedWindow = 202;
     beginCall(L, "validate");
     pushExactTarget(L, token, 202, 102);
     finishCall(L, 4);
     check(lua_toboolean(L, 1), "cached browser identity survives window reordering");
+
+    resetFixture();
+    testReorderAfterProperties = YES;
+    inventoryAuthority(L);
+    lua_geti(L, 1, 201);
+    check(lua_tointeger(L, -1) == 101, "batch metadata stays attached to the first window ID after reorder");
+    lua_geti(L, 1, 202);
+    check(lua_tointeger(L, -1) == 102, "batch metadata stays attached to the second window ID after reorder");
+
+    resetFixture();
+    testMalformedProperties = YES;
+    beginCall(L, "inventory");
+    lua_pushinteger(L, testPID);
+    finishCall(L, 1);
+    check(lua_isnil(L, 1), "malformed batch is not a successful empty inventory");
+
+    resetFixture();
+    testPropertiesDelay = 0.6;
+    beginCall(L, "inventory");
+    lua_pushinteger(L, testPID);
+    lua_pushnumber(L, 0.5);
+    finishCall(L, 2);
+    check(lua_isnil(L, 1), "expired batch cannot establish route authority");
+    check(testScriptingReads == 1, "expired batch starts no per-window reads");
 
     resetFixture();
     NSMutableDictionary *duplicateWindow = [testWindows[1] mutableCopy];
