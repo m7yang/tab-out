@@ -25,6 +25,8 @@ local inventoryFailure
 local matchCreatedTimeout
 local matchCreatedError
 local authoritySerial = 0
+local securePreferencesReads = 0
+local securePreferencesRevision = 1
 
 local function issueAuthority()
   authoritySerial = authoritySerial + 1
@@ -83,6 +85,11 @@ local privateChrome = {
 }
 
 local fakeHs = {
+  fs = {
+    attributes = function()
+      return { ino = securePreferencesRevision, modification = 1800000000, size = 100 }
+    end,
+  },
   json = {
     read = function(path)
       if path:match("/Local State$") then
@@ -109,6 +116,7 @@ local fakeHs = {
         true
       ) ~= nil
       assert(isConfiguredProfile or isAlternateProfile, "catalog reads a known profile")
+      securePreferencesReads = securePreferencesReads + 1
       return {
         extensions = {
           settings = (isConfiguredProfile or duplicateProfileInstall) and {
@@ -256,6 +264,22 @@ assertEqual(#duplicateWindows, 1, "the paired profile inventory remains authorit
 assertEqual(duplicateWindows[1].window, configuredFront, "the paired window still resolves")
 duplicateProfileInstall = false
 assertEqual(catalog:status().extensionReady, true, "readiness stays available with one loaded profile")
+
+local readsBeforeRepeat = securePreferencesReads
+catalog:resolveProfileWindows(CONFIGURED_PROCESS_ID, { 101 }, { configuredFront })
+catalog:resolveProfileWindows(CONFIGURED_PROCESS_ID, { 101 }, { configuredFront })
+assertEqual(
+  securePreferencesReads,
+  readsBeforeRepeat,
+  "an unchanged Secure Preferences file is not parsed again"
+)
+securePreferencesRevision = securePreferencesRevision + 1
+catalog:resolveProfileWindows(CONFIGURED_PROCESS_ID, { 101 }, { configuredFront })
+assertEqual(
+  securePreferencesReads,
+  readsBeforeRepeat + 1,
+  "a replaced Secure Preferences file is parsed again"
+)
 
 inventory = { [201] = "invalid" }
 local invalidMapping, invalidError = catalog:browserWindowIdsFor(

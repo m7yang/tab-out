@@ -2,6 +2,7 @@ local M = {}
 
 local CREATED_WINDOW_CLOSE_FOCUS_TIMEOUT_SECONDS = 0.5
 local CREATED_WINDOW_CLOSE_MONITOR_INTERVAL_SECONDS = 0.1
+local CREATED_WINDOW_LIVENESS_TIMEOUT_SECONDS = 0.05
 local CREATED_WINDOW_CLOSE_RETRY_INTERVAL_SECONDS = 0.005
 local DESTINATION_CONTROL_TIMEOUT_SECONDS = 6
 local NEW_TAB_URL = "chrome://newtab/"
@@ -246,12 +247,19 @@ function M.new(options)
     return nil
   end
 
+  -- hs.window.get enumerates every application's windows (tens of
+  -- milliseconds) and omits windows on inactive Spaces, so recovery keeps the
+  -- exact window objects captured at registration instead.
+  local function createdWindowIsOpen(recovery)
+    return recovery.createdElement:isValid() ~= false
+  end
+
   local function recoveryWindow(recovery, requireTop, excludedWindowId)
-    local window = recovery and hs.window.get(recovery.windowId) or nil
+    local window = recovery and recovery.window or nil
     local application = window and window:application() or nil
     local screen = window and window:screen() or nil
     if not window
-      or not window:id()
+      or window:id() ~= recovery.windowId
       or not window:isStandard()
       or window:isMinimized()
       or not application
@@ -322,11 +330,11 @@ function M.new(options)
   local function finishCreatedWindowClose(windowId, attempt)
     attempt = attempt or 0
     local recovery = createdWindowCloseRecovery[windowId]
-    local targetWindow = hs.window.get(windowId)
-    local restoreWindow = recoveryWindow(recovery, false)
-    if not recovery or not targetWindow then
+    if not recovery or not createdWindowIsOpen(recovery) then
       return
     end
+    local targetWindow = recovery.createdWindow
+    local restoreWindow = recoveryWindow(recovery, false)
     if not restoreWindow then
       recovery.closing = false
       log.wf("Prior non-Chrome window became unavailable before closing created Chrome window %d", windowId)
@@ -394,18 +402,15 @@ function M.new(options)
     return window, recovery
   end
 
-  local function shouldInterceptKeyboardClose(event, window)
+  local function closeShortcutFlags(event)
     if event:getKeyCode() ~= hs.keycodes.map.w then
-      return false
+      return nil
     end
     local flags = event:getFlags()
     if not flags.cmd or flags.alt or flags.ctrl then
-      return false
+      return nil
     end
-    if flags.shift then
-      return true
-    end
-    return chromeTabCount(window) == 1
+    return flags
   end
 
   local function handleCreatedWindowCloseGesture(event)
@@ -418,19 +423,27 @@ function M.new(options)
       return false
     end
 
+    -- Classify the event before any Accessibility lookup; this tap sees every
+    -- keystroke and click while a created window has recovery state.
+    local closeFlags
+    if eventType == hs.eventtap.event.types.keyDown then
+      closeFlags = closeShortcutFlags(event)
+      if not closeFlags then
+        return false
+      end
+    elseif eventType ~= hs.eventtap.event.types.leftMouseDown then
+      return false
+    end
+
     local window, recovery = focusedCreatedWindowCloseRecovery()
     if not window then
       return false
     end
 
-    if eventType == hs.eventtap.event.types.keyDown then
-      if shouldInterceptKeyboardClose(event, window) then
+    if closeFlags then
+      if closeFlags.shift or chromeTabCount(window) == 1 then
         return beginCreatedWindowClose(window, recovery)
       end
-      return false
-    end
-
-    if eventType ~= hs.eventtap.event.types.leftMouseDown then
       return false
     end
     local closeButtonFrame = createdWindowCloseButtonFrame(window)
@@ -920,7 +933,7 @@ function M.new(options)
   local function monitorCreatedWindowClose(windowId, recovery)
     recovery.monitor = hs.timer.waitUntil(function()
       return createdWindowCloseRecovery[windowId] ~= recovery
-        or hs.window.get(windowId) == nil
+        or not createdWindowIsOpen(recovery)
     end, function()
       if createdWindowCloseRecovery[windowId] ~= recovery then
         return
@@ -933,7 +946,9 @@ function M.new(options)
 
   local function registerCreatedWindowCloseRecovery(request, window)
     local windowId = window and window:id() or nil
-    if not windowId
+    local createdElement = windowId and hs.axuielement.windowElement(window) or nil
+    if not createdElement
+      or not request.focusedWindow
       or not request.focusedWindowId
       or not request.focusedWindowBundleId
       or not request.focusedWindowScreenUuid
@@ -945,8 +960,11 @@ function M.new(options)
     local recovery = {
       bundleId = request.focusedWindowBundleId,
       closing = false,
+      createdElement = createdElement:setTimeout(CREATED_WINDOW_LIVENESS_TIMEOUT_SECONDS) or createdElement,
+      createdWindow = window,
       screenUuid = request.focusedWindowScreenUuid,
       targetScreenUuid = request.screenUuid,
+      window = request.focusedWindow,
       windowId = request.focusedWindowId,
     }
     local excludedWindowId = recovery.screenUuid == recovery.targetScreenUuid and windowId or nil

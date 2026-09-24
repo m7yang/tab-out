@@ -230,6 +230,11 @@ local scenarios = {
       targetFocused = true, unrelatedPrivateFocusAttempted = false },
   },
   {
+    "skip created-window correlation until a native candidate appears", "filter",
+    { createdWindowNeverPublishedToAccessibility = true, targetHasChromeWindow = false },
+    { createdMatchCallCount = 0, createdWindow = true, failed = true, privateFocusUsed = false },
+  },
+  {
     "safe-abort sole bounds-only native window while created token stays AX-pending", "filter",
     { createdWindowNeverPublishedToAccessibility = true,
       emitBoundsOnlyNativeWindowAfterBridge = true, targetHasChromeWindow = false },
@@ -497,6 +502,13 @@ local scenarios = {
       targetProfileDirectory = "Profile 8" },
     { closeGestureConsumed = true, createdWindowClosed = true,
       originalWindowFocused = true, otherChromeReceivedFocus = false },
+  },
+  {
+    "keep close recovery while hs.window lookup omits the created window", "filter",
+    { closeCreatedWindowAfterShortcut = "windowShortcut", createdWindowOnInactiveSpace = true,
+      sourceWindowOnRemote = true, targetHasChromeWindow = false },
+    { closeGestureConsumed = true, createdWindowClosed = true,
+      otherChromeReceivedFocus = false, remoteTopFocused = true },
   },
   {
     "repair an unhandled close", "filter",

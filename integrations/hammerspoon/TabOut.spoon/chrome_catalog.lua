@@ -114,6 +114,7 @@ function M.new(options)
   local privateChrome = options.privateChrome
   local extensionId
   local profileByWindow = {}
+  local settingsCache
   local catalog = {}
 
   local function configuredProcessWindow(window, browserProcessId)
@@ -135,13 +136,22 @@ function M.new(options)
     if not profileDirectoryIsValid(profileDirectory) then
       return nil, "Chrome returned an invalid profile directory"
     end
-    local preferences = hs.json.read(
-      chromeUserDataDirectory .. "/" .. profileDirectory .. "/Secure Preferences"
-    )
+    -- Parsing Secure Preferences costs tens of milliseconds and runs on every
+    -- route and created-window poll. Chrome replaces the file on each write, so
+    -- an unchanged inode, size, and mtime identify an unchanged parse.
+    local path = chromeUserDataDirectory .. "/" .. profileDirectory .. "/Secure Preferences"
+    local stat = hs.fs.attributes(path)
+    local identity = stat and string.format("%s:%s:%s", stat.ino, stat.size, stat.modification) or nil
+    if identity and settingsCache and settingsCache.path == path and settingsCache.identity == identity then
+      return settingsCache.settings
+    end
+    local preferences = hs.json.read(path)
     local settings = preferences and preferences.extensions and preferences.extensions.settings or nil
     if type(settings) ~= "table" then
+      settingsCache = nil
       return nil, "Chrome's extension settings could not be read"
     end
+    settingsCache = identity and { identity = identity, path = path, settings = settings } or nil
     return settings
   end
 

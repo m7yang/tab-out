@@ -118,7 +118,7 @@ function M.new(options)
       return nil, "The target display has no stable identifier"
     end
 
-    if spaceType == "user" then
+    if spaceType == "user" and lastUserSpaceByScreen[uuid] ~= spaceId then
       lastUserSpaceByScreen[uuid] = spaceId
       hs.settings.set(LAST_USER_SPACES_KEY, lastUserSpaceByScreen)
     end
@@ -127,6 +127,7 @@ function M.new(options)
       capturedSpaceId = spaceId,
       capturedSpaceType = spaceType,
       fallbackUserSpaceId = spaceType == "fullscreen" and lastUserSpaceByScreen[uuid] or nil,
+      focusedWindow = focusedWindow,
       focusedWindowBundleId = focusedApplication and focusedApplication:bundleID() or nil,
       focusedWindowId = focusedWindow and focusedWindow:id() or nil,
       focusedWindowScreenUuid = screenUuid(focusedScreen),
@@ -274,6 +275,29 @@ function M.new(options)
     return false
   end
 
+  -- hs.window.orderedWindows() queries every application through
+  -- Accessibility, so an unresponsive app can stall the shortcut. Order the
+  -- tracked Chrome windows by the same on-screen window-server z-order instead.
+  local function orderedTrackedChromeWindows()
+    if type(hs.window._orderedwinids) ~= "function" then
+      return hs.window.orderedWindows()
+    end
+    local trackedById = {}
+    for _, window in ipairs(trackedChromeWindows()) do
+      local id = window and window:id() or nil
+      if id then
+        trackedById[id] = window
+      end
+    end
+    local ordered = {}
+    for _, id in ipairs(hs.window._orderedwinids()) do
+      if trackedById[id] then
+        table.insert(ordered, trackedById[id])
+      end
+    end
+    return ordered
+  end
+
   local function eligibleChromeWindows(screen, spaceId, browserProcessId)
     local candidates = {}
     if not screenHasChromeWindowOnSpace(screen, spaceId, browserProcessId) then
@@ -282,7 +306,7 @@ function M.new(options)
 
     local targetScreenUuid = screenUuid(screen)
 
-    for _, window in ipairs(hs.window.orderedWindows()) do
+    for _, window in ipairs(orderedTrackedChromeWindows()) do
       if isChromeWindow(window, browserProcessId)
         and screenUuid(window:screen()) == targetScreenUuid
       then
@@ -447,11 +471,19 @@ function M.new(options)
       return
     end
 
+    -- A match needs a new native window on the target Desktop; until one
+    -- appears, skip the full process-targeted Chrome inventory on each tick.
+    local candidates = pendingNativePlacementCandidates(pending)
+    if #candidates == 0 then
+      pending.identityError = "The created native Chrome window is not yet available on the target Desktop"
+      return
+    end
+
     local window, identityError, fatal, authorityToken = catalog:matchCreatedBrowserWindow(
       pending.browserProcessId,
       pending.browserWindowId,
       pending.creationToken,
-      pendingNativePlacementCandidates(pending),
+      candidates,
       remainingSeconds
     )
     pending.identityError = identityError

@@ -399,11 +399,17 @@ local function runShortcut(kind, options)
     function element:setAttributeValue(attribute, value)
       return setAttribute and setAttribute(attribute, value) or false
     end
+    function element:isValid()
+      return true
+    end
     return element
   end
 
   local axRoot
   local createdAxRoot
+  local function createdWindowElementIsValid()
+    return createdChromeWindow ~= nil
+  end
   local function destinationControl(roleDescription, focused, onFocus, value)
     return newAxElement({
       AXChildren = {},
@@ -474,6 +480,7 @@ local function runShortcut(kind, options)
     end,
     AXRole = "AXWindow",
   })
+  createdAxRoot.isValid = createdWindowElementIsValid
   local remoteAxRoot = newAxElement({
     AXChildren = {},
     AXDocument = otherDocumentUrl,
@@ -612,6 +619,11 @@ local function runShortcut(kind, options)
     },
     hotkey = {
       bind = function() return {} end,
+    },
+    fs = {
+      attributes = function()
+        return { ino = 1, modification = 1800000000, size = 100 }
+      end,
     },
     http = {
       urlParts = _G.hs.http.urlParts,
@@ -936,7 +948,10 @@ local function runShortcut(kind, options)
         return focusedWindow
       end,
       get = function(windowId)
-        if createdChromeWindow and createdChromeWindow:id() == windowId then
+        if createdChromeWindow
+          and createdChromeWindow:id() == windowId
+          and not options.createdWindowOnInactiveSpace
+        then
           return createdChromeWindow
         end
         if unrelatedNewChromeWindow and unrelatedNewChromeWindow:id() == windowId then
@@ -958,6 +973,13 @@ local function runShortcut(kind, options)
       end,
       orderedWindows = function()
         return currentOrderedWindows()
+      end,
+      _orderedwinids = function()
+        local ids = {}
+        for _, window in ipairs(currentOrderedWindows()) do
+          table.insert(ids, window:id())
+        end
+        return ids
       end,
     },
   }
