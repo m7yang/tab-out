@@ -95,3 +95,10 @@ parent PID onto every request before Hammerspoon sees it. Selection now excludes
 all other same-bundle processes before PID-targeted ScriptingBridge and
 Accessibility correlation. Mixed controller or extension versions receive a
 version rejection and cannot fall back to application-name targeting.
+
+## Amendment: Process-Scoped Window Enumeration
+
+[ADR 0046](0046-bound-hammerspoon-close-inspection-and-creation-retries.md)
+replaces global ordered-window enumeration with an explicit refresh of the
+authorized Chrome process and WindowServer's on-screen IDs. Watcher-missed
+windows still participate, and native front-to-back selection is unchanged.

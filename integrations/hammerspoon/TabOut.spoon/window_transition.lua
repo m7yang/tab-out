@@ -1,5 +1,7 @@
 local M = {}
 
+local CLOSE_TAB_SCAN_TIMEOUT_SECONDS = 0.05
+local CLOSE_WINDOW_ORDER_TIMEOUT_SECONDS = 0.05
 local CREATED_WINDOW_CLOSE_FOCUS_TIMEOUT_SECONDS = 0.5
 local CREATED_WINDOW_CLOSE_MONITOR_INTERVAL_SECONDS = 0.1
 local CREATED_WINDOW_LIVENESS_TIMEOUT_SECONDS = 0.05
@@ -126,16 +128,16 @@ function M.new(options)
 
   local function readAccessibilityAttribute(element, attribute, deadline)
     if not prepareAccessibilityElement(element, deadline) then
-      return nil
+      return nil, "Accessibility read could not be prepared"
     end
-    local value = element:attributeValue(attribute)
+    local value, readError = element:attributeValue(attribute)
     if deadline then
       element:setTimeout(0)
       if hs.timer.secondsSinceEpoch() >= deadline then
-        return nil
+        return nil, "Accessibility deadline expired"
       end
     end
-    return value
+    return value, readError
   end
 
   local function isDestinationControl(kind, element, role, deadline)
@@ -223,24 +225,88 @@ function M.new(options)
     return findDestinationControl(kind, root, deadline)
   end
 
-  local function topStandardWindowOnScreen(screen, excludedWindowId)
+  local function topStandardWindowOnScreen(screen, excludedWindowId, knownWindow)
     local expectedScreenUuid = screenUuid(screen)
     local activeSpace = screen and hs.spaces.activeSpaceOnScreen(screen) or nil
     if not expectedScreenUuid or not activeSpace then
       return nil
     end
 
-    for _, window in ipairs(hs.window.orderedWindows()) do
-      if window
-        and window:id()
-        and window:id() ~= excludedWindowId
-        and window:isStandard()
-        and not window:isMinimized()
-        and screenUuid(window:screen()) == expectedScreenUuid
+    local deadline = hs.timer.secondsSinceEpoch() + CLOSE_WINDOW_ORDER_TIMEOUT_SECONDS
+    local applicationWindows = {}
+    local eligibleApplications = {}
+    -- Running-application metadata does not query Accessibility. Restrict the
+    -- snapshot to the same visible ordinary apps as orderedWindows, excluding
+    -- WindowServer and other system-owned surfaces that have no application.
+    for _, application in ipairs(hs.application.runningApplications()) do
+      if application:kind() > 0 and not application:isHidden() then
+        eligibleApplications[application:pid()] = application
+      end
+    end
+    -- WindowServer supplies geometry and z-order without AX calls to every app.
+    -- Only a possible obstruction ahead of the already-validated recovery window
+    -- needs Accessibility inspection. An unreadable obstruction fails closed.
+    for _, record in ipairs(hs.window.list(true) or {}) do
+      if hs.timer.secondsSinceEpoch() >= deadline then
+        return nil
+      end
+      local id = record.kCGWindowNumber
+      local bounds = record.kCGWindowBounds
+      if id and id ~= excludedWindowId
+        and record.kCGWindowIsOnscreen and bounds
+        and screenUuid(hs.screen.find({
+          x = bounds.X, y = bounds.Y, w = bounds.Width, h = bounds.Height,
+        })) == expectedScreenUuid
       then
-        local spaces = hs.spaces.windowSpaces(window)
-        if spaces and containsValue(spaces, activeSpace) then
-          return window
+        local pid = record.kCGWindowOwnerPID
+        local owner = eligibleApplications[pid]
+        if owner then
+          local spaces = hs.spaces.windowSpaces(id)
+          if not spaces or hs.timer.secondsSinceEpoch() >= deadline then
+            return nil
+          end
+          if containsValue(spaces, activeSpace) then
+            if id == knownWindow:id() then
+              return knownWindow
+            end
+            local windows = applicationWindows[pid]
+            if not windows then
+              -- The PID-based AX constructor reads AXRole before a timeout can be
+              -- set. Wrapping hs.application's existing element avoids that read.
+              local application = hs.axuielement.applicationElement(owner)
+              windows = readAccessibilityAttribute(application, "AXWindows", deadline)
+              if type(windows) ~= "table" then
+                return nil
+              end
+              applicationWindows[pid] = windows
+            end
+            local matched = false
+            for _, element in ipairs(windows) do
+              if not prepareAccessibilityElement(element, deadline) then
+                return nil
+              end
+              local window = element:asHSWindow()
+              local candidateId = window and window:id() or nil
+              element:setTimeout(0)
+              if hs.timer.secondsSinceEpoch() >= deadline then
+                return nil
+              end
+              if candidateId == id then
+                matched = true
+                local subrole = readAccessibilityAttribute(element, "AXSubrole", deadline)
+                if not subrole then
+                  return nil
+                end
+                if subrole == "AXStandardWindow" then
+                  return window
+                end
+                break
+              end
+            end
+            if not matched then
+              return nil
+            end
+          end
         end
       end
     end
@@ -278,7 +344,7 @@ function M.new(options)
     end
 
     if requireTop then
-      local topWindow = topStandardWindowOnScreen(screen, excludedWindowId)
+      local topWindow = topStandardWindowOnScreen(screen, excludedWindowId, window)
       if not topWindow or topWindow:id() ~= window:id() then
         return nil
       end
@@ -308,15 +374,53 @@ function M.new(options)
     if not root then
       return nil
     end
+    local deadline = hs.timer.secondsSinceEpoch() + CLOSE_TAB_SCAN_TIMEOUT_SECONDS
     local count = 0
-    walkAccessibility(root, 20, true, function(element, role)
-      if role == "AXRadioButton" and element:attributeValue("AXSubrole") == "AXTabButton" then
-        count = count + 1
-        return nil, true
+    local visited = {}
+    local function scan(element, depth)
+      if type(element) ~= "userdata" or depth > 20
+        or hs.timer.secondsSinceEpoch() >= deadline
+      then
+        return false
       end
-      return nil
-    end)
-    return count > 0 and count or nil
+      if visited[element] then
+        return true
+      end
+      visited[element] = true
+      local role = readAccessibilityAttribute(element, "AXRole", deadline)
+      if not role then
+        return false
+      end
+      if role == "AXWebArea" then
+        return true
+      end
+      if role == "AXRadioButton" then
+        local subrole = readAccessibilityAttribute(element, "AXSubrole", deadline)
+        if not subrole then
+          return false
+        end
+        if subrole == "AXTabButton" then
+          count = count + 1
+          return true
+        end
+      end
+      local children, readError = readAccessibilityAttribute(element, "AXChildren", deadline)
+      if readError or hs.timer.secondsSinceEpoch() >= deadline then
+        return false
+      end
+      for _, child in ipairs(children or {}) do
+        if not scan(child, depth + 1) then
+          return false
+        end
+        -- Two tabs already prove Chrome must own this Command-W.
+        if count >= 2 then
+          return true
+        end
+      end
+      return true
+    end
+    local complete = scan(root, 0)
+    return complete and hs.timer.secondsSinceEpoch() < deadline and count > 0 and count or nil
   end
 
   local function pointIsInsideFrame(point, frame)

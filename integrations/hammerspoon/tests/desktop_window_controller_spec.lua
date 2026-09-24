@@ -70,6 +70,12 @@ local fakeSocket = {
   end,
 }
 local fakeHs = {
+  application = {
+    applicationForPID = function(pid)
+      if pid ~= CONFIGURED_PROCESS_ID then return nil end
+      return { allWindows = function() return { destinationWindow, sourceWindow } end }
+    end,
+  },
   json = hs.json,
   socket = {
     new = function(callback)
@@ -90,7 +96,14 @@ local fakeHs = {
     secondsSinceEpoch = function() return 1800000000 end,
   },
   window = {
-    orderedWindows = function() return orderedWindows end,
+    orderedWindows = function() error("must not enumerate every application") end,
+    _orderedwinids = function()
+      local ids = {}
+      for _, candidate in ipairs(orderedWindows) do
+        table.insert(ids, candidate:id())
+      end
+      return ids
+    end,
   },
 }
 local catalogCandidates
@@ -121,7 +134,7 @@ local controller = DesktopWindowController.new({
   catalog = catalog,
   chromeBundleId = "com.google.Chrome",
   chromeWindows = function()
-    return { isolatedWindow, destinationWindow, sourceWindow }
+    return { isolatedWindow, destinationWindow }
   end,
   hs = fakeHs,
   later = function(delay, callback)
@@ -168,7 +181,7 @@ assertArray(selection.windowIds, { 102, 101 }, "desktop windows use native front
 assertArray(
   { catalogCandidates[1]:id(), catalogCandidates[2]:id() },
   { 501, 502 },
-  "catalog receives every tracked Chrome window"
+  "catalog includes a Chrome window missed by the watcher"
 )
 assertEqual(#catalogCandidates, 2, "isolated same-bundle windows never reach the catalog")
 assertEqual(catalogProcessId, CONFIGURED_PROCESS_ID, "catalog receives process authority")

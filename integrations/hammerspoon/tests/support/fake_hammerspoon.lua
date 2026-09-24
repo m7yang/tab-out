@@ -25,12 +25,18 @@ local function runShortcut(kind, options)
   local createdBootstrapTokenCheckedBeforeFinalization = false
   local closeGestureCallback
   local closeGestureConsumed = false
+  local readingCloseGesture = false
+  local closeGestureElapsed = 0
+  local closeTabReads = 0
+  local recoveryAppReads = 0
   local closeMouseUpConsumed = false
   local chromeLaunchArguments
   local chromeLaunchCount = 0
   local chromeApplicationHidden = false
   local createdBrowserWindowId = 4004
   local createdMatchCallCount = 0
+  local createdMatchLastFinishedAt
+  local createdMatchesSpaced = true
   local createdMatchMaximumElapsed = 0
   local createdMatchStartedAt
   local createdBootstrapReplaced = false
@@ -160,6 +166,7 @@ local function runShortcut(kind, options)
   local thirdScreen = newScreen("third-screen", targetDisplayPosition == 3 and 1440 or 2880)
 
   local chromeApplication = {
+    kind = function() return 1 end,
     bundleID = function()
       return "com.google.Chrome"
     end,
@@ -179,6 +186,7 @@ local function runShortcut(kind, options)
     end,
   }
   local isolatedChromeApplication = {
+    kind = function() return 1 end,
     bundleID = function()
       return "com.google.Chrome"
     end,
@@ -260,6 +268,8 @@ local function runShortcut(kind, options)
     return options.isolatedChromeWindow and { isolatedChromeWindow } or {}
   end
   remoteTopApplication = {
+    kind = function() return 1 end,
+    pid = function() return 65432 end,
     bundleID = function()
       return "com.example.Editor"
     end,
@@ -304,6 +314,15 @@ local function runShortcut(kind, options)
   focusedWindow = targetHasChromeWindow and cacheTargetProfile and targetChromeWindow
     or (not targetHasChromeWindow and otherHasChromeWindow and chromeIsRunning and otherChromeWindow)
     or originalWindow
+
+  local obstructionApplication = {
+    pid = function() return 65433 end,
+    kind = function() return options.closeRecoveryObstruction == "accessory" and 0 or 1 end,
+    isHidden = function() return false end,
+  }
+  local recoveryObstruction = newNonChromeWindow(707,
+    options.closeRecoveryObstruction == "remote" and targetScreen or otherScreen, noOp)
+  recoveryObstruction.application = function() return obstructionApplication end
 
   local function currentConfiguredChromeWindows()
     local windows = {}
@@ -350,6 +369,9 @@ local function runShortcut(kind, options)
       end
     end
 
+    if readingCloseGesture and options.closeRecoveryObstruction then
+      append(recoveryObstruction)
+    end
     append(focusedWindow)
     if createdChromeWindow and createdWindowPublished and not createdChromeWindow:isMinimized() then
       append(createdChromeWindow)
@@ -378,20 +400,31 @@ local function runShortcut(kind, options)
     return currentConfiguredChromeWindows()
   end
 
+  local fakeAxElements = {}
   local function newAxElement(attributes, setAttribute)
     local element = {}
+    fakeAxElements[element] = true
     local timeoutSeconds
     function element:setTimeout(timeout)
       timeoutSeconds = timeout > 0 and timeout or nil
       return self
     end
     function element:attributeValue(attribute)
-      if openedFilter or openedNewPage then
-        local delay = options.destinationAccessibilityReadDelaySeconds or 0
+      if readingCloseGesture and attributes.AXSubrole == "AXTabButton" then
+        closeTabReads = closeTabReads + 1
+      end
+      if readingCloseGesture or openedFilter or openedNewPage then
+        local delay = readingCloseGesture and (options.closeAccessibilityReadDelaySeconds or 0)
+          or (options.destinationAccessibilityReadDelaySeconds or 0)
         clock = clock + math.min(delay, timeoutSeconds or delay)
         if timeoutSeconds and delay > timeoutSeconds then
           return nil
         end
+      end
+      if readingCloseGesture and options.closeAccessibilityReadFails
+        and attributes.AXRole == "AXTextField" and attribute == "AXChildren"
+      then
+        return nil, "Accessibility read failed"
       end
       local value = attributes[attribute]
       return type(value) == "function" and value() or value
@@ -452,21 +485,22 @@ local function runShortcut(kind, options)
   })
   local tabAttributes = { AXChildren = {}, AXRole = "AXRadioButton", AXSubrole = "AXTabButton" }
   local tabButton = newAxElement(tabAttributes)
-  local secondTabButton = options.createdTabCount == 2 and newAxElement(tabAttributes) or nil
+  local secondTabButton = createdTabCount >= 2 and newAxElement(tabAttributes) or nil
+  local thirdTabButton = createdTabCount >= 3 and newAxElement(tabAttributes) or nil
+  local function chromeChildren()
+    local children = { filterInput, addressBar, tabButton }
+    if secondTabButton then table.insert(children, secondTabButton) end
+    if thirdTabButton then table.insert(children, thirdTabButton) end
+    return children
+  end
   axRoot = newAxElement({
-    AXChildren = function()
-      return secondTabButton and { filterInput, addressBar, tabButton, secondTabButton }
-        or { filterInput, addressBar, tabButton }
-    end,
+    AXChildren = chromeChildren,
     AXCloseButton = closeButton,
     AXDocument = targetDocumentUrl,
     AXRole = "AXWindow",
   })
   createdAxRoot = newAxElement({
-    AXChildren = function()
-      return secondTabButton and { filterInput, addressBar, tabButton, secondTabButton }
-        or { filterInput, addressBar, tabButton }
-    end,
+    AXChildren = chromeChildren,
     AXCloseButton = closeButton,
     AXDocument = function()
       createdAxDocumentReadCount = createdAxDocumentReadCount + 1
@@ -519,13 +553,6 @@ local function runShortcut(kind, options)
         or (kind == "filter" and filterInput or addressBar)
     end,
   })
-  local fakeAxElements = {}
-  for _, element in ipairs({
-    addressBar, axRoot, closeButton, createdAxRoot, filterInput, remoteAxRoot,
-    remoteDestinationControl, chromeAxElement, tabButton, secondTabButton, unrelatedAxRoot,
-  }) do
-    if element then fakeAxElements[element] = true end
-  end
 
   local function schedule(queue, timer)
     timer.stopped = false
@@ -534,6 +561,23 @@ local function runShortcut(kind, options)
     end
     table.insert(queue, timer)
     return timer
+  end
+
+  local function recoveryApplicationElement(pid)
+    recoveryAppReads = recoveryAppReads + 1
+    if options.closeRecoveryObstruction == "unreadable" then
+      return newAxElement({})
+    end
+    local elements = {}
+    for _, window in ipairs(currentOrderedWindows()) do
+      if window:application():pid() == pid then
+        local element = newAxElement({ AXSubrole = window == recoveryObstruction
+          and options.closeRecoveryObstruction == "nonstandard" and "AXDialog" or "AXStandardWindow" })
+        element.asHSWindow = function() return window end
+        table.insert(elements, element)
+      end
+    end
+    return newAxElement({ AXWindows = elements })
   end
 
   local fakeHs = {
@@ -546,6 +590,9 @@ local function runShortcut(kind, options)
       end,
     },
     application = {
+      runningApplications = function()
+        return { chromeApplication, isolatedChromeApplication, remoteTopApplication, obstructionApplication }
+      end,
       applicationForPID = function(processId)
         if processId == 43250 and chromeIsRunning then
           return chromeApplication
@@ -553,6 +600,8 @@ local function runShortcut(kind, options)
         if processId == 54321 and options.isolatedChromeWindow then
           return isolatedChromeApplication
         end
+        if processId == 65432 then return remoteTopApplication end
+        if processId == 65433 then return obstructionApplication end
         return nil
       end,
       frontmostApplication = function()
@@ -582,9 +631,13 @@ local function runShortcut(kind, options)
       end,
     },
     axuielement = {
+      applicationElementForPID = function(pid)
+        clock = clock + (options.closeApplicationConstructorDelaySeconds or 0)
+        return recoveryApplicationElement(pid)
+      end,
       applicationElement = function(application)
-        assert(application == chromeApplication, "destination queries use only the configured Chrome process")
-        return chromeAxElement
+        if application == chromeApplication then return chromeAxElement end
+        return recoveryApplicationElement(application:pid())
       end,
       windowElement = function(window)
         if window == otherChromeWindow then
@@ -811,6 +864,12 @@ local function runShortcut(kind, options)
       end,
     },
     screen = {
+      find = function(frame)
+        for _, screen in ipairs({ targetScreen, otherScreen, thirdScreen }) do
+          if screen:frame().x == frame.x then return screen end
+        end
+        return nil
+      end,
       allScreens = function()
         if options.screenCount == 1 then
           return { targetScreen }
@@ -863,6 +922,11 @@ local function runShortcut(kind, options)
         new = newWatcher,
       },
       windowSpaces = function(window)
+        if type(window) == "number" then
+          for _, candidate in ipairs(currentOrderedWindows()) do
+            if candidate:id() == window then window = candidate; break end
+          end
+        end
         if window == inactiveSpaceChromeWindow then
           return { 33 }
         end
@@ -972,7 +1036,36 @@ local function runShortcut(kind, options)
         return nil
       end,
       orderedWindows = function()
-        return currentOrderedWindows()
+        error("must not enumerate every application's windows")
+      end,
+      list = function(allWindows)
+        local records = {}
+        if options.includeSystemSurface and allWindows then
+          local frame = otherScreen:frame()
+          table.insert(records, {
+            kCGWindowBounds = { X = frame.x, Y = frame.y, Width = frame.w, Height = frame.h },
+            kCGWindowIsOnscreen = true,
+            kCGWindowLayer = 25,
+            kCGWindowNumber = 909,
+            kCGWindowOwnerPID = 99999,
+          })
+        end
+        for _, window in ipairs(currentOrderedWindows()) do
+          local frame = window:screen():frame()
+          local layer = window == recoveryObstruction and (options.closeRecoveryObstructionLayer or 0)
+            or ((window == remoteTopWindow or window == originalWindow) and (options.recoveryWindowLayer or 0))
+            or 0
+          if allWindows or layer < 20 then
+            table.insert(records, {
+              kCGWindowBounds = { X = frame.x, Y = frame.y, Width = frame.w, Height = frame.h },
+              kCGWindowIsOnscreen = true,
+              kCGWindowLayer = layer,
+              kCGWindowNumber = window:id(),
+              kCGWindowOwnerPID = window:application():pid(),
+            })
+          end
+        end
+        return records
       end,
       _orderedwinids = function()
         local ids = {}
@@ -1013,7 +1106,7 @@ local function runShortcut(kind, options)
       end
       if nextTimer then
         table.remove(pendingTimers, nextIndex)
-        clock = nextTimer.due
+        clock = math.max(clock, nextTimer.due)
         nextTimer.callback()
         if nextTimer.repeating and not nextTimer.stopped then
           nextTimer.due = clock + nextTimer.interval
@@ -1172,6 +1265,9 @@ local function runShortcut(kind, options)
       timeoutSeconds
     )
       fullCorrelationCount = fullCorrelationCount + 1
+      if createdMatchLastFinishedAt then
+        createdMatchesSpaced = createdMatchesSpaced and clock - createdMatchLastFinishedAt >= 0.199
+      end
       createdMatchCallCount = createdMatchCallCount + 1
       local requestedDelay = options.createdMatchDelaySeconds or 0
       if requestedDelay > 0 then
@@ -1181,6 +1277,7 @@ local function runShortcut(kind, options)
           clock - (createdMatchStartedAt or clock)
         )
       end
+      createdMatchLastFinishedAt = clock
       if pid ~= 43250
         or browserWindowId ~= createdBrowserWindowId
         or extensionId ~= string.rep("a", 32)
@@ -1476,7 +1573,11 @@ local function runShortcut(kind, options)
         }
       end,
     }
+    readingCloseGesture = true
+    local closeStartedAt = clock
     closeGestureConsumed = closeGestureCallback and closeGestureCallback(event) == true or false
+    closeGestureElapsed = clock - closeStartedAt
+    readingCloseGesture = false
     if closeGesture == "mouse" and closeGestureConsumed then
       closeMouseUpConsumed = closeGestureCallback({
         getType = function()
@@ -1485,7 +1586,7 @@ local function runShortcut(kind, options)
       }) == true
     end
     if not closeGestureConsumed and createdChromeWindow then
-      if closeGesture == "tabShortcut" and options.createdTabCount == 2 then
+      if closeGesture == "tabShortcut" and createdTabCount >= 2 then
         createdWindowNativeTabCloseAllowed = true
       else
         createdChromeWindow:close()
@@ -1500,6 +1601,9 @@ local function runShortcut(kind, options)
     addressBarFocused = addressBarFocused,
     addressBarInputEmpty = addressBarInputEmpty,
     closeGestureConsumed = closeGestureConsumed,
+    closeScanWithinDeadline = closeGestureElapsed <= 0.051,
+    closeTabReads = closeTabReads,
+    recoveryAppReads = recoveryAppReads,
     closeMouseUpConsumed = closeMouseUpConsumed,
     createdWindow = createdChromeWindow ~= nil,
     createdBootstrapReplaced = createdBootstrapReplaced,
@@ -1513,6 +1617,7 @@ local function runShortcut(kind, options)
     completionWithinDestinationDeadline = clock <= 6.2,
     completionWithinCreatedDeadline = createdMatchMaximumElapsed <= 12.2,
     createdMatchCallCount = createdMatchCallCount,
+    createdMatchesSpaced = createdMatchesSpaced,
     createExpectedBrowserProcessId = nativeBridgeRequest
       and nativeBridgeRequest.expectedBrowserProcessId
       or nil,

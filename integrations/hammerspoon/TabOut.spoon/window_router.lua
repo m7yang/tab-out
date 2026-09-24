@@ -5,6 +5,7 @@ local CHROME_LAUNCH_RETRY_INTERVAL_SECONDS = 0.2
 local CHROME_OPEN_EXECUTABLE = "/usr/bin/open"
 local LAST_USER_SPACES_KEY = "tabOut.lastUserSpaces.v1"
 local NEW_WINDOW_POLL_INTERVAL_SECONDS = 0.05
+local NEW_WINDOW_MATCH_RETRY_INTERVAL_SECONDS = 0.2
 local NEW_WINDOW_TIMEOUT_SECONDS = 12
 local PROFILE_WINDOW_INVENTORY_TIMEOUT_SECONDS = 3
 
@@ -471,6 +472,12 @@ function M.new(options)
       return
     end
 
+    -- Leave the main loop time to handle input between unsuccessful inventories.
+    -- The first match is immediate; timer and window-created callbacks share this gate.
+    if pending.nextMatchAt and hs.timer.secondsSinceEpoch() < pending.nextMatchAt then
+      return
+    end
+
     -- A match needs a new native window on the target Desktop; until one
     -- appears, skip the full process-targeted Chrome inventory on each tick.
     local candidates = pendingNativePlacementCandidates(pending)
@@ -487,6 +494,9 @@ function M.new(options)
       remainingSeconds
     )
     pending.identityError = identityError
+    if not window then
+      pending.nextMatchAt = hs.timer.secondsSinceEpoch() + NEW_WINDOW_MATCH_RETRY_INTERVAL_SECONDS
+    end
     if hs.timer.secondsSinceEpoch() >= pending.deadline then
       catalog:releaseAuthority(authorityToken)
       failNativePlacementTimeout(pending)

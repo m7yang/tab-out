@@ -201,15 +201,23 @@ function M.new(options)
         table.insert(tracked, window)
       end
     end
-    local orderedTracked = {}
-    local orderedTrackedIds = {}
-    for _, window in ipairs(hs.window.orderedWindows()) do
+    -- Refresh only the authorized process so windows missed by the watcher still
+    -- participate. WindowServer supplies order without querying unrelated apps.
+    local application = hs.application.applicationForPID(browserProcessId)
+    if not application or type(hs.window._orderedwinids) ~= "function" then
+      return nil, "The configured Chrome window order is unavailable"
+    end
+    for _, window in ipairs(application:allWindows() or {}) do
       local id = window and window:id() or nil
       if isChromeWindow(window, browserProcessId) and id and not trackedById[id] then
         trackedById[id] = window
         table.insert(tracked, window)
       end
-      if id and trackedById[id] and not orderedTrackedIds[id] then
+    end
+    local orderedTracked = {}
+    local orderedTrackedIds = {}
+    for _, id in ipairs(hs.window._orderedwinids()) do
+      if trackedById[id] and not orderedTrackedIds[id] then
         orderedTrackedIds[id] = true
         table.insert(orderedTracked, trackedById[id])
       end
