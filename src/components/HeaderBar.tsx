@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { Tabs as TabsPrimitive } from '@base-ui/react/tabs'
 import { useWindowEvent } from '../hooks/useGlobalEvent'
 import { HeaderStats } from './HeaderStats'
+import { HeaderFilterSurface } from './HeaderFilterSurface'
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs'
 import { dashboardViewOptionId, type DashboardView } from '../extension/dashboard-view.js'
 import { isHistoryFilterEnabled } from '../extension/history-range.js'
@@ -133,10 +134,11 @@ export function HeaderBar({
           <div
             data-tabout="filter-query"
             className={cn(
-              "tab-filter-wrap relative isolate inline-flex w-70 shrink-0 items-center min-[981px]:max-[1100px]:[.dashboard-shell.has-history_&]:w-39 before:pointer-events-none before:absolute before:inset-0 before:z-0 before:rounded-page-chip before:border before:border-input before:drop-shadow-xs before:[corner-shape:squircle] before:content-[''] after:pointer-events-none after:absolute after:inset-0 after:z-0 after:rounded-page-chip after:border after:border-blue-500 after:opacity-0 after:drop-shadow-md after:drop-shadow-blue-500/50 after:transition-opacity after:duration-150 after:ease-out after:[corner-shape:squircle] after:content-[''] motion-reduce:after:transition-none [&:has(input:focus-visible)::after]:opacity-100",
+              'tab-filter-wrap relative isolate inline-flex w-70 shrink-0 items-center min-[981px]:max-[1100px]:[.dashboard-shell.has-history_&]:w-39',
               filter && 'has-value [&_.tab-filter]:pr-7.5 [&_.tab-filter-clear]:inline-flex',
             )}
           >
+            <HeaderFilterSurface inputRef={inputRef} />
             <span
               aria-hidden="true"
               className="bookmarks-filter-startup-placeholder pointer-events-none absolute top-1/2 left-[calc(var(--spacing)*3+1px)] z-2 hidden -translate-y-1/2 select-none whitespace-nowrap text-(length:--header-control-font-size) leading-(--header-control-line-height) text-muted-foreground font-[inherit] md:text-sm"
@@ -148,10 +150,7 @@ export function HeaderBar({
               type="search"
               data-slot="input"
               data-tabout-part="input"
-              className={cn(
-                'h-8 w-full min-w-0 rounded-lg border border-transparent bg-transparent px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 md:text-sm dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40',
-                'tab-filter relative z-1 box-border h-(--header-control-height) w-full rounded-page-chip border border-transparent bg-transparent px-3 py-1 text-(length:--header-control-font-size) leading-(--header-control-line-height) text-foreground caret-blue-500 shadow-none transition-colors outline-none font-[inherit] [corner-shape:squircle] placeholder:select-none placeholder:text-muted-foreground md:text-sm [&::-webkit-search-cancel-button]:[-webkit-appearance:none]',
-              )}
+              className="tab-filter relative z-1 box-border h-(--header-control-height) w-full min-w-0 rounded-full border bg-transparent px-3 py-1 text-(length:--header-control-font-size) leading-(--header-control-line-height) text-foreground caret-blue-500 font-[inherit] placeholder:select-none placeholder:text-muted-foreground md:text-sm [&::-webkit-search-cancel-button]:[-webkit-appearance:none]"
               autoComplete="off"
               spellCheck="false"
               aria-label="Filter dashboard"

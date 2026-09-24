@@ -117,9 +117,10 @@ test('pre-app clear remains authoritative over a URL filter', async ({ page }) =
   })
 })
 
-test('filter shortcut startup preserves the prerendered input and its focus-visible shadow', async ({
+test('filter shortcut startup preserves the prerendered input and its focus-visible capsule shadow', async ({
   page,
 }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
   const hydrationErrors: string[] = []
   page.on('console', (message) => {
     if (message.type() === 'error' && /hydration|didn't match/i.test(message.text())) {
@@ -127,23 +128,23 @@ test('filter shortcut startup preserves the prerendered input and its focus-visi
     }
   })
   await page.addInitScript(() => {
-    const focusShadowPaint = {
+    const focusRingPaint = {
       owner: 'none',
       presentations: 0,
       visible: false,
-      blur: 0,
+      strokeWidth: 0,
     }
     const startupInput = {
       element: null as HTMLInputElement | null,
       seeded: false,
     }
 
-    function sampleFocusShadow() {
+    function sampleFocusRing() {
       const inputs = document.querySelectorAll<HTMLInputElement>(
         '[data-tabout="filter-query"] input',
       )
       let owner = 'none'
-      let blur = 0
+      let strokeWidth = 0
       for (const input of inputs) {
         if (!input.matches(':focus-visible')) continue
         if (!startupInput.seeded) {
@@ -153,38 +154,33 @@ test('filter shortcut startup preserves the prerendered input and its focus-visi
           input.setSelectionRange(2, 2)
           input.dispatchEvent(new Event('input', { bubbles: true }))
         }
-        const borderLayer = input.parentElement
-        if (!borderLayer) continue
-        const focusLayer = getComputedStyle(borderLayer, '::after')
-        const shadowLengths = focusLayer.filter
-          .match(/-?[\d.]+px/g)
-          ?.map((length) => Number.parseFloat(length)) ?? []
-        const inputBlur = Math.max(
-          0,
-          ...shadowLengths.filter((_, index) => index % 3 === 2),
-        ) * Number.parseFloat(focusLayer.opacity)
-        if (inputBlur > blur) {
+        const focusPath = input.parentElement?.querySelector('.header-filter-focus')
+        const focusStyle = focusPath
+          ? getComputedStyle(focusPath)
+          : getComputedStyle(input.parentElement!, '::after')
+        const paintedWidth = Number.parseFloat(focusPath ? focusStyle.strokeWidth : focusStyle.borderWidth) * Number.parseFloat(focusStyle.opacity)
+        if (paintedWidth > strokeWidth) {
           owner = 'app'
-          blur = inputBlur
+          strokeWidth = paintedWidth
         }
       }
 
-      const visible = blur > 0
-      if (visible && !focusShadowPaint.visible) focusShadowPaint.presentations += 1
-      focusShadowPaint.owner = owner
-      focusShadowPaint.visible = visible
-      focusShadowPaint.blur = blur
-      requestAnimationFrame(sampleFocusShadow)
+      const visible = strokeWidth > 0
+      if (visible && !focusRingPaint.visible) focusRingPaint.presentations += 1
+      focusRingPaint.owner = owner
+      focusRingPaint.visible = visible
+      focusRingPaint.strokeWidth = strokeWidth
+      requestAnimationFrame(sampleFocusRing)
     }
 
     ;(window as typeof window & {
-      __tabOutFocusShadowPaint: typeof focusShadowPaint
+      __tabOutFocusRingPaint: typeof focusRingPaint
       __tabOutStartupInput: typeof startupInput
-    }).__tabOutFocusShadowPaint = focusShadowPaint
+    }).__tabOutFocusRingPaint = focusRingPaint
     ;(window as typeof window & {
       __tabOutStartupInput: typeof startupInput
     }).__tabOutStartupInput = startupInput
-    requestAnimationFrame(sampleFocusShadow)
+    requestAnimationFrame(sampleFocusRing)
   })
   await page.route('**/extension/dist/app.js', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 200))
@@ -212,24 +208,30 @@ test('filter shortcut startup preserves the prerendered input and its focus-visi
   })
   expect(hydrationErrors).toEqual([])
   await expect.poll(() => page.evaluate(() =>
-    (window as typeof window & { __tabOutFocusShadowPaint: { blur: number } })
-      .__tabOutFocusShadowPaint.blur,
-  )).toBeGreaterThan(2.8)
+    (window as typeof window & { __tabOutFocusRingPaint: { strokeWidth: number } })
+      .__tabOutFocusRingPaint.strokeWidth,
+  )).toBe(1)
 
-  const focusStyle = await filterInput.evaluate((input) => ({
-    restingFilter: getComputedStyle(input.parentElement!, '::before').filter,
-    focusFilter: getComputedStyle(input.parentElement!, '::after').filter,
-    focusBoxShadow: getComputedStyle(input.parentElement!, '::after').boxShadow,
-    focusBorderColor: getComputedStyle(input.parentElement!, '::after').borderColor,
-    focusOpacity: getComputedStyle(input.parentElement!, '::after').opacity,
-    caretColor: getComputedStyle(input).caretColor,
-    inputFilter: getComputedStyle(input).filter,
-  }))
-  expect(focusStyle.inputFilter).toBe('none')
+  const focusStyle = await filterInput.evaluate((input) => {
+    const surface = input.parentElement!.querySelector('.header-filter-border')!
+    const focus = input.parentElement!.querySelector('.header-filter-focus')!
+    return {
+      restingFilter: getComputedStyle(surface).filter,
+      focusFilter: getComputedStyle(focus).filter,
+      samePath: focus.getAttribute('d') === surface.getAttribute('d'),
+      strokeWidth: getComputedStyle(focus).strokeWidth,
+      focusColor: getComputedStyle(focus).stroke,
+      focusOpacity: getComputedStyle(focus).opacity,
+      caretColor: getComputedStyle(input).caretColor,
+      inputOutline: getComputedStyle(input).outlineStyle,
+    }
+  })
+  expect(focusStyle.inputOutline).toBe('none')
   expect(focusStyle.restingFilter).toContain('drop-shadow')
   expect(focusStyle.focusFilter).toContain('drop-shadow')
-  expect(focusStyle.focusBoxShadow).toBe('none')
-  expect(focusStyle.focusBorderColor).toBe(focusStyle.caretColor)
+  expect(focusStyle.samePath).toBe(true)
+  expect(focusStyle.strokeWidth).toBe('1px')
+  expect(focusStyle.focusColor).toBe(focusStyle.caretColor)
   expect(focusStyle.focusOpacity).toBe('1')
 
   await filterInput.fill('example')
@@ -249,17 +251,17 @@ test('filter shortcut startup preserves the prerendered input and its focus-visi
     (window as typeof window & { __tabOutFilterBlurCount?: number }).__tabOutFilterBlurCount,
   )).toBe(0)
 
-  const focusShadowPaint = await page.evaluate(() =>
+  const focusRingPaint = await page.evaluate(() =>
     (window as typeof window & {
-      __tabOutFocusShadowPaint: {
+      __tabOutFocusRingPaint: {
         owner: string
         presentations: number
         visible: boolean
-        blur: number
+        strokeWidth: number
       }
-    }).__tabOutFocusShadowPaint,
+    }).__tabOutFocusRingPaint,
   )
-  expect(focusShadowPaint).toMatchObject({
+  expect(focusRingPaint).toMatchObject({
     owner: 'app',
     presentations: 1,
     visible: true,
@@ -269,17 +271,19 @@ test('filter shortcut startup preserves the prerendered input and its focus-visi
     const borderLayer = input.parentElement!
     input.blur()
     await new Promise((resolve) => setTimeout(resolve, 200))
+    // Flush the blurred style before focusing, even on a throttled frame.
+    void getComputedStyle(borderLayer.querySelector('.header-filter-focus')!).opacity
     input.focus()
     const samples: Array<{ borderColor: string, filter: string, opacity: number }> = []
     const start = performance.now()
     do {
-      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
-      const focusLayer = getComputedStyle(borderLayer, '::after')
+      const focusLayer = getComputedStyle(borderLayer.querySelector('.header-filter-focus')!)
       samples.push({
-        borderColor: focusLayer.borderColor,
+        borderColor: focusLayer.stroke,
         filter: focusLayer.filter,
         opacity: Number.parseFloat(focusLayer.opacity),
       })
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
     } while (performance.now() - start < 200)
     return samples
   })
