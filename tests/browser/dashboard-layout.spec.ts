@@ -836,10 +836,11 @@ test('window merge keeps a partial result open until acknowledgement succeeds', 
   await expect(dialog).not.toBeAttached()
 })
 
-test('header stats keep counts and actions compact and accessible', async ({ page }) => {
+test('header stats keep counts compact and accessible without cleanup actions', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?filter=Duplicate%20Stack')
 
   const headerStats = page.locator('[data-tabout="header-stats"]')
+  await expect(headerStats.locator('[data-tabout-part="tab-count"]')).toBeVisible()
   const initialGap = await headerStats.evaluate((element) => {
     const tabs = element.querySelector<HTMLElement>('[data-tabout-part="tab-count"]')
     const secondary = element.querySelector<HTMLElement>('[data-tabout-part="secondary-counts"]')
@@ -852,26 +853,23 @@ test('header stats keep counts and actions compact and accessible', async ({ pag
   await expect(headerStats).not.toContainText('·')
   await expect(headerStats.locator('[data-tabout-part="dedupe-button"]')).toHaveCount(0)
   const closeButton = headerStats.locator('[data-tabout-part="close-filtered-button"]')
-  await expect(closeButton).toHaveAccessibleName(/Close \d+ matching open tabs/)
-  await expect(closeButton.locator('svg')).toHaveCount(0)
+  await expect(closeButton).toHaveCount(0)
 
   const geometry = await headerStats.evaluate((element) => {
     const find = (part: string) => element.querySelector<HTMLElement>(`[data-tabout-part="${part}"]`)
     const tabCount = find('tab-count')
     const secondaryCounts = find('secondary-counts')
-    const closeButton = find('close-filtered-button')
     const count = find('window-count-value')
     const icon = find('window-icon')
     const windowCount = find('window-count')
     const domainCount = find('domain-count')
     if (
-      !tabCount || !secondaryCounts || !closeButton ||
+      !tabCount || !secondaryCounts ||
       !count || !icon || !windowCount || !domainCount
     ) return null
 
     const tabRect = tabCount.getBoundingClientRect()
     const secondaryRect = secondaryCounts.getBoundingClientRect()
-    const closeRect = closeButton.getBoundingClientRect()
     const countRect = count.getBoundingClientRect()
     const iconRect = icon.getBoundingClientRect()
     const windowRect = windowCount.getBoundingClientRect()
@@ -883,7 +881,7 @@ test('header stats keep counts and actions compact and accessible', async ({ pag
     baselineProbe.remove()
     const rowCenter = element.getBoundingClientRect().y + element.getBoundingClientRect().height / 2
     return {
-      centers: [tabRect, secondaryRect, closeRect]
+      centers: [tabRect, secondaryRect]
         .map((rect) => rect.y + rect.height / 2 - rowCenter),
       gap: secondaryRect.left - tabRect.right,
       iconAfterCount: Boolean(count.compareDocumentPosition(icon) & Node.DOCUMENT_POSITION_FOLLOWING),
@@ -906,8 +904,8 @@ test('header stats keep counts and actions compact and accessible', async ({ pag
   for (const centerDelta of geometry.centers) expect(centerDelta).toBeCloseTo(0, 1)
 
   await page.setViewportSize({ width: 760, height: 700 })
-  await expect.poll(() => closeButton.evaluate((element) => (element as HTMLElement).innerText)).toMatch(/^Close \d+ open tabs$/)
-  await expect(closeButton).toHaveAccessibleName(/Close \d+ matching open tabs/)
+  await expect(closeButton).toHaveCount(0)
+  await expect(headerStats.locator('[data-tabout-part="tab-count"]')).toBeVisible()
 })
 
 for (const scenario of [
@@ -3923,70 +3921,6 @@ test('history layout collapses while off and restores its prior card width', asy
     Math.abs(restoredGeometry.cardWidth - initialGeometry.cardWidth),
     JSON.stringify({ initialGeometry, restoredGeometry }, null, 2),
   ).toBeLessThanOrEqual(1)
-})
-
-test('global filtered close keeps its retained result ahead of matching History', async ({ page }) => {
-  await page.goto('/tests/fixtures/dashboard-resize.html')
-  await expect.poll(() => page.locator('[data-tabout="domain-card"]').count()).toBeGreaterThanOrEqual(12)
-
-  await page.evaluate(() => {
-    window.chrome.history.search = async () => [{
-      id: 'history-example-2',
-      title: 'Example 2 with enough tooltip text',
-      url: 'https://tab-out-smoke-02.com/docs/2',
-    }]
-  })
-
-  const input = page.locator('[data-tabout="filter-query"] input')
-  const query = 'https://tab-out-smoke-02.com/docs/2'
-  await input.fill(query)
-  const openCard = page.locator('#openTabsMissions [data-tabout-domain="tab-out-smoke-02.com"]')
-  const historyCard = page.locator('#historyMatchesMissions [data-tabout-domain="tab-out-smoke-02.com"]')
-  const historyStatus = page.locator('[data-tabout="history-search-status"]')
-  await expect(openCard).toHaveCount(1)
-  await expect(historyCard).toHaveCount(0)
-  await expect(historyStatus).toContainText('1 shown in Tabs')
-
-  const closeFiltered = page.getByRole('button', { name: 'Close 1 matching open tab' })
-  await expect(closeFiltered).toContainText('Close 1 open tab')
-  await closeFiltered.focus()
-  await closeFiltered.click()
-  await expect(openCard).toHaveCount(1)
-  await expect(openCard.locator('.tab-count-badge')).toHaveText('1 closed')
-  const openChip = openCard.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]')
-  await expect(openChip).toHaveAttribute('data-tabout-retained-page-identity', /\S+/)
-  await expect(openChip.locator('[data-tabout-part="close-button"]')).toHaveCount(0)
-  await expect(page.locator('[data-tabout-part="close-filtered-button"]')).toHaveCount(0)
-  await expect(input).toHaveValue(query)
-  await expect(input).toBeFocused()
-  await expect(historyCard).toHaveCount(0)
-  await expect(historyStatus).toContainText('1 shown in Tabs')
-  await expect(historyStatus).toContainText('No returned matches repeated below')
-  await expect(page.getByText('Closed 1 open tab', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible()
-})
-
-test('global filtered close does not steal focus moved while closing settles', async ({ page }) => {
-  await page.goto('/tests/fixtures/dashboard-resize.html')
-  await expect.poll(() => page.locator('[data-tabout="domain-card"]').count()).toBeGreaterThanOrEqual(12)
-
-  await page.evaluate(() => {
-    const removeTabs = window.chrome.tabs.remove.bind(window.chrome.tabs)
-    window.chrome.tabs.remove = async (tabIds) => {
-      await new Promise((resolve) => setTimeout(resolve, 400))
-      await removeTabs(Array.isArray(tabIds) ? tabIds : [tabIds])
-    }
-  })
-
-  const input = page.locator('[data-tabout="filter-query"] input')
-  await input.fill('https://tab-out-smoke-02.com/docs/2')
-  const closeFiltered = page.getByRole('button', { name: 'Close 1 matching open tab' })
-  const tabsSource = page.getByRole('tab', { name: 'All Tabs' })
-
-  await closeFiltered.click()
-  await tabsSource.focus()
-  await expect(closeFiltered).toHaveCount(0)
-  await expect(tabsSource).toBeFocused()
 })
 
 test('a Tab Out filter URL update does not restart the current result-card move', async ({ page }) => {
