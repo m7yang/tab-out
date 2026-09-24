@@ -2,6 +2,7 @@ import type { ComponentProps } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Toast as BaseToast } from '@base-ui/react/toast'
 import { cn } from '@/lib/utils'
+import { attachCapsuleBorder } from '../capsule-border'
 import type { ToastAction, ToastOptions } from '../../extension/toast.js'
 
 const baseToastManager = BaseToast.createToastManager()
@@ -81,7 +82,10 @@ function ToastList() {
       toast={toast}
       data-tabout="toast"
       className={cn(
-        'group/toast absolute bottom-0 left-0 right-auto box-border w-full cursor-default select-none rounded-3xl [corner-shape:squircle] border border-[oklch(12%_0.036_264deg/7%)] bg-clip-padding p-4! text-[oklch(12%_0.02_264deg/90%)] [background:oklch(98%_0.001_264deg)] [box-shadow:0_2px_10px_rgb(0_0_0/0.1)] [font-synthesis:none] origin-[bottom_center]',
+        'group/toast absolute bottom-0 left-0 right-auto box-border w-full cursor-default select-none rounded-[36px] [corner-shape:squircle] border border-[oklch(12%_0.036_264deg/7%)] bg-clip-padding text-[oklch(12%_0.02_264deg/90%)] [background:oklch(98%_0.001_264deg)] [box-shadow:0_2px_10px_rgb(0_0_0/0.1)] [font-synthesis:none] origin-[bottom_center]',
+        // Match the reference notification spacing with an 11px button inset.
+        // Content minimums keep the shared 36px radius from being clamped.
+        'p-2.5!',
         '[--gap:0.75rem] [--peek:0.75rem] [--scale:calc(max(0,1-(var(--toast-index)*0.1)))] [--shrink:calc(1-var(--scale))] [--height:var(--toast-frontmost-height,var(--toast-height))]',
         '[--offset-y:calc(var(--toast-offset-y)*-1+(var(--toast-index)*var(--gap)*-1)+var(--toast-swipe-movement-y))] z-[calc(1000-var(--toast-index))] h-(--height)',
         'transform-[translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--peek))-(var(--shrink)*var(--height))))_scale(var(--scale))]',
@@ -96,12 +100,19 @@ function ToastList() {
         '[&[data-ending-style][data-swipe-direction=right]]:transform-[translateX(calc(var(--toast-swipe-movement-x)+150%))_translateY(var(--offset-y))]',
       )}
     >
-      <BaseToast.Content className="overflow-hidden [transition:opacity_0.25s] data-behind:opacity-0 data-expanded:opacity-100">
-        <BaseToast.Title className="m-0 text-[0.975rem] leading-5 font-bold" />
-        <BaseToast.Description className="m-0 text-[0.925rem] leading-5" />
-        <BaseToast.Action className="mt-2! inline-flex h-8 items-center justify-center rounded-xl [corner-shape:squircle] border-0 bg-[oklch(12%_0.02_264deg/90%)] px-3! text-[0.875rem] leading-5 font-normal text-[oklch(98%_0.001_264deg)] focus-visible:outline-2! focus-visible:-outline-offset-1! focus-visible:outline-[oklch(45%_0.2_264deg)]!" />
+      <BaseToast.Content className={cn(
+        '[transition:opacity_0.25s] data-behind:opacity-0 data-expanded:opacity-100',
+        toast.actionProps ? 'flex min-h-13.5 flex-col gap-2 overflow-visible' : 'flex min-h-12.5 flex-col justify-center overflow-hidden',
+      )}
+      >
+        <div className="px-0.5 pt-0.5">
+          <BaseToast.Title className="m-0 text-[0.975rem] leading-5 font-bold" />
+          <BaseToast.Description className="m-0 text-[0.925rem] leading-5" />
+        </div>
+        <BaseToast.Action ref={attachCapsuleBorder} data-tabout-part="action-button" className="mt-auto! inline-flex h-6 shrink-0 self-end items-center justify-center rounded-full [corner-shape:round] border-0 bg-[oklch(12%_0.02_264deg/90%)] px-3! text-[13px] leading-4 font-normal text-[oklch(98%_0.001_264deg)] focus-visible:outline-2! focus-visible:-outline-offset-1! focus-visible:outline-[oklch(45%_0.2_264deg)]!" />
       </BaseToast.Content>
       <BaseToast.Close
+        ref={attachCapsuleBorder}
         data-tabout-part="close-button"
         className="pointer-events-none absolute top-0 left-0 z-1 flex size-5 translate-x-[-35%] translate-y-[-35%] items-center justify-center rounded-full border border-[oklch(12%_0.036_264deg/7%)] bg-[oklch(98%_0.001_264deg)] p-0 text-[oklch(12%_0.02_264deg/62%)] opacity-0 transition-[opacity,background-color,border-color,color] duration-100 group-hover/toast:pointer-events-auto group-hover/toast:opacity-100 group-focus-within/toast:pointer-events-auto group-focus-within/toast:opacity-100 hover:border-[oklch(12%_0.036_264deg/11%)] hover:bg-[oklch(96%_0.003_264deg)] hover:text-[oklch(12%_0.02_264deg/90%)] focus-visible:outline-2! focus-visible:-outline-offset-1! focus-visible:outline-[oklch(45%_0.2_264deg)]! [html[data-tabout-popup]_&]:-translate-x-1/4"
         aria-label="Close"

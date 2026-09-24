@@ -162,3 +162,46 @@ Verification: expanded/focused fixture geometry reports 7px inner radius with
 checks through bundle validation passed; after updating the old radius assertion,
 test-file lint and all 1,718 unit tests passed. Visual inspection used the fixture;
 live-extension acceptance remains unverified.
+
+## Action toast nesting — 2026-09-24
+
+The continuous-capsule action now deliberately follows the toast's bottom-right
+corner. This replaces the earlier independent-control treatment for action
+toasts only. The other button corners and the overlapping close button do not
+form matching nested bands. The shared toast component right-aligns actions in
+both dashboard and toolbar-popup notices; the close control stays at the top-left.
+
+All toasts share a 36px outer squircle radius, whether or not they have an
+action. The user rejected increasing the radius to 40px for a closer reference
+silhouette; preserve the smaller radius consistently.
+
+Use a 24px-high capsule with 13px action text, 10px container padding, and a 1px
+inward container border. Right and bottom box gaps are 11px, yielding a 10px
+straight clear band. A minimum 54px action content height keeps the outer box
+at least 76px tall; a flexible column anchors the action to the bottom even
+without a description. Keep an 8px minimum gap between copy and action. The copy
+adds 2px top and horizontal padding in both variants, preserving a shared 13px
+horizontal box-edge inset. Notices without actions use the same 10px container
+padding, with a minimum 50px content height and vertically centered copy. Their
+outer box is at least 72px tall, ensuring the shared 36px radius is not reduced by CSS radius overlap scaling.
+
+The macOS Notification Center reference supplies the spacing target, not a
+native radius token. Its visible edge gap is approximately 45% of its button
+height; the selected 11px box gap for the 24px action is 46%. These screenshot
+proportions are approximate; this is an explicit optical pattern, not a new
+universal nesting coefficient.
+
+Matching-squircle shortcuts do not apply to this mixed shape pair. The package's
+actual capsule path was compared against the inside of a native Chromium 153
+squircle border using supporting-line distances over the matching corner and
+adjacent straight segments. The selected 11px box gap and 36px radius give
+approximately 9.77–11.18px clearance around a 10px straight band. This accepts a
+1.18px maximum corner deviation to preserve the requested smaller shell and
+button spacing. Native paint was sampled at 32 device pixels per CSS pixel with
+a midpoint black/white threshold. Other button corners and the overlapping close
+control are not matching nested bands.
+
+Preserve the action's 2px focus outline at -1px offset. Its 1px outward extent
+uses the existing clear band; action content allows visible overflow so that
+outline is not clipped at the right or bottom edge. Colors, shadows, viewport
+insets, and close-button positioning are unchanged.

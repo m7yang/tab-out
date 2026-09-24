@@ -21,8 +21,8 @@ width transition rather than stretching a fixed SVG. CSS pills provide the
 prerender and unsupported-size fallback; no material or shadow is added.
 
 Overflow expanders, open-tab count badges, title-suppression tokens, chip
-suppression markers, path-group labels (including PR badges), and structural
-strip indicators apply the measured path through CSS `border-shape`. This
+suppression markers, path-group labels (including PR badges), structural strip
+indicators, and toast buttons apply the measured path through CSS `border-shape`. This
 keeps their existing backgrounds, borders, inset highlights, shadows, and focus
 outlines app-owned, including the original outline offsets. The adapter observes
 size and content changes; expanded and clamped captured labels are rebuilt with
