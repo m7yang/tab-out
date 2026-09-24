@@ -150,6 +150,7 @@ export function carriedExpandedMarkerToneClass(classNames: readonly string[]) {
   return classNames
     .filter((className) => (
       className.startsWith('title-suppression-token-tone-') ||
+      /^\[--capsule-(fill|border-color):var\(--color-(yellow|teal|sky|rose)-/.test(className) ||
       /^(border|bg|ring)-(yellow|teal|sky|rose)-/.test(className) ||
       className === 'ring-1' ||
       className === 'ring-inset' ||

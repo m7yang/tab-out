@@ -240,13 +240,16 @@ test('carriedExpandedMarkerToneClass keeps tone, ring, and palette classes only'
       'bg-yellow-100',
       'border-teal-200',
       'border-red-200',
+      '[--capsule-fill:var(--color-yellow-50)]',
+      '[--capsule-border-color:var(--color-teal-100)]',
+      '[--capsule-fill:rgba(115,115,115,0.08)]',
       'ring-1',
       'ring-2',
       'ring-inset',
       'text-foreground',
       'text-xs',
     ]),
-    'title-suppression-token-tone-2 bg-yellow-100 border-teal-200 ring-1 ring-inset text-foreground',
+    'title-suppression-token-tone-2 bg-yellow-100 border-teal-200 [--capsule-fill:var(--color-yellow-50)] [--capsule-border-color:var(--color-teal-100)] ring-1 ring-inset text-foreground',
   )
 })
 

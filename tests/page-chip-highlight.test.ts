@@ -2877,13 +2877,13 @@ test('PageChip colors title suppression markers from token tones before hover', 
 
   assert.equal(markerClasses.length, 2)
   assert.match(requiredAt(markerClasses, 0), /title-suppression-token-tone-amber/)
-  assert.match(requiredAt(markerClasses, 0), /\bbg-yellow-50\b/)
+  assert.match(requiredAt(markerClasses, 0), /\[--capsule-fill:var\(--color-yellow-50\)\]/)
   assert.doesNotMatch(requiredAt(markerClasses, 0), /bg-\[#fff7ed\]/)
   assert.doesNotMatch(requiredAt(markerClasses, 0), /bg-\[rgba/)
   assert.doesNotMatch(requiredAt(markerClasses, 0), /\bhover:/)
   assert.doesNotMatch(requiredAt(markerClasses, 0), /\bfocus-visible:/)
   assert.match(requiredAt(markerClasses, 1), /title-suppression-token-tone-teal/)
-  assert.match(requiredAt(markerClasses, 1), /\bbg-teal-50\b/)
+  assert.match(requiredAt(markerClasses, 1), /\[--capsule-fill:var\(--color-teal-50\)\]/)
   assert.doesNotMatch(requiredAt(markerClasses, 1), /bg-\[#f0fdfa\]/)
   assert.doesNotMatch(requiredAt(markerClasses, 1), /bg-\[rgba/)
   assert.doesNotMatch(requiredAt(markerClasses, 1), /\bhover:/)
@@ -2980,10 +2980,10 @@ test('PageChip marks chips affected by the active suppressed title text', () => 
 
   assert.match(defaultHtml, /page-chip\b[^"]*page-chip-suppression-highlighted/)
   assert.match(defaultHtml, /\bbg-yellow-50\b/)
-  assert.match(defaultHtml, /chip-title-suppression-marker\b[^"]*\bbg-yellow-50\b/)
+  assert.match(defaultHtml, /chip-title-suppression-marker\b[^"]*\[--capsule-fill:var\(--color-yellow-50\)\]/)
   assert.match(tealHtml, /page-chip\b[^"]*page-chip-suppression-highlighted/)
   assert.match(tealHtml, /\bbg-teal-50\b/)
-  assert.match(tealHtml, /chip-title-suppression-marker\b[^"]*\bbg-teal-50\b/)
+  assert.match(tealHtml, /chip-title-suppression-marker\b[^"]*\[--capsule-fill:var\(--color-teal-50\)\]/)
   assert.doesNotMatch(tealHtml, /\bbg-yellow-50\b/)
 })
 
@@ -3092,7 +3092,7 @@ test('PathgroupSection renders header path-group pills with a slash prefix', () 
     }),
   )
 
-  assert.match(html, /chip-pathgroup\b[^>]*>\/openai\/docs<\/span>/)
+  assert.match(html, /chip-pathgroup\b[^>]*><span class="pathgroup-label-text block truncate">\/openai\/docs<\/span>/)
 })
 
 test('WebsitePathSection renders raw path labels and keeps suppression summary on the section rail', () => {
@@ -3150,7 +3150,7 @@ test('WebsitePathSection renders raw path labels and keeps suppression summary o
   assert.doesNotMatch(requiredAt(websitePathLabelMatch, 1), /\bpx-/)
   assert.match(requiredAt(websitePathLabelMatch, 1), /\bfont-semibold\b/)
   assert.match(requiredAt(websitePathLabelMatch, 1), /\btracking-wide\b/)
-  assert.match(html, /chip-pathgroup\b[^>]*>\/KB<\/span>/)
+  assert.match(html, /chip-pathgroup\b[^>]*><span class="pathgroup-label-text block truncate">\/KB<\/span>/)
   assert.doesNotMatch(html, /Confluence space|Jira|Google Docs/)
   const summaryMatch = html.match(/<div[^>]*class="([^"]*\btitle-suppression-summary\b[^"]*)">/)
   assert.ok(summaryMatch, 'website-path suppression summary should render')
@@ -3393,7 +3393,7 @@ test('Overflow expanders use full chip color when all hidden chips match active 
     const overflowButtonMatch = html.match(/<button[^>]*class="([^"]*\bpage-chip-overflow\b[^"]*)"/)
     assert.ok(overflowButtonMatch, 'overflow expander button should render')
     assert.match(requiredAt(overflowButtonMatch, 1), /\bpage-chip-overflow-suppression-highlighted\b/)
-    assert.match(requiredAt(overflowButtonMatch, 1), /\bbg-teal-50\b/)
+    assert.match(requiredAt(overflowButtonMatch, 1), /\[--capsule-fill:var\(--color-teal-50\)\]/)
     assert.match(requiredAt(overflowButtonMatch, 1), /\bring-1\b/)
     assert.match(requiredAt(overflowButtonMatch, 1), /\bring-inset\b/)
     assert.match(requiredAt(overflowButtonMatch, 1), /\bring-teal-50\b/)

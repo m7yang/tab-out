@@ -1762,7 +1762,7 @@ test('Path Group tooltip follows observer-driven label truncation', async ({ pag
   await page.addStyleTag({
     content: '.pathgroup-header .chip-pathgroup { width: 20px !important; max-width: 20px !important; flex: 0 0 20px !important; }',
   })
-  await expect.poll(() => label.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
+  await expect.poll(() => label.locator('.pathgroup-label-text').evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true)
 
   await label.hover()
   await expect(page.locator('[data-slot="tooltip-content"]:visible')).toHaveText(labelText)

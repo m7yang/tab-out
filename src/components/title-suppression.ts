@@ -21,24 +21,24 @@ export const TITLE_SUPPRESSION_MARKER_SYMBOL = '˷'
 
 const TITLE_SUPPRESSION_TOKEN_TONES: Record<TitleSuppressionTone, { base: string, marker: string, active: string }> = {
   amber: {
-    base: 'title-suppression-token-tone-amber border-yellow-50 bg-yellow-50 text-muted-foreground hover:border-yellow-100 hover:bg-yellow-50 hover:text-foreground focus-visible:outline-yellow-200',
-    marker: 'title-suppression-token-tone-amber border-yellow-50 bg-yellow-50 text-muted-foreground',
-    active: 'border-yellow-100 bg-yellow-50 text-foreground ring-1 ring-inset ring-yellow-50',
+    base: 'title-suppression-token-tone-amber [--capsule-border-color:var(--color-yellow-50)] [--capsule-fill:var(--color-yellow-50)] text-muted-foreground hover:[--capsule-border-color:var(--color-yellow-100)] hover:[--capsule-fill:var(--color-yellow-50)] hover:text-foreground focus-visible:outline-yellow-200',
+    marker: 'title-suppression-token-tone-amber [--capsule-border-color:var(--color-yellow-50)] [--capsule-fill:var(--color-yellow-50)] text-muted-foreground',
+    active: '[--capsule-border-color:var(--color-yellow-100)] [--capsule-fill:var(--color-yellow-50)] text-foreground ring-1 ring-inset ring-yellow-50',
   },
   teal: {
-    base: 'title-suppression-token-tone-teal border-teal-50 bg-teal-50 text-muted-foreground hover:border-teal-100 hover:bg-teal-50 hover:text-foreground focus-visible:outline-teal-200',
-    marker: 'title-suppression-token-tone-teal border-teal-50 bg-teal-50 text-muted-foreground',
-    active: 'border-teal-100 bg-teal-50 text-foreground ring-1 ring-inset ring-teal-50',
+    base: 'title-suppression-token-tone-teal [--capsule-border-color:var(--color-teal-50)] [--capsule-fill:var(--color-teal-50)] text-muted-foreground hover:[--capsule-border-color:var(--color-teal-100)] hover:[--capsule-fill:var(--color-teal-50)] hover:text-foreground focus-visible:outline-teal-200',
+    marker: 'title-suppression-token-tone-teal [--capsule-border-color:var(--color-teal-50)] [--capsule-fill:var(--color-teal-50)] text-muted-foreground',
+    active: '[--capsule-border-color:var(--color-teal-100)] [--capsule-fill:var(--color-teal-50)] text-foreground ring-1 ring-inset ring-teal-50',
   },
   sky: {
-    base: 'title-suppression-token-tone-sky border-sky-50 bg-sky-50 text-muted-foreground hover:border-sky-100 hover:bg-sky-50 hover:text-foreground focus-visible:outline-sky-200',
-    marker: 'title-suppression-token-tone-sky border-sky-50 bg-sky-50 text-muted-foreground',
-    active: 'border-sky-100 bg-sky-50 text-foreground ring-1 ring-inset ring-sky-50',
+    base: 'title-suppression-token-tone-sky [--capsule-border-color:var(--color-sky-50)] [--capsule-fill:var(--color-sky-50)] text-muted-foreground hover:[--capsule-border-color:var(--color-sky-100)] hover:[--capsule-fill:var(--color-sky-50)] hover:text-foreground focus-visible:outline-sky-200',
+    marker: 'title-suppression-token-tone-sky [--capsule-border-color:var(--color-sky-50)] [--capsule-fill:var(--color-sky-50)] text-muted-foreground',
+    active: '[--capsule-border-color:var(--color-sky-100)] [--capsule-fill:var(--color-sky-50)] text-foreground ring-1 ring-inset ring-sky-50',
   },
   rose: {
-    base: 'title-suppression-token-tone-rose border-rose-50 bg-rose-50 text-muted-foreground hover:border-rose-100 hover:bg-rose-50 hover:text-foreground focus-visible:outline-rose-200',
-    marker: 'title-suppression-token-tone-rose border-rose-50 bg-rose-50 text-muted-foreground',
-    active: 'border-rose-100 bg-rose-50 text-foreground ring-1 ring-inset ring-rose-50',
+    base: 'title-suppression-token-tone-rose [--capsule-border-color:var(--color-rose-50)] [--capsule-fill:var(--color-rose-50)] text-muted-foreground hover:[--capsule-border-color:var(--color-rose-100)] hover:[--capsule-fill:var(--color-rose-50)] hover:text-foreground focus-visible:outline-rose-200',
+    marker: 'title-suppression-token-tone-rose [--capsule-border-color:var(--color-rose-50)] [--capsule-fill:var(--color-rose-50)] text-muted-foreground',
+    active: '[--capsule-border-color:var(--color-rose-100)] [--capsule-fill:var(--color-rose-50)] text-foreground ring-1 ring-inset ring-rose-50',
   },
 }
 
@@ -63,7 +63,7 @@ const TITLE_SUPPRESSION_HIGHLIGHT_TONES: Record<TitleSuppressionTone, { chip: st
 
 export function titleSuppressionTokenToneClass(index: number, enabled: boolean, active: boolean) {
   if (!enabled) {
-    return active ? 'border-yellow-100 bg-yellow-50 text-foreground ring-1 ring-inset ring-yellow-50' : ''
+    return active ? '[--capsule-border-color:var(--color-yellow-100)] [--capsule-fill:var(--color-yellow-50)] text-foreground ring-1 ring-inset ring-yellow-50' : ''
   }
   const tone = TITLE_SUPPRESSION_TOKEN_TONES[titleSuppressionToneForIndex(index)]
   return cn(tone.base, active && tone.active)
@@ -74,7 +74,7 @@ export function titleSuppressionChipHighlightClass(tone: TitleSuppressionTone | 
 }
 
 export function titleSuppressionOverflowHighlightClass(tone: TitleSuppressionTone | '') {
-  return cn(titleSuppressionChipHighlightClass(tone), 'text-foreground')
+  return cn(TITLE_SUPPRESSION_TOKEN_TONES[tone || 'amber'].active, 'text-foreground')
 }
 
 export function titleSuppressionBadgeClass(tone: TitleSuppressionTone | '') {
@@ -83,7 +83,7 @@ export function titleSuppressionBadgeClass(tone: TitleSuppressionTone | '') {
 
 export function titleSuppressionMarkerClass(tone: TitleSuppressionTone | '', active = false) {
   if (tone) return cn(TITLE_SUPPRESSION_TOKEN_TONES[tone].marker, active && TITLE_SUPPRESSION_TOKEN_TONES[tone].active)
-  return active ? 'border-yellow-100 bg-yellow-50 text-foreground ring-1 ring-inset ring-yellow-50' : ''
+  return active ? '[--capsule-border-color:var(--color-yellow-100)] [--capsule-fill:var(--color-yellow-50)] text-foreground ring-1 ring-inset ring-yellow-50' : ''
 }
 
 export function countHiddenSuppressedTitleMatches(hiddenChips: DashboardChipData[], activeSuppressedTitle: string): number {

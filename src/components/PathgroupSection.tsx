@@ -63,8 +63,8 @@ function pathGroupDisplayLabel(label: string): string {
 }
 
 function isPathgroupLabelTruncated(labelEl: HTMLElement | null) {
-  if (!labelEl) return false
-  return labelEl.scrollWidth - labelEl.clientWidth > 1
+  const textEl = labelEl?.querySelector<HTMLElement>('.pathgroup-label-text')
+  return !!textEl && textEl.scrollWidth - textEl.clientWidth > 1
 }
 
 function syncPathgroupLabelTruncation(labelEl: HTMLElement | null) {
@@ -201,8 +201,8 @@ export function PathgroupSection({ domain = '', subdomainKey = '', websitePathKe
         )}
       >
         <TooltipAnchor content={pathgroupLabelTooltipContent}>
-          <span ref={observePathgroupLabel} className="chip-pathgroup inline-block min-w-0 overflow-hidden bg-[rgba(115,115,115,0.1)] px-1.5 text-ellipsis whitespace-nowrap text-xs font-medium text-muted-foreground align-baseline">
-            {displayLabel}
+          <span ref={observePathgroupLabel} className="chip-pathgroup inline-block min-w-0 bg-[rgba(115,115,115,0.1)] px-1.5 whitespace-nowrap text-xs font-medium text-muted-foreground align-baseline">
+            <span className="pathgroup-label-text block truncate">{displayLabel}</span>
           </span>
         </TooltipAnchor>
         {isPR && (

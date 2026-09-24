@@ -216,22 +216,53 @@
   corner-shape: round;
 }
 
-/* Chromium clips a border-shape background to a pixel-snapped paint rectangle.
-   Give the borderless count badge's fill 1px of paint room around its unchanged
-   path, so fractional placement cannot cut through the shallow shoulders. */
-.open-tabs-badge[data-capsule-ready] {
-  position: relative;
-  isolation: isolate;
-  background-color: transparent;
+.chip-pathgroup,
+.chip-strip-indicator {
+  --capsule-fill: rgba(115, 115, 115, 0.1);
+  background-color: var(--capsule-fill);
 }
 
-.open-tabs-badge[data-capsule-ready]::before {
+.chip-pathgroup-pr {
+  --capsule-fill: rgba(115, 115, 115, 0.18);
+}
+
+/* The fallback and measured border share the same color tokens. */
+.title-suppression-token,
+.chip-title-suppression-marker {
+  border-color: var(--capsule-border-color, transparent);
+}
+
+/* Chromium pixel-snaps border-shape background bounds. Paint inside a box with
+   1px of extra room, leaving layout and the control's focus outline untouched.
+   Overflow expanders already use both pseudos, so they supply a fill child. */
+:where([data-capsule-ready]:not(svg)) {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-capsule-ready]:not(svg) {
+  background-color: transparent;
+  border-color: transparent;
+  --capsule-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow, 0 0 #0000);
+  box-shadow: none;
+}
+
+.capsule-fill {
+  display: none;
+}
+
+[data-capsule-ready]:not(svg):not([data-tabout-part="overflow-expander"])::before,
+[data-capsule-ready] > .capsule-fill {
   content: '';
+  display: block;
   position: absolute;
-  inset: -1px;
+  inset: calc(-1px - var(--capsule-border-width));
   z-index: -1;
   box-sizing: border-box;
   pointer-events: none;
-  background: var(--tab-count-fill);
+  background: var(--capsule-fill, var(--tab-count-fill));
+  border: var(--capsule-border-width) solid var(--capsule-border-color, transparent);
   border-shape: var(--capsule-fill-shape) border-box;
+  box-shadow: var(--capsule-shadow);
+  transition: inherit;
 }

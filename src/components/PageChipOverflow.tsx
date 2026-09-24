@@ -25,7 +25,7 @@ interface PageChipOverflowOptions {
 }
 
 const OVERFLOW_BUTTON_CLASS_NAME =
-  "page-chip page-chip-overflow clickable relative flex cursor-pointer items-start gap-2 border-0 bg-transparent py-[5px] pr-1 text-left text-[13px] leading-tight tabular-nums text-muted-foreground [font-family:inherit] transition-[color,box-shadow,opacity] duration-100 ease-swift before:pointer-events-none before:absolute before:top-[7px] before:bottom-[7px] before:left-1 before:w-0.5 before:rounded-[1px] before:bg-(--group-color,transparent) before:[corner-shape:squircle] before:content-[''] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-[72px] after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,color-mix(in_srgb,var(--card-bg)_92%,rgb(82_82_82))_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] hover:bg-[rgba(82,82,82,0.08)] [&:has(.chip-actions):hover::after]:opacity-100"
+  "page-chip page-chip-overflow clickable relative flex cursor-pointer items-start gap-2 border-0 [--capsule-fill:transparent] bg-(--capsule-fill) py-[5px] pr-1 text-left text-[13px] leading-tight tabular-nums text-muted-foreground [font-family:inherit] transition-[color,box-shadow,opacity] duration-100 ease-swift before:pointer-events-none before:absolute before:top-[7px] before:bottom-[7px] before:left-1 before:w-0.5 before:rounded-[1px] before:bg-(--group-color,transparent) before:[corner-shape:squircle] before:content-[''] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-[72px] after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,color-mix(in_srgb,var(--card-bg)_92%,rgb(82_82_82))_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] hover:[--capsule-fill:rgba(82,82,82,0.08)] [&:has(.chip-actions):hover::after]:opacity-100"
 
 function resolveClassName(className: OverflowContainerClassName | undefined, expanded: boolean) {
   return typeof className === 'function' ? className({ expanded }) : className
@@ -138,6 +138,7 @@ export function usePageChipOverflow({
           onClick={onExpand}
           onTransitionEnd={onExpanderTransitionEnd}
         >
+          <span className="capsule-fill" aria-hidden="true" />
           <span className="chip-text block min-w-0 flex-1 overflow-hidden hyphens-auto break-normal text-[13px] max-h-[calc(2lh)] [hyphenate-character:'']">+{hiddenCount} more</span>
           {hiddenSuppressionMatchCount > 0 && (
             <span className={cn('page-chip-overflow-suppression-badge relative z-2 inline-flex h-4 min-w-4 items-center justify-center rounded-lg border border-transparent px-1 text-xs leading-none font-semibold text-foreground [corner-shape:squircle]', titleSuppressionBadgeClass(activeSuppressionTone))}>

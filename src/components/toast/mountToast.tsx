@@ -109,7 +109,7 @@ function ToastList() {
           <BaseToast.Title className="m-0 text-[0.975rem] leading-5 font-bold" />
           <BaseToast.Description className="m-0 text-[0.925rem] leading-5" />
         </div>
-        <BaseToast.Action ref={attachCapsuleBorder} data-tabout-part="action-button" className="mt-auto! inline-flex h-6 shrink-0 self-end items-center justify-center rounded-full [corner-shape:round] border-0 bg-[oklch(12%_0.02_264deg/90%)] px-3! text-[13px] leading-4 font-normal text-[oklch(98%_0.001_264deg)] focus-visible:outline-2! focus-visible:-outline-offset-1! focus-visible:outline-[oklch(45%_0.2_264deg)]!" />
+        <BaseToast.Action ref={attachCapsuleBorder} data-tabout-part="action-button" className="mt-auto! inline-flex h-6 shrink-0 self-end items-center justify-center rounded-full [corner-shape:round] border-0 [--capsule-fill:oklch(12%_0.02_264deg/90%)] bg-(--capsule-fill) px-3! text-[13px] leading-4 font-normal text-[oklch(98%_0.001_264deg)] focus-visible:outline-2! focus-visible:-outline-offset-1! focus-visible:outline-[oklch(45%_0.2_264deg)]!" />
       </BaseToast.Content>
       <BaseToast.Close
         ref={attachCapsuleBorder}

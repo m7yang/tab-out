@@ -28,12 +28,18 @@ outlines app-owned, including the original outline offsets. The adapter observes
 size and content changes; expanded and clamped captured labels are rebuilt with
 live refs.
 Narrow/circular dimensions and fragmented inline labels retain CSS pill rounding.
-Chrome's half-border-box origin supplies the path's half-stroke inset. No content
-clipping is introduced. The borderless count badge paints its unchanged path
-on a pseudo-element with a 1px paint margin and a matching path translation. This
-avoids Chromium clipping its background at fractional vertical positions. The
-fill token, layout, and hit target remain unchanged; the geometry package and
-vendored tarball are unchanged.
+
+Chromium clips CSS `border-shape` backgrounds at fractional positions. Tab Out's
+padded paint layer works around this without changing Fleet's geometry or the
+vendored tarball. For consumer paint changes, consult the shared
+[adapter](../src/components/capsule-border.ts) and [styles](../src/styles/app.css).
+Preserve colors, borders, shadows, focus outlines, layout, and hit targets.
+
+After changing consumer paint, rebuild the extension and run
+`pnpm test:browser:all tests/browser/capsule-crop.spec.ts`.
+The [crop regression](../tests/browser/capsule-crop.spec.ts) must pass its
+fractional-position comparisons at 1×, 2×, and 3× display scales and its
+interaction-paint checks before handoff.
 
 Geometry changes belong in Fleet. See its
 `agent-tools/guides/continuous-capsules.md` and
