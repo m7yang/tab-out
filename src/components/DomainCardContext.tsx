@@ -8,7 +8,6 @@ export type DomainCardContextValue = {
   activeSuppressedTitle: string
   highlightTerms?: readonly string[] | null
   setActiveSuppressedTitle: (text: string) => void
-  dedupeBadgesClosing: boolean
   suppressionCloseTargetsByText: Record<string, DashboardTabMutationTarget[]>
   suppressionSuspendTargetsByText: Record<string, DashboardTabMutationTarget[]>
 }
@@ -17,7 +16,6 @@ const defaultDomainCardContext: DomainCardContextValue = {
   activeSuppressedTitle: '',
   highlightTerms: null,
   setActiveSuppressedTitle: () => {},
-  dedupeBadgesClosing: false,
   suppressionCloseTargetsByText: {},
   suppressionSuspendTargetsByText: {},
 }

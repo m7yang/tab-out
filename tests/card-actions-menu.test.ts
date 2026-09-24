@@ -18,7 +18,7 @@ function menuItemOpeningTag(source: string, part: string) {
   return source.slice(tagStart, tagEnd + 1)
 }
 
-test('CardActionsMenu renders a kebab trigger and hides the close item until opened', () => {
+test('CardActionsMenu renders a horizontal ellipsis trigger and hides the close item until opened', () => {
   const html = renderToStaticMarkup(
     React.createElement(CardActionsMenu, {
       displayName: 'google.com',
@@ -31,7 +31,7 @@ test('CardActionsMenu renders a kebab trigger and hides the close item until ope
   assert.match(html, /<button[^>]*data-tabout-part="card-menu"/)
   assert.match(html, /aria-label="Actions for google\.com"/)
   assert.match(html, /aria-haspopup="menu"/)
-  assert.match(html, /icon-\[lucide--ellipsis-vertical\]/)
+  assert.match(html, /icon-\[lucide--ellipsis\]/)
 
   // The closed menu's item is NOT in the at-rest markup (it lives in the unopened portal).
   assert.doesNotMatch(html, /Close all 5 tabs/)
@@ -56,7 +56,7 @@ function makeClosableCardVM(overrides: Partial<DashboardCardVM> = {}): Dashboard
   }
 }
 
-test('DomainCard renders the kebab actions menu (not the old close button) when closable', () => {
+test('DomainCard renders the actions menu (not the old close button) when closable', () => {
   const group: DomainGroup = { domain: 'google.com', tabs: [] }
   const html = renderToStaticMarkup(React.createElement(DomainCard, { group, vm: makeClosableCardVM() }))
 

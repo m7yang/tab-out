@@ -29,7 +29,11 @@ size and content changes; expanded and clamped captured labels are rebuilt with
 live refs.
 Narrow/circular dimensions and fragmented inline labels retain CSS pill rounding.
 Chrome's half-border-box origin supplies the path's half-stroke inset. No content
-clipping or extra paint layer is introduced.
+clipping is introduced. The borderless count badge paints its unchanged path
+on a pseudo-element with a 1px paint margin and a matching path translation. This
+avoids Chromium clipping its background at fractional vertical positions. The
+fill token, layout, and hit target remain unchanged; the geometry package and
+vendored tarball are unchanged.
 
 Geometry changes belong in Fleet. See its
 `agent-tools/guides/continuous-capsules.md` and

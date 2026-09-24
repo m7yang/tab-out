@@ -24,8 +24,15 @@ export function attachCapsuleBorder(element: HTMLElement | null) {
     if (geometry) {
       // The default half-border-box origin supplies the package's half-stroke inset.
       element.style.setProperty('border-shape', `path("${geometry.surfacePath}")`)
+      // This pinned profile contains only absolute M/L/C coordinates. Translate
+      // them 1px for the badge's padded paint box without changing its contour.
+      const paddedPath = geometry.surfacePath.replace(/-?\d*\.?\d+/g, (value) => String(Number(value) + 1))
+      element.style.setProperty('--capsule-fill-shape', `path("${paddedPath}")`)
+      element.dataset.capsuleReady = ''
     } else {
       element.style.removeProperty('border-shape')
+      element.style.removeProperty('--capsule-fill-shape')
+      delete element.dataset.capsuleReady
     }
   }
 
@@ -44,5 +51,7 @@ export function attachCapsuleBorder(element: HTMLElement | null) {
     resize.disconnect()
     mutations.disconnect()
     element.style.removeProperty('border-shape')
+    element.style.removeProperty('--capsule-fill-shape')
+    delete element.dataset.capsuleReady
   }
 }

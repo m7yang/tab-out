@@ -166,7 +166,7 @@ export function HeaderBar({
             <button
               type="button"
               data-tabout-part="clear-button"
-              className="tab-filter-clear absolute top-1/2 right-1.5 z-1 hidden size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground transition-[background,color] duration-150 ease-[ease] hover:bg-[rgba(10,10,10,0.08)] hover:text-foreground [&_svg]:h-3 [&_svg]:w-3"
+              className="tab-filter-clear absolute top-1/2 right-[6.5px] z-1 hidden size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground transition-[background,color] duration-150 ease-[ease] hover:bg-[rgba(10,10,10,0.08)] hover:text-foreground [&_svg]:h-3 [&_svg]:w-3"
               aria-label="Clear filter"
               onPointerDown={(event) => event.preventDefault()}
               onClick={onClear}

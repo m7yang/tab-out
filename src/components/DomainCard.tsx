@@ -1,6 +1,6 @@
 import { isPinnableDomain } from '../extension/domain-pins.js'
 import { splitDomainForDisplay } from '../extension/domains.js'
-import { closeDomainTabs, closeSuspendedDomainTabs, dedupeTabs, suspendDomainTabs } from '../extension/tab-actions'
+import { closeDomainTabs, closeSuspendedDomainTabs, suspendDomainTabs } from '../extension/tab-actions'
 import { removeRetainedPageTargets } from '../extension/retained-page-actions.js'
 import { DomainCardProvider } from './DomainCardContext'
 import { captureDomainCardFocusRecovery } from './DomainCardFocusRecovery'
@@ -113,7 +113,7 @@ function TabBadge({
       ref={attachCapsuleBorder}
       aria-label={accessibleLabel}
       className={cn(
-        'open-tabs-badge tab-count-badge inline-flex h-5.5 box-border items-center bg-[rgba(82,82,82,0.08)] px-2 py-0 text-[12px] font-medium tabular-nums text-(--accent-amber)',
+        'open-tabs-badge tab-count-badge inline-flex h-5.5 box-border items-center [--tab-count-fill:rgba(82,82,82,0.08)] bg-(--tab-count-fill) px-2 py-0 text-[12px] font-medium tabular-nums text-(--accent-amber)',
         isFiltered && 'tab-count-badge-filtered',
       )}
     >
@@ -129,23 +129,6 @@ function TabBadge({
         </span>
       ) : null}
     </span>
-  )
-}
-
-function DedupButton({ count, closing = false, onClick }: { count: number, closing?: boolean, onClick: () => void | Promise<void> }) {
-  const label = `Dedupe ${count}`
-  return (
-    <button
-      type="button"
-      data-tabout-part="dedupe-button"
-      className={cn(
-        'action-btn inline-flex h-5.5 box-border cursor-pointer items-center gap-1.25 rounded-[10px] border border-(--warm-gray) bg-tab-card px-3 py-0 font-sans text-[12px] font-medium tabular-nums text-muted-foreground transition-[color,border-color] duration-200 [corner-shape:squircle] hover:border-foreground hover:text-foreground [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transition-opacity [&.closing]:duration-200 [&.closing]:ease-swift',
-        closing && 'closing',
-      )}
-      onClick={onClick}
-    >
-      {label}
-    </button>
   )
 }
 
@@ -203,7 +186,6 @@ function DomainTitle({ displayName, subdomainKey = '' }: { displayName: string, 
 export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCardProps) {
   const { onReorderPinnedDomain, onTogglePinnedDomain, onTogglePinnedSection } = useDashboardActions()
   const [activeSuppressedTitle, setActiveSuppressedTitle] = useState('')
-  const [dedupeBadgesClosing, setDedupeBadgesClosing] = useState(false)
   // Set once the close removed every item this card shows. The card stays in
   // its fade until the refresh unmounts it, so no reset is scheduled here: a
   // timed reset could pop the card back before that refresh lands.
@@ -214,7 +196,6 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
     activeSuppressedTitle,
     highlightTerms: highlightTerms ?? null,
     setActiveSuppressedTitle,
-    dedupeBadgesClosing,
     suppressionCloseTargetsByText: vm.suppressionCloseTargetsByText ?? {},
     suppressionSuspendTargetsByText: vm.suppressionSuspendTargetsByText ?? {},
   }
@@ -222,7 +203,6 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
   const hideCardClose = group.domain === '__standalone-apps__'
   const canPin = isPinnableDomain(group.domain) && typeof onTogglePinnedDomain === 'function'
   const displayName = vm.displayName || group.label || group.domain
-  const closableExtras = vm.closableExtras ?? 0
   const closableCount = vm.closableCount ?? 0
   const suspendableCount = vm.suspendableCount ?? 0
   const closableSuspendedCount = vm.closableSuspendedCount ?? Math.max(0, closableCount - suspendableCount)
@@ -280,22 +260,6 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
     const startFocusRecovery = captureDomainCardFocusRecovery(blockRef.current)
     const completedCount = await removeRetainedPageTargets(retainedPageRemovalTargets)
     if (completedCount > 0) startFocusRecovery?.()
-  }
-
-  async function onDedup() {
-    const urls = vm.closableDupeUrls || []
-
-    await dedupeTabs({
-      urls,
-      preservePinnedTabOut: group.domain === '__tab-out__',
-      onAfterClose: async ({ snapshot }) => {
-        if (snapshot.length === 0) return
-        setDedupeBadgesClosing(true)
-        await new Promise((resolve) => setTimeout(resolve, 200))
-      },
-    }).finally(() => {
-      setDedupeBadgesClosing(false)
-    })
   }
 
   async function onTogglePin() {
@@ -436,7 +400,6 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
               </span>
             )}
             <TabBadge label={vm.tabCountLabel} accessibleLabel={vm.tabCountTitle} />
-            {closableExtras > 0 && <DedupButton count={closableExtras} closing={dedupeBadgesClosing} onClick={onDedup} />}
           </div>
           {showCardMenu && (
             <CardActionsMenu

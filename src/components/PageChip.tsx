@@ -142,7 +142,6 @@ type ChipFaviconFrameProps = {
   dupeCount: number
   showDefaultFavicon: boolean
   showFaviconCloseAction: boolean
-  dedupeBadgesClosing: boolean
   closeActionLabel: string
   closeActionDestructive: boolean
   onCloseAction: (e: MouseEvent<HTMLButtonElement>) => void
@@ -156,7 +155,7 @@ type ChipFaviconFrameProps = {
  * chip — the image itself, not the frame, so dupe-stack rings and badges
  * keep their weight.
  */
-function ChipFaviconFrame({ chip, dupeCount, showDefaultFavicon, showFaviconCloseAction, dedupeBadgesClosing, closeActionLabel, closeActionDestructive, onCloseAction, onToggleAudio }: ChipFaviconFrameProps) {
+function ChipFaviconFrame({ chip, dupeCount, showDefaultFavicon, showFaviconCloseAction, closeActionLabel, closeActionDestructive, onCloseAction, onToggleAudio }: ChipFaviconFrameProps) {
   const faviconClassName = faviconLivenessClassName({ closed: isClosedSavedDashboardTab(chip), suspended: !!chip.suspended })
   return (
     <span
@@ -178,9 +177,8 @@ function ChipFaviconFrame({ chip, dupeCount, showDefaultFavicon, showFaviconClos
       {!chip.iconOnly && dupeCount > 2 && (
         <span
           className={cn(
-            'chip-favicon-stack-layer pointer-events-none absolute top-0 left-0 z-0 size-4 max-h-4 max-w-4 translate-x-1 translate-y-1 rounded-sm bg-(--card-bg) ring-1 ring-neutral-300/45 shadow-[0_1px_2px_rgba(10,10,10,0.12)] [corner-shape:squircle] [&.closing]:opacity-0 [&.closing]:transition-opacity [&.closing]:duration-200 [&.closing]:ease-swift',
+            'chip-favicon-stack-layer pointer-events-none absolute top-0 left-0 z-0 size-4 max-h-4 max-w-4 translate-x-1 translate-y-1 rounded-sm bg-(--card-bg) ring-1 ring-neutral-300/45 shadow-[0_1px_2px_rgba(10,10,10,0.12)] [corner-shape:squircle]',
             showFaviconCloseAction && 'title-interaction:group-hover/favicon-frame:opacity-0',
-            dedupeBadgesClosing && 'closing',
           )}
           aria-hidden="true"
         />
@@ -188,9 +186,8 @@ function ChipFaviconFrame({ chip, dupeCount, showDefaultFavicon, showFaviconClos
       {!chip.iconOnly && dupeCount > 1 && (
         <span
           className={cn(
-            'chip-favicon-stack-layer pointer-events-none absolute top-0 left-0 z-1 size-4 max-h-4 max-w-4 translate-x-0.5 translate-y-0.5 rounded-sm bg-(--card-bg) ring-1 ring-neutral-300/55 shadow-[0_1px_2px_rgba(10,10,10,0.1)] [corner-shape:squircle] [&.closing]:opacity-0 [&.closing]:transition-opacity [&.closing]:duration-200 [&.closing]:ease-swift',
+            'chip-favicon-stack-layer pointer-events-none absolute top-0 left-0 z-1 size-4 max-h-4 max-w-4 translate-x-0.5 translate-y-0.5 rounded-sm bg-(--card-bg) ring-1 ring-neutral-300/55 shadow-[0_1px_2px_rgba(10,10,10,0.1)] [corner-shape:squircle]',
             showFaviconCloseAction && 'title-interaction:group-hover/favicon-frame:opacity-0',
-            dedupeBadgesClosing && 'closing',
           )}
           aria-hidden="true"
         />
@@ -258,7 +255,7 @@ function ChipFaviconFrame({ chip, dupeCount, showDefaultFavicon, showFaviconClos
 }
 
 function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTitleToneByText }: PageChipProps) {
-  const { activeSuppressedTitle, dedupeBadgesClosing, highlightTerms: cardHighlightTerms } = useDomainCardContext()
+  const { activeSuppressedTitle, highlightTerms: cardHighlightTerms } = useDomainCardContext()
   const { onHoverUrlChange, onLayoutChange, onTogglePinnedPageChip } = useDashboardActions()
   const envs = Array.isArray(chip.envs) ? chip.envs : []
   const isFolded = envs.length > 0
@@ -1871,7 +1868,6 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
           dupeCount={dupeCount}
           showDefaultFavicon={showDefaultFavicon}
           showFaviconCloseAction={showFaviconCloseAction}
-          dedupeBadgesClosing={dedupeBadgesClosing}
           closeActionLabel={closeActionLabel}
           closeActionDestructive={closeActionDeletesHistory}
           onCloseAction={isTitleVariantGroup ? onCloseAllVariants : isHistorySource ? onDeleteHistory : onClose}

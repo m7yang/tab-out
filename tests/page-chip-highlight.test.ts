@@ -90,7 +90,6 @@ function renderWithDomainCardContext(element: React.ReactElement, overrides: Ren
   const value: DomainCardContextValue = {
     activeSuppressedTitle: overrides.activeSuppressedTitle ?? '',
     setActiveSuppressedTitle: overrides.setActiveSuppressedTitle ?? (() => {}),
-    dedupeBadgesClosing: overrides.dedupeBadgesClosing ?? false,
     suppressionCloseTargetsByText: overrides.suppressionCloseTargetsByText ?? {},
     suppressionSuspendTargetsByText: overrides.suppressionSuspendTargetsByText ?? {},
   }

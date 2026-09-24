@@ -215,3 +215,23 @@
   border-radius: 999px;
   corner-shape: round;
 }
+
+/* Chromium clips a border-shape background to a pixel-snapped paint rectangle.
+   Give the borderless count badge's fill 1px of paint room around its unchanged
+   path, so fractional placement cannot cut through the shallow shoulders. */
+.open-tabs-badge[data-capsule-ready] {
+  position: relative;
+  isolation: isolate;
+  background-color: transparent;
+}
+
+.open-tabs-badge[data-capsule-ready]::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  box-sizing: border-box;
+  pointer-events: none;
+  background: var(--tab-count-fill);
+  border-shape: var(--capsule-fill-shape) border-box;
+}
