@@ -10,7 +10,6 @@ import { saveHistoryRangePreference } from '../extension/history-range-storage.j
 import { animateDomainCardMoves, prepareDomainCardMoveAnimation } from '../extension/card-move-animation'
 import { animateQueuedPageChipRefreshMoves } from '../extension/intra-card-move-animation.js'
 import { createDashboardMoveChoreography, type DashboardMoveChoreography } from '../extension/card-move-choreography.js'
-import { closeFilteredTabs } from '../extension/tab-actions'
 import { buildFilterResultCandidates, type FilterResultCandidate } from '../extension/filter-result-navigation.js'
 import { dashboardNeedsFilterSearchRefresh } from '../extension/filter-search.js'
 import { appDashboardStore, settleDashboardRefresh, type MissionOrderMap } from '../extension/dashboard-intake.js'
@@ -52,7 +51,6 @@ type MissionContainerRef = {
 }
 
 const EMPTY_CLOSED_TABS: readonly ClosedTabEntry[] = []
-const FILTER_QUERY_INPUT_SELECTOR = '[data-tabout="filter-query"] [data-tabout-part="input"]'
 
 // Module-stable dispatch: every Dashboard arrival applies through the intake
 // store, and the alias stays non-reactive for hook dependency purposes.
@@ -265,7 +263,6 @@ type DashboardShellProps = {
   historyRange: string
   isReady: boolean
   missionSections: DashboardMissionSection[]
-  onCloseFiltered: () => void
   onRetryHistorySearch: () => void
   onDashboardViewChange: (nextView: DashboardView) => void
   onTabsChange: () => void
@@ -295,7 +292,6 @@ function DashboardShell({
   historyRange,
   isReady,
   missionSections,
-  onCloseFiltered,
   onRetryHistorySearch,
   onDashboardViewChange,
   onTabsChange,
@@ -401,7 +397,6 @@ function DashboardShell({
               historyRange={historyRange}
               onFilterChange={setFilterInput}
               onDashboardViewChange={onDashboardViewChange}
-              onCloseFiltered={onCloseFiltered}
             />
           </DashboardPinnedTop>
 
@@ -626,7 +621,6 @@ export function App() {
   }, [visibleDashboard])
 
   const {
-    dashboardVm,
     stats,
     matchedCards,
     bookmarkMatchedCards,
@@ -695,27 +689,6 @@ export function App() {
     workingSet: visibleWorkingSet,
     startupReady,
   })
-
-  const onCloseFiltered = useCallback(async function onCloseFiltered() {
-    const targets = dashboardVm.filteredCloseTargets
-    const activeElement = document.activeElement
-    const closeTrigger = activeElement instanceof HTMLElement &&
-      activeElement.matches('[data-tabout-part="close-filtered-button"]')
-      ? activeElement
-      : null
-    const result = await closeFilteredTabs(targets)
-    if (targets.length > 0 && result.removedCount === targets.length) {
-      const nextActiveElement = document.activeElement
-      const focusCanStillTransfer =
-        !nextActiveElement ||
-        nextActiveElement === document.body ||
-        nextActiveElement === document.documentElement ||
-        nextActiveElement === closeTrigger
-      if (focusCanStillTransfer) {
-        document.querySelector<HTMLInputElement>(FILTER_QUERY_INPUT_SELECTOR)?.focus()
-      }
-    }
-  }, [dashboardVm.filteredCloseTargets])
 
   const onTabsChange = useCallback(function onTabsChange() {
     void settleDashboardRefresh(refreshDashboard({ animateCards: true }))
@@ -831,7 +804,6 @@ export function App() {
           historyRange={historyRange}
           isReady={isReady}
           missionSections={missionSections}
-          onCloseFiltered={onCloseFiltered}
           onRetryHistorySearch={retryHistorySearch}
           onDashboardViewChange={onDashboardViewChange}
           onTabsChange={onTabsChange}

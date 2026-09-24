@@ -27,7 +27,6 @@ function renderHeaderStats(stats: DashboardStats): string {
   return renderToStaticMarkup(
     React.createElement(HeaderStats, {
       ...stats,
-      onCloseFiltered: () => {},
     }),
   )
 }
@@ -45,7 +44,7 @@ test('HeaderStats hides the active count when no tabs are suspended', () => {
   assert.doesNotMatch(html, /active/)
 })
 
-test('HeaderStats renders accessible counts and text-only actions', () => {
+test('HeaderStats renders accessible counts without cleanup actions', () => {
   const html = renderHeaderStats(makeStats({
     totalTabs: 3,
     activeTabs: 3,
@@ -64,7 +63,6 @@ test('HeaderStats renders accessible counts and text-only actions', () => {
   assert.match(html, />2\/3<\/span><span class="sr-only"> windows<\/span>/)
   assert.match(html, />2 domains<\/span>/)
   assert.doesNotMatch(html, /data-tabout-part="dedupe-button"|Dedupe/)
-  assert.match(html, /aria-label="Close 2 matching open tabs"/)
-  assert.match(html, />Close 2 open tabs<\/button>/)
+  assert.doesNotMatch(html, /<button|close-filtered-button|Close 2 open tabs/)
   assert.doesNotMatch(html, /·|<svg/)
 })

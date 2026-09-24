@@ -36,7 +36,6 @@ interface HeaderBarProps {
   filterResultSearchSettled?: boolean
   historyRange: string
   onFilterChange: (filter: string) => void
-  onCloseFiltered: () => void | Promise<void>
   dashboardView: DashboardView
   onDashboardViewChange: (dashboardView: DashboardView) => void | Promise<void>
   source?: DashboardSource
@@ -93,7 +92,6 @@ export function HeaderBar({
   filterResultSearchSettled = true,
   historyRange,
   onFilterChange,
-  onCloseFiltered,
   onDashboardViewChange,
   source = 'tabs',
   sourceSelection = source,
@@ -178,7 +176,6 @@ export function HeaderBar({
             source={source}
             ready={ready}
             {...stats}
-            onCloseFiltered={onCloseFiltered}
           />
         </div>
         <div className="header-controls inline-flex items-center gap-2.5">
