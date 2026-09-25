@@ -12,6 +12,13 @@
 
 @tailwind utilities source(none);
 
+/* Improve wrapping without re-enabling it on captured title lines or other
+   nowrap surfaces, as the text-wrap shorthand would.
+   Inspiration: https://x.com/emilkowalski/status/2103124466352210045 */
+* {
+  text-wrap-style: pretty;
+}
+
 /* Expandable titles paint interaction chrome only with their expanded content.
    Include descendants so favicon actions and URL pills cannot reveal early. */
 @custom-variant title-interaction (&:not(:where([data-title-collapsed], [data-title-collapsed] *)));
