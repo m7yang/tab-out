@@ -67,7 +67,7 @@ function attachBorder(element: HTMLElement | null, menuItem: boolean) {
     const size = `${width}:${height}:${borderWidth}:${multiline}`
     if (size === previousSize) return
     previousSize = size
-    const geometry = multiline ? null : createCapsuleGeometry({ width, height, borderWidth }) ?? (
+    const geometry = multiline ? null : createCapsuleGeometry({ width, height, borderWidth, includeFocus: false }) ?? (
       roundMarkerFallback ? roundFallbackGeometry(width, height, borderWidth) : null
     )
     if (geometry) {

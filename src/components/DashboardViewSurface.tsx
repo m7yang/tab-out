@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { createCapsuleGeometry, type CapsuleGeometry } from '@fleet/continuous-capsule'
+import { createCapsuleGeometry, type CapsuleSurfaceGeometry } from '@fleet/continuous-capsule'
 
 interface Surface {
   width: number
   height: number
-  geometry: CapsuleGeometry | null
+  geometry: CapsuleSurfaceGeometry | null
 }
 
 /** Paints the measured control without changing its layout or hit target. */
@@ -27,7 +27,7 @@ export function DashboardViewSurface({ variant }: { variant: 'frame' | 'selectio
         : {
             width,
             height,
-            geometry: createCapsuleGeometry({ width, height, borderWidth: variant === 'frame' ? 1 : 0 }),
+            geometry: createCapsuleGeometry({ width, height, borderWidth: variant === 'frame' ? 1 : 0, includeFocus: false }),
           })
     })
     observer.observe(control, { box: 'border-box' })

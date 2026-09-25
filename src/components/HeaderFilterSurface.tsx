@@ -1,10 +1,10 @@
 import { useEffect, useState, type RefObject } from 'react'
-import { createCapsuleGeometry, type CapsuleGeometry } from '@fleet/continuous-capsule'
+import { createCapsuleGeometry, type CapsuleSurfaceGeometry } from '@fleet/continuous-capsule'
 
 interface Surface {
   width: number
   height: number
-  geometry: CapsuleGeometry | null
+  geometry: CapsuleSurfaceGeometry | null
 }
 
 /** Decoration only: the native input keeps its focus, events, and startup identity. */
@@ -22,7 +22,7 @@ export function HeaderFilterSurface({ inputRef }: { inputRef: RefObject<HTMLInpu
       // Geometry is cached with its measured dimensions, independent of query or theme.
       setSurface((previous) => previous?.width === width && previous.height === height
         ? previous
-        : { width, height, geometry: createCapsuleGeometry({ width, height }) })
+        : { width, height, geometry: createCapsuleGeometry({ width, height, includeFocus: false }) })
     })
     observer.observe(input, { box: 'border-box' })
     return () => observer.disconnect()

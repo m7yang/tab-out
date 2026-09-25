@@ -116,8 +116,8 @@ importers:
         specifier: ^1.8.0
         version: 1.8.0(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@fleet/continuous-capsule':
-        specifier: file:vendor/fleet-continuous-capsule-0.1.0.tgz
-        version: file:vendor/fleet-continuous-capsule-0.1.0.tgz
+        specifier: file:vendor/fleet-continuous-capsule-0.1.1.tgz
+        version: file:vendor/fleet-continuous-capsule-0.1.1.tgz
       cn:
         specifier: ^0.2.6
         version: 0.2.6
@@ -681,9 +681,9 @@ packages:
     resolution: {integrity: sha512-IkO+/KEUvwbVpiURZg+P7zF74z5Jxe0UgJxVni+RtoHQ6IZieXaO02kmadomap/q+l6bc/jdPGGqTjhuZnuz1Q==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
 
-  '@fleet/continuous-capsule@file:vendor/fleet-continuous-capsule-0.1.0.tgz':
-    resolution: {integrity: sha512-tfYEttx1Kya48Zrk3aUVFkDHopN/sKYX3fVyrhxKOX4nsme3KK/bu2QyqPHRkj8ZdSP3svmllDwf9pbDmU4prQ==, tarball: file:vendor/fleet-continuous-capsule-0.1.0.tgz}
-    version: 0.1.0
+  '@fleet/continuous-capsule@file:vendor/fleet-continuous-capsule-0.1.1.tgz':
+    resolution: {integrity: sha512-MWZPFeXANHaJ5LMtiXTjht0j1ZRw4FaHeKq+LyyAt1L/7Mw7xe2nQgSJpNkAdH7Zh0pLqs1DFTLDlT2MzO4c2g==, tarball: file:vendor/fleet-continuous-capsule-0.1.1.tgz}
+    version: 0.1.1
 
   '@floating-ui/core@1.8.0':
     resolution: {integrity: sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==}
@@ -4475,7 +4475,7 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@fleet/continuous-capsule@file:vendor/fleet-continuous-capsule-0.1.0.tgz': {}
+  '@fleet/continuous-capsule@file:vendor/fleet-continuous-capsule-0.1.1.tgz': {}
 
   '@floating-ui/core@1.8.0':
     dependencies:
