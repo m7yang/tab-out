@@ -1501,6 +1501,99 @@ test('Page Chip closes its expansion and interaction chrome as soon as the point
   expect(await chip.evaluate(readInteractionPaint)).toEqual(restingPaint)
 })
 
+for (const { kind, selector, titles, paintTitle } of [
+  { kind: 'structural', selector: '.chip-strip-indicator', titles: ['Another Handoff Page', 'Tooltip Screenshot Alpha'], paintTitle: 'story/ABC-123_2' },
+  { kind: 'suppression', selector: '.chip-title-suppression-marker', titles: ['Marker line one', 'Marker line two'], paintTitle: 'Marker line one' },
+]) {
+  test(`${kind} markers keep their vertical position when Page Chips expand at different zoom levels`, async ({ page }) => {
+    await page.setViewportSize({ width: 1800, height: 1200 })
+    await page.goto('/tests/fixtures/dashboard-resize.html')
+
+    for (const zoom of [1, 1.25, 1.75]) {
+      await page.mouse.move(0, 0)
+      await page.evaluate((value) => { document.documentElement.style.zoom = String(value) }, zoom)
+
+      for (const title of titles) {
+        const chip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({ hasText: title }).first()
+        await chip.scrollIntoViewIfNeeded()
+        await expect(chip).not.toHaveAttribute('data-expanded', 'true')
+        const marker = chip.locator(selector).first()
+        const readMarkerGeometry = (element: HTMLElement) => {
+          const favicon = element.closest('.page-chip')?.querySelector('.chip-favicon-frame')
+          if (!favicon) throw new Error('Title-marker fixture favicon is missing')
+          const rect = element.getBoundingClientRect()
+          return { top: rect.top - favicon.getBoundingClientRect().top, height: rect.height }
+        }
+        const resting = await marker.evaluate(readMarkerGeometry)
+        await chip.locator('.chip-text').hover()
+        await expect(chip).toHaveAttribute('data-expanded', 'true')
+        const expanded = await marker.evaluate(readMarkerGeometry)
+        expect(Math.abs(expanded.top - resting.top), `${title} top at ${zoom} zoom`).toBeLessThan(0.1)
+        expect(Math.abs(expanded.height - resting.height), `${title} height at ${zoom} zoom`).toBeLessThan(0.1)
+        await page.mouse.move(0, 0)
+        await expect(chip).not.toHaveAttribute('data-expanded', 'true')
+      }
+    }
+  })
+
+  test(`${kind} marker keeps its painted left edge when expanded at a fractional position`, async ({ browser, baseURL }) => {
+    if (!baseURL) throw new Error('Dashboard fixture base URL is unavailable')
+    const page = await browser.newPage({ baseURL, viewport: { width: 1800, height: 1200 }, deviceScaleFactor: 3 })
+    try {
+      await page.goto('/tests/fixtures/dashboard-resize.html')
+      await page.evaluate(async () => {
+        await (window as typeof window & {
+          __tabOutSmokeAddPathGroupPlaceholderTabs?: () => Promise<void>
+        }).__tabOutSmokeAddPathGroupPlaceholderTabs?.()
+      })
+      const chip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({ hasText: paintTitle }).first()
+      await chip.scrollIntoViewIfNeeded()
+      await page.mouse.move(0, 0)
+      const marker = chip.locator(selector).first()
+      await marker.evaluate((element) => {
+        const text = element.closest<HTMLElement>('.chip-text')
+        if (!text) throw new Error('Marker text container is unavailable')
+        const left = element.getBoundingClientRect().left
+        text.style.marginLeft = `${Math.floor(left) + 0.5 - left}px`
+      })
+      const resting = await marker.boundingBox()
+      if (!resting) throw new Error('Title-marker paint fixture is unavailable')
+      // Sample the middle of the left end, before any glyph ink. DOM rectangles
+      // cannot detect the different pixel snapping of CSS backgrounds and paths.
+      const clip = { x: Math.floor(resting.x - 3), y: Math.floor(resting.y + resting.height / 2), width: 6, height: 1 }
+      const before = await page.screenshot({ clip, animations: 'disabled' })
+      await chip.locator('.chip-text').hover()
+      await expect(chip).toHaveAttribute('data-expanded', 'true')
+      const after = await page.screenshot({ clip, animations: 'disabled' })
+      const edges = await page.evaluate(async (images) => Promise.all(images.map(async (encoded) => {
+        const response = await fetch(`data:image/png;base64,${encoded}`)
+        const bitmap = await createImageBitmap(await response.blob())
+        const canvas = document.createElement('canvas')
+        canvas.width = bitmap.width
+        canvas.height = bitmap.height
+        const context = canvas.getContext('2d')
+        if (!context) throw new Error('Title-marker screenshot canvas is unavailable')
+        context.drawImage(bitmap, 0, 0)
+        const pixels = context.getImageData(0, 0, bitmap.width, 1).data
+        const channel = [0, 1, 2].reduce((best, next) => (
+          pixels[next]! - pixels[(bitmap.width - 1) * 4 + next]! > pixels[best]! - pixels[(bitmap.width - 1) * 4 + best]! ? next : best
+        ))
+        const background = pixels[channel]!
+        const fill = pixels[(bitmap.width - 1) * 4 + channel]!
+        if (background - fill < 8) throw new Error('Title-marker paint contrast is unavailable')
+        // Normalize the hover background away and integrate antialiased coverage
+        // to find the edge in CSS pixels, including fractions of a device pixel.
+        let coverage = 0
+        for (let x = 0; x < bitmap.width; x += 1) coverage += (background - pixels[x * 4 + channel]!) / (background - fill)
+        return (bitmap.width - coverage) / devicePixelRatio
+      })), [before.toBase64(), after.toBase64()])
+      expect(Math.abs(edges[1]! - edges[0]!)).toBeLessThan(0.15)
+    } finally {
+      await page.close()
+    }
+  })
+}
+
 test('Page Chip keeps hydrated title details and interaction chrome in one expansion state', async ({ page }) => {
   const targetLabel = 'Tooltip Boundary Alpha'
   await page.setViewportSize({ width: 1600, height: 900 })

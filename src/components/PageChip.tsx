@@ -53,10 +53,12 @@ const DESTRUCTIVE_ICON_ACTION_CLASS_NAME = 'title-interaction:hover:bg-destructi
 
 function rebuildCapturedCapsuleLabel(element: Element, key: string) {
   if (!element.classList.contains('chip-pathgroup') && !element.classList.contains('chip-strip-indicator')) return undefined
+  // Structural markers keep CSS rounding in both states: switching to a path
+  // changes paint snapping at fractional positions even when the box stays put.
   return (
     <span
       key={key}
-      ref={attachCapsuleBorder}
+      ref={element.classList.contains('chip-pathgroup') ? attachCapsuleBorder : undefined}
       className={element.className}
       aria-label={element.getAttribute('aria-label') || undefined}
       aria-hidden={element.getAttribute('aria-hidden') === 'true' ? true : undefined}
@@ -1140,9 +1142,8 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     const marker = (
       <span
         key={key}
-        ref={attachCapsuleBorder}
         className={cn(
-          'chip-title-suppression-marker inline-flex h-3.5 min-w-3.5 shrink-0 items-center justify-center border [--capsule-fill:rgba(115,115,115,0.08)] bg-(--capsule-fill) px-0.75 text-[12px] leading-3 text-muted-foreground align-middle group-[.page-chip-expanded]/page-chip:h-auto group-[.page-chip-expanded]/page-chip:max-w-full group-[.page-chip-expanded]/page-chip:items-baseline group-[.page-chip-expanded]/page-chip:border-0 group-[.page-chip-expanded]/page-chip:px-1 group-[.page-chip-expanded]/page-chip:leading-[inherit] group-[.page-chip-expanded]/page-chip:font-medium group-[.page-chip-expanded]/page-chip:align-baseline group-[.page-chip-expanded]/page-chip:[box-decoration-break:clone]',
+          'chip-title-suppression-marker inline-flex h-3.5 min-w-3.5 shrink-0 items-center justify-center border [--capsule-fill:rgba(115,115,115,0.08)] bg-(--capsule-fill) px-0.75 text-[12px] leading-3.5 text-muted-foreground align-middle group-[.page-chip-expanded]/page-chip:h-auto group-[.page-chip-expanded]/page-chip:max-w-full group-[.page-chip-expanded]/page-chip:border-0 group-[.page-chip-expanded]/page-chip:px-1 group-[.page-chip-expanded]/page-chip:font-medium group-[.page-chip-expanded]/page-chip:[box-decoration-break:clone]',
           markerClassName,
           titleSuppressionMarkerClass(tone, active),
         )}
@@ -1161,7 +1162,6 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       return (
         <span
           key={key}
-          ref={attachCapsuleBorder}
           className={cn(
             PAGE_CHIP_TOOLTIP_SUPPRESSION_MARKER_CLASS_NAME,
             markerClassName,
@@ -1217,8 +1217,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     const marker = (
       <span
         key={key}
-        ref={attachCapsuleBorder}
-        className="chip-strip-indicator inline-flex size-4 items-center justify-center rounded-full bg-[rgba(115,115,115,0.1)] text-xs leading-none font-medium text-muted-foreground align-baseline group-[.page-chip-expanded]/page-chip:h-auto group-[.page-chip-expanded]/page-chip:w-auto group-[.page-chip-expanded]/page-chip:max-w-full group-[.page-chip-expanded]/page-chip:px-1.5 group-[.page-chip-expanded]/page-chip:leading-[inherit]"
+        className="chip-strip-indicator inline-flex size-4 items-center justify-center rounded-full bg-[rgba(115,115,115,0.1)] text-xs leading-4 font-medium text-muted-foreground align-baseline group-[.page-chip-expanded]/page-chip:h-auto group-[.page-chip-expanded]/page-chip:w-auto group-[.page-chip-expanded]/page-chip:max-w-full group-[.page-chip-expanded]/page-chip:px-1.5"
         aria-hidden={hiddenLabel ? undefined : true}
         aria-label={hiddenLabel || undefined}
       >
@@ -1235,7 +1234,6 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       return (
         <span
           key={key}
-          ref={attachCapsuleBorder}
           className={PAGE_CHIP_TOOLTIP_STRUCTURAL_MARKER_CLASS_NAME}
           aria-label={hiddenLabel}
         >
