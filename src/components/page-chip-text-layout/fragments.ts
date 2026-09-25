@@ -2,7 +2,8 @@ import { cn } from '@/lib/utils'
 import { expansionLineMarkup, fragmentHtml, unwrapClampedTitleLines, type ExpansionLineClasses } from '../title-expansion'
 import { carriedExpandedMarkerSpacingClass, carriedExpandedMarkerToneClass } from './policy.js'
 
-export const PAGE_CHIP_TOOLTIP_SUPPRESSION_MARKER_CLASS_NAME = 'chip-title-suppression-marker inline border-0 [--capsule-fill:rgba(115,115,115,0.08)] bg-(--capsule-fill) px-1 text-[12px] leading-[inherit] font-medium whitespace-nowrap text-muted-foreground align-baseline [box-decoration-break:clone]'
+// Match the compact badge's 14px box and middle alignment throughout expansion.
+export const PAGE_CHIP_TOOLTIP_SUPPRESSION_MARKER_CLASS_NAME = 'chip-title-suppression-marker inline-block border-0 [--capsule-fill:rgba(115,115,115,0.08)] bg-(--capsule-fill) px-1 text-[12px] leading-3.5 font-medium whitespace-nowrap text-muted-foreground align-middle [box-decoration-break:clone]'
 export const PAGE_CHIP_TOOLTIP_STRUCTURAL_MARKER_CLASS_NAME = 'chip-strip-indicator inline-block max-w-full bg-[rgba(115,115,115,0.1)] px-1.5 text-xs font-medium whitespace-nowrap text-muted-foreground align-baseline'
 // Expanded chips reveal the full path suffix, so the cloned/measured copy must
 // wrap (and break long, space-free query strings) instead of staying on the

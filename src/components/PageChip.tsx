@@ -1142,8 +1142,10 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
         key={key}
         ref={attachCapsuleBorder}
         className={cn(
-          'chip-title-suppression-marker inline-flex h-3.5 min-w-3.5 shrink-0 items-center justify-center border [--capsule-fill:rgba(115,115,115,0.08)] bg-(--capsule-fill) px-0.75 text-[12px] leading-3 text-muted-foreground align-middle group-[.page-chip-expanded]/page-chip:h-auto group-[.page-chip-expanded]/page-chip:max-w-full group-[.page-chip-expanded]/page-chip:items-baseline group-[.page-chip-expanded]/page-chip:border-0 group-[.page-chip-expanded]/page-chip:px-1 group-[.page-chip-expanded]/page-chip:leading-[inherit] group-[.page-chip-expanded]/page-chip:font-medium group-[.page-chip-expanded]/page-chip:align-baseline group-[.page-chip-expanded]/page-chip:[box-decoration-break:clone]',
+          'chip-title-suppression-marker inline-flex h-3.5 min-w-3.5 shrink-0 items-center justify-center border [--capsule-fill:rgba(115,115,115,0.08)] bg-(--capsule-fill) px-0.75 text-[12px] leading-3.5 text-muted-foreground align-middle group-[.page-chip-expanded]/page-chip:h-auto group-[.page-chip-expanded]/page-chip:max-w-full group-[.page-chip-expanded]/page-chip:border-0 group-[.page-chip-expanded]/page-chip:px-1 group-[.page-chip-expanded]/page-chip:font-medium group-[.page-chip-expanded]/page-chip:[box-decoration-break:clone]',
           markerClassName,
+          // Keep the compact box without an invisible stroke insetting its fill.
+          !tone && !active && 'border-0 px-1',
           titleSuppressionMarkerClass(tone, active),
         )}
         aria-label={label}
@@ -1218,7 +1220,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       <span
         key={key}
         ref={attachCapsuleBorder}
-        className="chip-strip-indicator inline-flex size-4 items-center justify-center rounded-full bg-[rgba(115,115,115,0.1)] text-xs leading-none font-medium text-muted-foreground align-baseline group-[.page-chip-expanded]/page-chip:h-auto group-[.page-chip-expanded]/page-chip:w-auto group-[.page-chip-expanded]/page-chip:max-w-full group-[.page-chip-expanded]/page-chip:px-1.5 group-[.page-chip-expanded]/page-chip:leading-[inherit]"
+        className="chip-strip-indicator inline-flex size-4 items-center justify-center rounded-full bg-[rgba(115,115,115,0.1)] text-xs leading-4 font-medium text-muted-foreground align-baseline group-[.page-chip-expanded]/page-chip:h-auto group-[.page-chip-expanded]/page-chip:w-auto group-[.page-chip-expanded]/page-chip:max-w-full group-[.page-chip-expanded]/page-chip:px-1.5"
         aria-hidden={hiddenLabel ? undefined : true}
         aria-label={hiddenLabel || undefined}
       >

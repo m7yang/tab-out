@@ -213,8 +213,16 @@ body::before {
   }
 }
 
+/* Let the title's leading contour retain subpixel coverage at the fade-mask
+   boundary. The extra opaque strip leaves the trailing fade stops unchanged. */
+.chip-text.chip-text-truncated {
+  mask: linear-gradient(black, black) -1px 0 / 2px 100% no-repeat, var(--title-fade-mask);
+  mask-clip: no-clip;
+  mask-repeat: no-repeat;
+}
+
 /* Measured capsule borders keep existing paint, focus offsets, and box metrics.
-   Pills also cover prerender, inline fragments, and the profile's narrow regime. */
+   CSS pills also cover prerender, inline fragments, and unsupported browsers. */
 [data-tabout-part="overflow-expander"],
 .open-tabs-badge,
 .title-suppression-token,
