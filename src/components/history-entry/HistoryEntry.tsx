@@ -124,7 +124,7 @@ function HistoryEntryTitle({ expanded, title, highlightTerms, mutedTitle, geomet
     ? expandedLinesNode()
     : !expanded && clampedLineHtml && clampedLineHtml.length > 1
         ? clampedTitleLineNodes(clampedLineHtml, 'history-entry-title')
-        : highlightedTextNodes(title, highlightTerms, 'history-entry-title', createBionicTitleTextRenderer(title))
+        : highlightedTextNodes(title, highlightTerms, 'history-entry-title', createBionicTitleTextRenderer(title, mutedTitle ? 600 : 700))
   const titleContentKey = clampedLineHtml && clampedLineHtml.length > 1
     ? 'captured'
     : 'natural'
@@ -133,8 +133,8 @@ function HistoryEntryTitle({ expanded, title, highlightTerms, mutedTitle, geomet
       <span className="flex min-w-0 flex-auto items-start gap-1.5">
         <span
           className={cn(
-            "history-entry-title block min-w-0 flex-auto overflow-hidden hyphens-auto break-normal max-h-[calc(2lh)] [font-size:inherit] [font-weight:inherit] [hyphenate-character:''] wrap-break-word [&.history-entry-title-truncated]:mask-(--title-fade-mask)",
-            mutedTitle ? 'text-tab-closed' : 'text-tab-live',
+            "history-entry-title block min-w-0 flex-auto overflow-hidden hyphens-auto break-normal max-h-[calc(2lh)] [font-size:inherit] [hyphenate-character:''] wrap-break-word [&.history-entry-title-truncated]:mask-(--title-fade-mask)",
+            mutedTitle ? 'text-tab-closed font-normal' : 'text-tab-live font-medium',
             expanded && 'max-h-none! max-w-none! flex-none! overflow-visible! mask-none! w-(--history-entry-expanded-title-width) whitespace-normal wrap-break-word',
           )}
           ref={expanded ? undefined : titleRef}
@@ -312,7 +312,7 @@ function HistoryEntryContextMenu({ entry, savedKeys, retainedPageSurfaceMatches 
 
 export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetItem = null, closedTab = null, savedKeys, retainedPageSurfaceMatches = EMPTY_RETAINED_PAGE_SURFACE_MATCHES, highlightTerms = EMPTY_HIGHLIGHT_TERMS, onSnapshotChange, onHistoryLayoutSettled, onHoverUrlChange, onTabsChange, onForgetClosedGhost }: HistoryEntryProps) {
   const contextMenuOpenRef = useRef(false)
-  const titleClampKey = JSON.stringify([entry.title, highlightTerms])
+  const titleClampKey = JSON.stringify([entry.title, entry.exists, highlightTerms])
   const {
     entryExpansionId,
     entrySlotRef,

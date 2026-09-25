@@ -29,7 +29,7 @@
   --color-foreground: var(--color-black);
   --color-muted-foreground: var(--color-neutral-500);
   --color-tab-live: var(--color-foreground);
-  --color-tab-closed: color-mix(in oklab, var(--color-neutral-700) 50%, var(--color-neutral-800));
+  --color-tab-closed: color-mix(in oklab, var(--color-neutral-800) 50%, var(--color-neutral-900));
   --color-tab-card: var(--card-bg);
   --color-background: var(--paper);
   --color-popover: var(--card-bg);

@@ -94,6 +94,7 @@ function bionicTitleTextNodes(
   keyPrefix: string,
   textOffset: number,
   fixationRanges: readonly TextRange[],
+  fixationWeight: 600 | 700,
 ): ReactNode {
   if (!text) return text
 
@@ -113,7 +114,7 @@ function bionicTitleTextNodes(
     const gap = localStart > gapStart ? [text.slice(gapStart, localStart)] : []
     return [
       ...gap,
-      <span key={`${keyPrefix}:${start}:fixation`} className="chip-title-fixation font-semibold">
+      <span key={`${keyPrefix}:${start}:fixation`} className={`chip-title-fixation ${fixationWeight === 700 ? 'font-bold' : 'font-semibold'}`}>
         {text.slice(localStart, localEnd)}
       </span>,
     ]
@@ -124,7 +125,7 @@ function bionicTitleTextNodes(
   return nodes.length > 0 ? nodes : text
 }
 
-export function createBionicTitleTextRenderer(titleText: string): InlineTextRenderer {
+export function createBionicTitleTextRenderer(titleText: string, fixationWeight: 600 | 700 = 600): InlineTextRenderer {
   const fixationRanges = findBionicTitleFixationRanges(titleText)
-  return (text, keyPrefix, textOffset) => bionicTitleTextNodes(text, keyPrefix, textOffset, fixationRanges)
+  return (text, keyPrefix, textOffset) => bionicTitleTextNodes(text, keyPrefix, textOffset, fixationRanges, fixationWeight)
 }

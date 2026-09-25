@@ -286,6 +286,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   const isClosedSavedPage = isClosedSavedDashboardTab(chip)
   const highlightTerms = cardHighlightTerms ?? highlightTermsForFilter(filter)
   const isReadOnlySource = isReadOnlyDashboardSourceType(chip.sourceType)
+  const isOpenPage = !isReadOnlySource && !isClosedSavedPage
   const readOnlyFilterResult = hasFilter && isReadOnlySource
   const primaryPreviewUrl = pageTargetUrl(chip)
   const suppressedTitleParts = chip.suppressedTitleParts || []
@@ -294,6 +295,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   const suppressionHighlighted = activeSuppressedTitleKey !== '' && suppressedTitleParts.some((part) => part.toLowerCase() === activeSuppressedTitleKey)
   const chipTextClampEligible = !chip.iconOnly && !isFolded && !isTitleVariantGroup
   const chipTextClampKey = JSON.stringify([
+    isOpenPage,
     chip.displaySegments,
     chip.leadPrefix ?? '',
     chip.pathGroupLabel ?? '',
@@ -1370,7 +1372,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
                     {highlightedTextNodes(seg, highlightTerms, `${keyPrefix}-segment-${index}`)}
                   </span>
                 )
-              : highlightedTextNodes(seg, highlightTerms, `${keyPrefix}-segment-${index}`, createBionicTitleTextRenderer(seg))
+              : highlightedTextNodes(seg, highlightTerms, `${keyPrefix}-segment-${index}`, createBionicTitleTextRenderer(seg, isOpenPage ? 700 : 600))
           }
           if (isTitleSuppressionSegment(seg)) return suppressionMarkerNode(seg.titleSuppression, mode, `${keyPrefix}-inline-title-suppression-${index}`)
           if (isStructuralPlaceholderSegment(seg)) return structuralPlaceholderNode(seg, mode, `${keyPrefix}-structural-placeholder-${index}`, target.pathGroupLabel)
@@ -1676,6 +1678,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       className={cn(
         "chip-text block min-w-0 max-w-[calc(100vw-32px)] hyphens-auto break-normal text-[13px] leading-tight text-tab-live font-[inherit] [hyphenate-character:'']",
         'whitespace-normal wrap-break-word',
+        isOpenPage && 'font-medium',
         hasFilter && 'text-[color-mix(in_srgb,var(--color-tab-live)_72%,var(--color-muted-foreground))]',
       )}
     >
@@ -1743,6 +1746,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     <span
       className={cn(
         "chip-text relative block min-w-0 flex-1 overflow-clip [overflow-clip-margin:2px] hyphens-auto break-normal max-h-[calc(2lh)] [hyphenate-character:''] [&.chip-text-truncated]:mask-(--title-fade-mask)",
+        isOpenPage && 'font-medium',
         hasFilter && !isClosedSavedPage && 'text-[color-mix(in_srgb,var(--color-tab-live)_72%,var(--color-muted-foreground))]',
         chip.pathSuffix && 'max-h-[calc(3lh)]',
         isTitleVariantGroup && 'max-h-none overflow-visible!',
