@@ -40,6 +40,7 @@ export function HeaderFilterSurface({ inputRef }: { inputRef: RefObject<HTMLInpu
       focusable="false"
     >
       <g transform={`translate(${geometry.inset} ${geometry.inset})`}>
+        <path className="header-filter-shadow" d={geometry.surfacePath} fill="none" strokeWidth={1} />
         <path className="header-filter-border" d={geometry.surfacePath} strokeWidth={1} />
         <path className="header-filter-focus" d={geometry.surfacePath} fill="none" strokeWidth={1} />
       </g>

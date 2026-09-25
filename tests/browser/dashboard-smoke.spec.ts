@@ -117,7 +117,7 @@ test('pre-app clear remains authoritative over a URL filter', async ({ page }) =
   })
 })
 
-test('filter shortcut startup preserves the prerendered input and its focus-visible capsule shadow', async ({
+test('filter shortcut startup preserves the input and eases its color with an independent shadow', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' })
@@ -215,9 +215,11 @@ test('filter shortcut startup preserves the prerendered input and its focus-visi
   const focusStyle = await filterInput.evaluate((input) => {
     const surface = input.parentElement!.querySelector('.header-filter-border')!
     const focus = input.parentElement!.querySelector('.header-filter-focus')!
+    const shadow = input.parentElement!.querySelector('.header-filter-shadow')!
     return {
       restingFilter: getComputedStyle(surface).filter,
       focusFilter: getComputedStyle(focus).filter,
+      shadowFilter: getComputedStyle(shadow).filter,
       samePath: focus.getAttribute('d') === surface.getAttribute('d'),
       strokeWidth: getComputedStyle(focus).strokeWidth,
       focusColor: getComputedStyle(focus).stroke,
@@ -228,7 +230,8 @@ test('filter shortcut startup preserves the prerendered input and its focus-visi
   })
   expect(focusStyle.inputOutline).toBe('none')
   expect(focusStyle.restingFilter).toContain('drop-shadow')
-  expect(focusStyle.focusFilter).toContain('drop-shadow')
+  expect(focusStyle.focusFilter).toBe('none')
+  expect(focusStyle.shadowFilter).toBe('blur(3px)')
   expect(focusStyle.samePath).toBe(true)
   expect(focusStyle.strokeWidth).toBe('1px')
   expect(focusStyle.focusColor).toBe(focusStyle.caretColor)
@@ -274,27 +277,47 @@ test('filter shortcut startup preserves the prerendered input and its focus-visi
     // Flush the blurred style before focusing, even on a throttled frame.
     void getComputedStyle(borderLayer.querySelector('.header-filter-focus')!).opacity
     input.focus()
-    const samples: Array<{ borderColor: string, filter: string, opacity: number }> = []
+    const samples: Array<{ borderColor: string, filter: string, opacity: number, strokeWidth: string, shadowOpacity: number, shadowFilter: string }> = []
     const start = performance.now()
     do {
       const focusLayer = getComputedStyle(borderLayer.querySelector('.header-filter-focus')!)
+      const shadowLayer = getComputedStyle(borderLayer.querySelector('.header-filter-shadow')!)
       samples.push({
         borderColor: focusLayer.stroke,
         filter: focusLayer.filter,
         opacity: Number.parseFloat(focusLayer.opacity),
+        strokeWidth: focusLayer.strokeWidth,
+        shadowOpacity: Number.parseFloat(shadowLayer.opacity),
+        shadowFilter: shadowLayer.filter,
       })
       await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
     } while (performance.now() - start < 200)
     return samples
   })
   expect(refocusPaint.length).toBeGreaterThan(2)
-  expect(refocusPaint[0]?.opacity).toBeLessThan(1)
-  expect(refocusPaint.at(-1)?.opacity).toBe(1)
-  expect(new Set(refocusPaint.map(({ borderColor }) => borderColor)).size).toBe(1)
+  expect(refocusPaint.map(({ opacity }) => opacity)).toEqual(refocusPaint.map(() => 1))
+  expect(new Set(refocusPaint.map(({ borderColor }) => borderColor)).size).toBeGreaterThan(1)
+  expect(refocusPaint.at(-1)?.borderColor).toBe(focusStyle.focusColor)
+  expect(refocusPaint.every(({ strokeWidth }) => strokeWidth === '1px')).toBe(true)
   expect(new Set(refocusPaint.map(({ filter }) => filter)).size).toBe(1)
+  expect(refocusPaint[0]?.shadowOpacity).toBe(0)
+  expect(refocusPaint.at(-1)?.shadowOpacity).toBe(1)
+  expect(refocusPaint.every(({ shadowFilter }) => shadowFilter === 'blur(3px)')).toBe(true)
   for (let index = 1; index < refocusPaint.length; index += 1) {
-    expect(refocusPaint[index]!.opacity).toBeGreaterThanOrEqual(refocusPaint[index - 1]!.opacity)
+    expect(refocusPaint[index]!.shadowOpacity).toBeGreaterThanOrEqual(refocusPaint[index - 1]!.shadowOpacity)
   }
+
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  expect(await filterInput.evaluate((input) => {
+    const ring = input.parentElement!.querySelector('.header-filter-focus')!
+    input.blur()
+    void getComputedStyle(ring).stroke
+    input.focus()
+    return {
+      color: getComputedStyle(ring).stroke,
+      shadowOpacity: getComputedStyle(input.parentElement!.querySelector('.header-filter-shadow')!).opacity,
+    }
+  })).toEqual({ color: focusStyle.focusColor, shadowOpacity: '1' })
 })
 
 test('dashboard attaches before storage resolves and fills startup surfaces atomically', async ({ page }) => {

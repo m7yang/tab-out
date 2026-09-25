@@ -102,13 +102,18 @@ body::before {
   outline: none;
 }
 
+.tab-filter-wrap::before,
 .tab-filter-wrap::after {
   content: '';
   position: absolute;
   inset: 0;
-  border: 1px solid var(--color-blue-500);
+  border: 1px solid var(--color-input);
   border-radius: 999px;
   pointer-events: none;
+}
+
+.tab-filter-wrap::after {
+  transition: border-color 150ms cubic-bezier(0, 0, 0.2, 1);
 }
 
 .header-filter-surface {
@@ -125,37 +130,62 @@ body::before {
 }
 
 .header-filter-focus {
-  stroke: var(--color-blue-500);
+  stroke: var(--color-input);
+  transition: stroke 150ms cubic-bezier(0, 0, 0.2, 1);
 }
 
 .tab-filter-wrap::after,
 .header-filter-focus {
-  filter: drop-shadow(0 3px 3px color-mix(in oklab, var(--color-blue-500) 50%, transparent));
+  opacity: 0;
+}
+
+.tab-filter-wrap::before,
+.header-filter-shadow {
+  /* Fade a fixed blur separately so Chrome never rasterizes the crisp outline with it. */
+  border-color: color-mix(in oklab, var(--color-blue-500) 50%, transparent);
+  stroke: color-mix(in oklab, var(--color-blue-500) 50%, transparent);
+  filter: blur(3px);
+  transform: translateY(3px);
   opacity: 0;
   transition: opacity 150ms cubic-bezier(0, 0, 0.2, 1);
 }
 
+.tab-filter-wrap:has(input:focus-visible)::before,
 .tab-filter-wrap:has(input:focus-visible)::after,
+.tab-filter-wrap:has(input:focus-visible) .header-filter-shadow,
 .tab-filter-wrap:has(input:focus-visible) .header-filter-focus {
   opacity: 1;
+}
+
+.tab-filter-wrap:has(input:focus-visible)::after {
+  border-color: var(--color-blue-500);
+}
+
+.tab-filter-wrap:has(input:focus-visible) .header-filter-focus {
+  stroke: var(--color-blue-500);
 }
 
 .tab-filter-wrap:has(.header-filter-surface) > .tab-filter {
   border-color: transparent;
 }
 
+.tab-filter-wrap:has(.header-filter-surface)::before,
 .tab-filter-wrap:has(.header-filter-surface)::after {
   display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .tab-filter-wrap::before,
   .tab-filter-wrap::after,
+  .header-filter-shadow,
   .header-filter-focus { transition: none; }
 }
 
 @media (forced-colors: active) {
+  .tab-filter-wrap::before,
+  .header-filter-shadow { display: none; }
   .tab-filter { border-color: ButtonText; }
-  .tab-filter-wrap::after {
+  .tab-filter-wrap:has(input:focus-visible)::after {
     border-color: Highlight;
     filter: none;
     forced-color-adjust: none;
@@ -166,7 +196,7 @@ body::before {
     filter: none;
     forced-color-adjust: none;
   }
-  .header-filter-focus {
+  .tab-filter-wrap:has(input:focus-visible) .header-filter-focus {
     stroke: Highlight;
     filter: none;
     forced-color-adjust: none;
