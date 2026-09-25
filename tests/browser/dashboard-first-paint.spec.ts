@@ -632,3 +632,42 @@ test('long Page Chip paints its final truncation treatment on the first refresh 
   expect(Math.abs(firstTitleFrame.fadeEnd - firstTitleFrame.width)).toBeLessThanOrEqual(0.1)
   expect(firstTitleFrame.verticalOverflow).toBeLessThanOrEqual(1)
 })
+
+test('history range keeps its capsule contour while the select module loads', async ({ page }) => {
+  const selectModuleGate = Promise.withResolvers<void>()
+  await page.route('**/HistoryRangeSelect-*.js', async (route) => {
+    await selectModuleGate.promise
+    await route.continue()
+  })
+
+  const navigation = page.goto('/tests/fixtures/dashboard-resize.html?filter=Example')
+  const fallback = page.locator('[data-tabout="history-range"][aria-hidden="true"]')
+  let fallbackPaint: unknown
+  const readPaint = (element: HTMLElement) => {
+    const style = getComputedStyle(element)
+    const paint = getComputedStyle(element, '::before')
+    const rect = element.getBoundingClientRect()
+    return {
+      width: rect.width,
+      height: rect.height,
+      contour: style.getPropertyValue('border-shape'),
+      fill: paint.backgroundColor,
+      border: paint.borderColor,
+    }
+  }
+
+  try {
+    await expect(fallback).toBeVisible()
+    await expect(fallback).toHaveAttribute('data-capsule-ready', '')
+    fallbackPaint = await fallback.evaluate(readPaint)
+  } finally {
+    selectModuleGate.resolve()
+    await navigation
+  }
+
+  const trigger = page.getByRole('combobox', { name: 'History search range' })
+  await expect(trigger).toBeVisible()
+  await expect(fallback).toHaveCount(0)
+  await expect(trigger).toHaveAttribute('data-capsule-ready', '')
+  expect(await trigger.evaluate(readPaint)).toEqual(fallbackPaint)
+})

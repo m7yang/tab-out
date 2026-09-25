@@ -24,14 +24,14 @@ export function HistoryRangeSelect({
     <Select value={value} items={items} onValueChange={handleValueChange}>
       <SelectTrigger
         data-tabout="history-range"
-        className="h-(--header-control-height)! rounded-(--header-control-radius) border-(--warm-gray) bg-tab-card text-(length:--header-control-font-size) leading-(--header-control-line-height) [corner-shape:squircle]"
+        className="h-(--header-control-height)! [--capsule-fill:var(--card-bg)] text-(length:--header-control-font-size) leading-(--header-control-line-height)"
         aria-label="History search range"
       >
         <SelectValue />
       </SelectTrigger>
       <SelectContent
         align="start"
-        className="rounded-(--header-control-radius) [corner-shape:squircle]"
+        className="rounded-[28px] [corner-shape:squircle]"
       >
         <SelectGroup>
           {items.map((option) => (
@@ -39,7 +39,7 @@ export function HistoryRangeSelect({
               key={option.value}
               value={option.value}
               label={option.label}
-              className="rounded-[9px] text-(length:--header-control-font-size) leading-(--header-control-line-height) [corner-shape:squircle]"
+              className="text-(length:--header-control-font-size) leading-(--header-control-line-height)"
             >
               {option.label}
             </SelectItem>

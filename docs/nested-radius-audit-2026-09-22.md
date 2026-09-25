@@ -205,3 +205,29 @@ Preserve the action's 2px focus outline at -1px offset. Its 1px outward extent
 uses the existing clear band; action content allows visible overflow so that
 outline is not clipped at the right or bottom edge. Colors, shadows, viewport
 insets, and close-button positioning are unchanged.
+
+## History range capsule options — 2026-09-25
+
+The range picker now uses Fleet continuous capsules for its option highlights.
+This supersedes the earlier 9px squircle item recommendation for this picker.
+Keep the 24px option height and equal 4px group padding; use a **28px outer
+squircle radius** on the History range popup. Other menu families retain their
+existing tokens. The popup’s 1px ring lies outside its box, so the relevant
+clear band is the 4px between the popup fill boundary and the option fill.
+The first and last options supply the four nested corner pairs.
+
+This mixed shape pair does not use the matching-squircle `1.75` shortcut.
+Evaluating Fleet’s general convex-contour clearance function with the actual
+136×24px, zero-border capsule path and an ideal CSS squircle outer boundary,
+while fixing the 4px gap and fitting only the popup radius, gives approximately
+27.981px. Half-pixel token rounding selects 28px. Angular and cubic sampling
+at 90, 180, and 360 subdivisions keeps that token stable. The model’s clearance
+range at 28px is approximately 3.69–4.30px; the former 16px radius gives about
+4.00–6.98px. This is a geometric model, not a new native-renderer calibration
+or a claim of exact constant thickness. No optical bias is added.
+
+The 144px minimum popup width and eight 24px rows leave enough space for the
+28px used radius without overlap reduction in the normal open menu. Preserve
+the existing item focus fill, selected checkmark, popup ring, and scrolling
+behavior. Recalculate for different option heights or padding rather than
+copying 28px into unrelated shared popup defaults.

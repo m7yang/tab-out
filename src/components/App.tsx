@@ -22,6 +22,7 @@ import { FILTER_SEARCH_UPDATE_DELAY_MS, useFilterRouting } from '../hooks/useFil
 import { useHoverMatch } from '../hooks/useHoverMatch'
 import type { UrlPreviewStore } from '../hooks/useUrlPreview'
 import { HeaderBar } from './HeaderBar'
+import { attachCapsuleBorder } from './capsule-border'
 import { HistorySearchStatus } from './HistorySearchStatus'
 import { MissionBlock } from './MissionBlock'
 import { validatePageChipTextLayoutsAfterMasonry } from './page-chip-text-layout'
@@ -130,8 +131,9 @@ function HistoryRangeSelectFallback({ value }: { value: string }) {
   const label = HISTORY_RANGE_OPTIONS.find((option) => option.value === value)?.label || 'History range'
   return (
     <span
+      ref={attachCapsuleBorder}
       data-tabout="history-range"
-      className="box-border flex h-(--header-control-height) w-fit items-center justify-between gap-1.5 whitespace-nowrap rounded-(--header-control-radius) border border-(--warm-gray) bg-tab-card py-0 pr-2 pl-2.5 text-(length:--header-control-font-size) leading-(--header-control-line-height) [corner-shape:squircle]"
+      className="box-border flex h-(--header-control-height) w-fit items-center justify-between gap-1.5 whitespace-nowrap rounded-full [corner-shape:round] border [--capsule-border-color:var(--warm-gray)] [--capsule-fill:var(--card-bg)] border-(--capsule-border-color) bg-(--capsule-fill) py-0 pr-2 pl-2.5 text-(length:--header-control-font-size) leading-(--header-control-line-height)"
       aria-hidden="true"
     >
       <span>{label}</span>
