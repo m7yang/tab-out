@@ -29,7 +29,7 @@ test('TabActionsPopup renders the Tab Actions Menu with browser-state-dependent 
 
   assert.match(html, />Dedupe duplicate tabs</)
   assert.match(html, />Close all suspended tabs</)
-  assert.match(html, />Close all suspended tabs and dedupe</)
+  assert.match(html, />Close all suspended tabs<br\s*\/> and dedupe</)
   assert.match(html, />Move current tab to new window</)
   assert.match(html, />Merge windows on this desktop…</)
 

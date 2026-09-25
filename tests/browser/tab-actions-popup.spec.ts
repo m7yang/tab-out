@@ -771,3 +771,40 @@ test('popup previews the merge, confirms inline, and hands the confirmation off'
     previewId: 'preview-fixture',
   }])
 })
+
+test('popup uses capsules for one-line items and matching squircles for wrapped content', async ({ page }) => {
+  await page.goto(POPUP_FIXTURE)
+  const closeItem = page.locator(CLOSE_SUSPENDED_ITEM)
+  const combinedItem = page.locator(COMBINED_ITEM)
+  const mergeItem = page.locator(MERGE_ITEM)
+  await expect(closeItem).toHaveAttribute('data-capsule-ready', '')
+  await expect(combinedItem).toHaveAttribute('data-menu-multiline', '')
+  await expect(combinedItem).not.toHaveAttribute('data-capsule-ready')
+  await expect(combinedItem).toHaveCSS('corner-shape', 'superellipse(2)')
+  await expect(combinedItem).toHaveCSS('border-radius', '26px')
+  const lines = await combinedItem.evaluate((element) => {
+    const label = element.lastElementChild!
+    return label.getBoundingClientRect().height / Number.parseFloat(getComputedStyle(label).lineHeight)
+  })
+  expect(lines).toBe(2)
+  await combinedItem.hover()
+  const hoverFill = await combinedItem.evaluate((element) => getComputedStyle(element).backgroundColor)
+  await closeItem.focus()
+  expect(await closeItem.evaluate((element) => getComputedStyle(element, '::before').backgroundColor)).toBe(hoverFill)
+
+  // Status copy can appear/disappear without remounting the menu button.
+  await expect(mergeItem).toHaveAttribute('data-menu-multiline', '')
+  await expect(mergeItem).not.toHaveAttribute('data-capsule-ready')
+  await enableMergeAvailability(page)
+  await expect(mergeItem).toHaveAttribute('data-capsule-ready', '')
+  await expect(mergeItem).not.toHaveAttribute('data-menu-multiline')
+
+  // Naturally wrapped labels must change shape and recover after a resize.
+  await closeItem.evaluate((element) => { element.style.width = '150px' })
+  await expect(closeItem).toHaveAttribute('data-menu-multiline', '')
+  await expect(closeItem).not.toHaveAttribute('data-capsule-ready')
+  await expect(closeItem).toHaveCSS('border-shape', 'none')
+  await closeItem.evaluate((element) => element.style.removeProperty('width'))
+  await expect(closeItem).toHaveAttribute('data-capsule-ready', '')
+  await expect(closeItem).not.toHaveAttribute('data-menu-multiline')
+})

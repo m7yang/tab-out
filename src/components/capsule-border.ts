@@ -14,6 +14,15 @@ function roundFallbackGeometry(width: number, height: number, borderWidth: numbe
 
 /** Owns measured contour, paint placement and cleanup; callers own theme/state. */
 export function attachCapsuleBorder(element: HTMLElement | null) {
+  return attachBorder(element, false)
+}
+
+/** Menu rows keep capsule-sized corners when their content wraps. */
+export function attachMenuItemBorder(element: HTMLElement | null) {
+  return attachBorder(element, true)
+}
+
+function attachBorder(element: HTMLElement | null, menuItem: boolean) {
   if (!element || !CSS.supports('border-shape', 'path("M0 0L1 0L1 1Z")')) return
 
   const roundMarkerFallback = element.matches('.chip-strip-indicator, .chip-title-suppression-marker')
@@ -50,10 +59,15 @@ export function attachCapsuleBorder(element: HTMLElement | null) {
     const width = inline ? rect?.width ?? 0 : borderBox?.inlineSize ?? 0
     const height = inline ? rect?.height ?? 0 : borderBox?.blockSize ?? 0
     const borderWidth = Number.parseFloat(style.borderTopWidth)
-    const size = `${width}:${height}:${borderWidth}`
+    const singleLineHeight = Number.parseFloat(style.lineHeight) +
+      Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom) +
+      borderWidth + Number.parseFloat(style.borderBottomWidth)
+    const multiline = menuItem && height > Math.max(singleLineHeight, Number.parseFloat(style.minHeight) || 0) + 1
+    if (menuItem) element.toggleAttribute('data-menu-multiline', multiline)
+    const size = `${width}:${height}:${borderWidth}:${multiline}`
     if (size === previousSize) return
     previousSize = size
-    const geometry = createCapsuleGeometry({ width, height, borderWidth }) ?? (
+    const geometry = multiline ? null : createCapsuleGeometry({ width, height, borderWidth }) ?? (
       roundMarkerFallback ? roundFallbackGeometry(width, height, borderWidth) : null
     )
     if (geometry) {
@@ -87,5 +101,6 @@ export function attachCapsuleBorder(element: HTMLElement | null) {
     clearGeometry()
     fill?.remove()
     delete element.dataset.capsulePaint
+    if (menuItem) delete element.dataset.menuMultiline
   }
 }

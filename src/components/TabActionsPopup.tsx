@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { attachMenuItemBorder } from './capsule-border'
 import { useRetimer } from 'foxact/use-retimer'
 import {
   DESKTOP_WINDOW_MERGE_OPEN_MESSAGE,
@@ -31,7 +32,7 @@ const MACOS_INTEGRATION_SETUP_URL =
   'https://github.com/m7yang/tab-out#optional-macos-hammerspoon-integration'
 
 const popupItemClassName =
-  'relative flex w-full min-h-6 cursor-pointer items-center gap-1.5 rounded-lg border-0 bg-transparent px-2 py-1.5 text-left text-sm leading-tight text-foreground outline-none select-none [corner-shape:squircle] hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground disabled:pointer-events-none disabled:opacity-50'
+  'relative flex w-full min-h-6 cursor-pointer items-center gap-1.5 rounded-full border-0 [--capsule-fill:transparent] bg-(--capsule-fill) px-2 py-1.5 text-left text-sm leading-tight text-foreground outline-none select-none [corner-shape:round] data-menu-multiline:rounded-[26px] data-menu-multiline:[corner-shape:squircle] hover:[--capsule-fill:var(--color-accent)] hover:text-accent-foreground focus-visible:[--capsule-fill:var(--color-accent)] focus-visible:text-accent-foreground disabled:pointer-events-none disabled:opacity-50'
 
 const popupSecondaryButtonClassName =
   'inline-flex h-7 cursor-pointer items-center justify-center rounded-lg border border-border bg-transparent px-2.5 text-sm text-foreground outline-none [corner-shape:squircle] hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber)'
@@ -416,6 +417,7 @@ export function TabActionsPopup() {
       <button
         type="button"
         data-tabout-part="dedupe-button"
+        ref={attachMenuItemBorder}
         className={popupItemClassName}
         disabled={dedupeDisabled}
         onClick={() => {
@@ -431,6 +433,7 @@ export function TabActionsPopup() {
       <button
         type="button"
         data-tabout-part="close-suspended-button"
+        ref={attachMenuItemBorder}
         className={popupItemClassName}
         disabled={otherActionsDisabled}
         onClick={() => void runPopupTabAction(closeAllSuspendedTabs)}
@@ -441,17 +444,20 @@ export function TabActionsPopup() {
       <button
         type="button"
         data-tabout-part="close-suspended-and-dedupe-button"
+        data-menu-multiline=""
+        ref={attachMenuItemBorder}
         className={popupItemClassName}
         disabled={otherActionsDisabled}
         onClick={() => void runPopupTabAction(closeAllSuspendedTabsAndDedupe)}
       >
         <span className="icon-[lucide--list-x] size-3.5" aria-hidden="true" />
-        <span className="min-w-0 flex-1">Close all suspended tabs and dedupe</span>
+        <span className="min-w-0 flex-1">Close all suspended tabs<br /> and dedupe</span>
       </button>
       <div role="separator" aria-orientation="horizontal" className="pointer-events-none mx-1 my-1 h-px bg-border" />
       <button
         type="button"
         data-tabout-part="move-current-tab-button"
+        ref={attachMenuItemBorder}
         className={popupItemClassName}
         disabled={otherActionsDisabled}
         onClick={() => void runPopupTabAction(async () => {
@@ -468,6 +474,7 @@ export function TabActionsPopup() {
         <button
           type="button"
           data-tabout-part="select-native-profile-button"
+          ref={attachMenuItemBorder}
           className={popupItemClassName}
           disabled={otherActionsDisabled}
           onClick={selectNativeIntegrationProfile}
@@ -484,6 +491,7 @@ export function TabActionsPopup() {
         <button
           type="button"
           data-tabout-part="transfer-native-profile-button"
+          ref={attachMenuItemBorder}
           className={popupItemClassName}
           disabled={otherActionsDisabled}
           onClick={() => setProfileTransferConfirm(availability.ownerRevision)}
@@ -496,6 +504,7 @@ export function TabActionsPopup() {
         <button
           type="button"
           data-tabout-part="setup-native-integration-button"
+          ref={attachMenuItemBorder}
           className={popupItemClassName}
           disabled={otherActionsDisabled}
           onClick={openMacosIntegrationSetup}
@@ -507,6 +516,8 @@ export function TabActionsPopup() {
       <button
         type="button"
         data-tabout-part="merge-desktop-windows-button"
+        ref={attachMenuItemBorder}
+        data-menu-multiline={mergeUnavailableReason ? '' : undefined}
         className={`${popupItemClassName} items-start`}
         aria-label="Merge windows on this desktop"
         disabled={mergeUnavailableReason !== null}

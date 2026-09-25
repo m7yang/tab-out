@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu'
 import { mergeRefs } from 'foxact/merge-refs'
-import { attachCapsuleBorder } from '../capsule-border'
+import { attachMenuItemBorder } from '../capsule-border'
 
 import { cn } from '@/lib/utils'
 import {
@@ -109,7 +109,7 @@ function ContextMenuItem({
     if (typeof ref === 'function') return ref(element)
     // Keep object refs cleared when the merged React 19 cleanup runs.
     if (ref) ref.current = element
-  }, attachCapsuleBorder), [ref])
+  }, attachMenuItemBorder), [ref])
 
   return (
     <ContextMenuPrimitive.Item

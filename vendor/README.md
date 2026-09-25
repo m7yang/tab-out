@@ -22,12 +22,15 @@ prerender and unsupported-size fallback; no material or shadow is added.
 
 Overflow expanders, open-tab count badges, title-suppression tokens, chip
 suppression markers, path-group labels (including PR badges), structural strip
-indicators, toast buttons, Select controls/options, and click/context-menu items
+indicators, toast buttons, Select controls/options, and click/context/toolbar-popup menu items
 apply the measured path through CSS `border-shape`. This
 keeps their existing backgrounds, borders, inset highlights, shadows, and focus
 outlines app-owned, including the original outline offsets. The adapter observes
 size and content changes; expanded and clamped captured labels are rebuilt with
 live refs.
+When changing menu item shapes or line wrapping, follow the
+[menu shape policy](../docs/nested-radius-audit-2026-09-22.md#menu-item-shapes)
+for shape selection, radius constraints, and fit limits.
 Narrow/circular dimensions and fragmented inline labels retain CSS pill rounding.
 Compact suppression and structural markers instead use a round path through the
 same padded painter, preserving pixel alignment when they expand.

@@ -69,9 +69,11 @@ for (const deviceScaleFactor of [1, 2, 3]) {
       }
     })
 
-    for (const selector of ['.open-tabs-badge', '.pathgroup-header .chip-pathgroup', '.page-chip-expanded .chip-strip-indicator', '.title-suppression-token', '.page-chip-expanded .chip-title-suppression-marker', '[data-tabout-part="overflow-expander"]', '[data-tabout="toast"] [data-tabout-part="action-button"]', '[data-slot="menu-item"]', '[data-slot="context-menu-item"]']) {
+    for (const selector of ['.open-tabs-badge', '.pathgroup-header .chip-pathgroup', '.page-chip-expanded .chip-strip-indicator', '.title-suppression-token', '.page-chip-expanded .chip-title-suppression-marker', '[data-tabout-part="overflow-expander"]', '[data-tabout="toast"] [data-tabout-part="action-button"]', '[data-slot="menu-item"]', '[data-slot="context-menu-item"]', '[data-tabout-part="close-suspended-button"]']) {
       test(`${selector} retains its native shoulders at fractional pixel positions`, async ({ page }) => {
-        await page.goto('/tests/fixtures/dashboard-resize.html?motion=1')
+        await page.goto(selector === '[data-tabout-part="close-suspended-button"]'
+          ? '/tests/fixtures/tab-actions-popup.html'
+          : '/tests/fixtures/dashboard-resize.html?motion=1')
         if (selector === '[data-slot="menu-item"]') {
           const trigger = page.locator('[data-tabout="domain-card"][data-tabout-domain="tab-out-smoke-02.com"] [data-tabout-part="card-menu"]')
           await trigger.focus()

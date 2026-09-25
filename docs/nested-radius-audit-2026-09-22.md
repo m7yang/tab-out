@@ -232,11 +232,20 @@ the existing item focus fill, selected checkmark, popup ring, and scrolling
 behavior. Recalculate for different option heights or padding rather than
 copying 28px into unrelated shared popup defaults.
 
-## Menu item capsules — 2026-09-25
+## Menu item shapes
 
-Click-menu and context-menu items now use the same measured continuous capsule
-as Select options. This supersedes the earlier 15px popup / 8px item squircle
-pair for these two menu families. Preserve their 4px popup padding, 8px item
+Current policy, updated 2026-09-25: click menus, context menus, and the toolbar
+popup use continuous capsules for single-line items and CSS squircles for
+multiline items, including rows with secondary status text. Size/content
+observation restores the capsule when content returns to one line. Multiline
+corners use the single-line reference rather than growing with extra lines:
+**21px** for click/context menus and **26px** for the toolbar popup, subject to
+CSS radius overlap reduction. Preserve existing state colors and spacing.
+
+### Click and context menu geometry
+
+This supersedes the earlier 15px popup / 8px item squircle pair for these two
+menu families. Preserve their 4px popup padding, 8px item
 text inset, 13px type, 1.25 line height, and 4px vertical item padding. A normal
 single-line item is 24.25px tall; the 160px minimum popup gives it 152px width.
 
@@ -248,8 +257,26 @@ ring remains the preset's 1px outward ring and does not reduce the inner gap.
 
 For a one-item menu, CSS caps the used radius at half the 32.25px popup height
 (16.125px). This is the best available radius under the unchanged dimensions,
-but its modeled corner clearance can reach about 7px. Do not enlarge that menu
-to force a fit. Wrapped rows likewise retain their content-driven height; the
+but its modeled corner clearance can reach about 7px. Preserve that compact
+height. Wrapped rows likewise retain their content-driven height; the
 28px token is fitted to the normal single-line row, not every possible height.
-Normal and destructive highlights and disabled styling retain their colors;
-only their painted contour changes.
+
+### Toolbar popup geometry
+
+The combined cleanup label breaks after “Close all suspended tabs”, with “and
+dedupe” on its second line. Keep the popup width, 8px text inset, 14px type,
+1.25 line height, and 6px vertical padding: a single line is 29.5px tall and
+two lines are 47px tall.
+
+### Multiline corner fit and limits
+
+For the toolbar popup, fitting a squircle corner to the actual 29.5px capsule
+corner at coincident box edges gives approximately 25.781px; the nearest-half
+pixel token is **26px**. Angular/cubic sampling at 90, 180 and 360 subdivisions
+keeps that token stable. The modeled deviation at 26px is at most 0.30px.
+CSS caps this to 23.5px on the two-line row, whose deviation from the reference
+corner is at most 0.80px; preserve the compact height rather than enlarge the
+row to avoid the cap. Taller rows use the full 26px. This is a geometric
+approximation for visual continuity, not an identical contour or a calibrated
+perceptual match. The shared click/context menu's 24.25px single-line reference
+scales the same fit to 21.193px, selecting **21px** with the same overlap rule.
