@@ -231,3 +231,25 @@ The 144px minimum popup width and eight 24px rows leave enough space for the
 the existing item focus fill, selected checkmark, popup ring, and scrolling
 behavior. Recalculate for different option heights or padding rather than
 copying 28px into unrelated shared popup defaults.
+
+## Menu item capsules — 2026-09-25
+
+Click-menu and context-menu items now use the same measured continuous capsule
+as Select options. This supersedes the earlier 15px popup / 8px item squircle
+pair for these two menu families. Preserve their 4px popup padding, 8px item
+text inset, 13px type, 1.25 line height, and 4px vertical item padding. A normal
+single-line item is 24.25px tall; the 160px minimum popup gives it 152px width.
+
+With that zero-border capsule path and a fixed 4px clear band, the general
+convex-contour function fits an ideal outer squircle radius of about 28.200px.
+Sampling at 90, 180, and 360 subdivisions selects the existing **28px token**;
+its modeled clearance is about 3.70–4.36px. No optical bias is added. The popup
+ring remains the preset's 1px outward ring and does not reduce the inner gap.
+
+For a one-item menu, CSS caps the used radius at half the 32.25px popup height
+(16.125px). This is the best available radius under the unchanged dimensions,
+but its modeled corner clearance can reach about 7px. Do not enlarge that menu
+to force a fit. Wrapped rows likewise retain their content-driven height; the
+28px token is fitted to the normal single-line row, not every possible height.
+Normal and destructive highlights and disabled styling retain their colors;
+only their painted contour changes.

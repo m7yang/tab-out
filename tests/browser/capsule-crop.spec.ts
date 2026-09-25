@@ -69,9 +69,17 @@ for (const deviceScaleFactor of [1, 2, 3]) {
       }
     })
 
-    for (const selector of ['.open-tabs-badge', '.pathgroup-header .chip-pathgroup', '.page-chip-expanded .chip-strip-indicator', '.title-suppression-token', '.page-chip-expanded .chip-title-suppression-marker', '[data-tabout-part="overflow-expander"]', '[data-tabout="toast"] [data-tabout-part="action-button"]']) {
+    for (const selector of ['.open-tabs-badge', '.pathgroup-header .chip-pathgroup', '.page-chip-expanded .chip-strip-indicator', '.title-suppression-token', '.page-chip-expanded .chip-title-suppression-marker', '[data-tabout-part="overflow-expander"]', '[data-tabout="toast"] [data-tabout-part="action-button"]', '[data-slot="menu-item"]', '[data-slot="context-menu-item"]']) {
       test(`${selector} retains its native shoulders at fractional pixel positions`, async ({ page }) => {
         await page.goto('/tests/fixtures/dashboard-resize.html?motion=1')
+        if (selector === '[data-slot="menu-item"]') {
+          const trigger = page.locator('[data-tabout="domain-card"][data-tabout-domain="tab-out-smoke-02.com"] [data-tabout-part="card-menu"]')
+          await trigger.focus()
+          await trigger.press('Enter')
+        }
+        if (selector === '[data-slot="context-menu-item"]') {
+          await page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({ hasText: 'Short title' }).first().click({ button: 'right' })
+        }
         if (selector.includes('page-chip-expanded')) {
           const chip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({ hasText: 'Tooltip Boundary Alpha' }).first()
           await chip.hover({ position: { x: 36, y: 8 } })

@@ -1,5 +1,7 @@
 import * as React from 'react'
 import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu'
+import { mergeRefs } from 'foxact/merge-refs'
+import { attachCapsuleBorder } from '../capsule-border'
 
 import { cn } from '@/lib/utils'
 import {
@@ -97,12 +99,21 @@ function ContextMenuContent({
 // react-doctor-disable-next-line react-doctor/no-multi-comp -- shadcn context-menu primitive family is intentionally colocated in one file.
 function ContextMenuItem({
   className,
+  ref,
   children,
   variant = 'default',
   ...props
 }: ContextMenuPrimitive.Item.Props & { variant?: MenuItemVariant }) {
+  // react-doctor-disable-next-line react-doctor/react-compiler-no-manual-memoization -- ref identity preserves the capsule observer and its cleanup across rerenders.
+  const itemRef = React.useMemo(() => mergeRefs<HTMLDivElement>((element) => {
+    if (typeof ref === 'function') return ref(element)
+    // Keep object refs cleared when the merged React 19 cleanup runs.
+    if (ref) ref.current = element
+  }, attachCapsuleBorder), [ref])
+
   return (
     <ContextMenuPrimitive.Item
+      ref={itemRef}
       data-slot="context-menu-item"
       data-variant={variant}
       className={cn(

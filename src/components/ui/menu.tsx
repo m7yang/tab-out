@@ -1,5 +1,7 @@
 import * as React from 'react'
 import { Menu as MenuPrimitive } from '@base-ui/react/menu'
+import { mergeRefs } from 'foxact/merge-refs'
+import { attachCapsuleBorder } from '../capsule-border'
 
 import { cn } from '@/lib/utils'
 import {
@@ -50,12 +52,21 @@ function MenuContent({
 // react-doctor-disable-next-line react-doctor/no-multi-comp -- Base UI menu primitive family is intentionally colocated in one file.
 function MenuItem({
   className,
+  ref,
   children,
   variant = 'default',
   ...props
 }: MenuPrimitive.Item.Props & { variant?: MenuItemVariant }) {
+  // react-doctor-disable-next-line react-doctor/react-compiler-no-manual-memoization -- ref identity preserves the capsule observer and its cleanup across rerenders.
+  const itemRef = React.useMemo(() => mergeRefs<HTMLDivElement>((element) => {
+    if (typeof ref === 'function') return ref(element)
+    // Keep object refs cleared when the merged React 19 cleanup runs.
+    if (ref) ref.current = element
+  }, attachCapsuleBorder), [ref])
+
   return (
     <MenuPrimitive.Item
+      ref={itemRef}
       data-slot="menu-item"
       data-variant={variant}
       className={cn(

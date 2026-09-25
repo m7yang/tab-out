@@ -3901,12 +3901,13 @@ test('destructive menu actions stay red at rest and through pointer and keyboard
   await expect(contextMenu).toBeVisible()
   await expect(saveItem).toHaveAttribute('data-variant', 'default')
   await expect(removeItem).toHaveAttribute('data-variant', 'destructive')
+  await expect(removeItem).toHaveAttribute('data-capsule-ready', '')
 
   await page.mouse.move(0, 0)
   await expect(removeItem).not.toHaveAttribute('data-highlighted', '')
   const saveRestColor = await saveItem.evaluate((element) => getComputedStyle(element).color)
   const removeRestColor = await removeItem.evaluate((element) => getComputedStyle(element).color)
-  const removeRestBackground = await removeItem.evaluate((element) => getComputedStyle(element).backgroundColor)
+  const removeRestBackground = await removeItem.evaluate((element) => getComputedStyle(element, '::before').backgroundColor)
   const destructiveColor = await page.evaluate(() => {
     const probe = document.createElement('span')
     probe.style.color = 'var(--color-destructive)'
@@ -3921,7 +3922,7 @@ test('destructive menu actions stay red at rest and through pointer and keyboard
   await removeItem.hover()
   await expect(removeItem).toHaveAttribute('data-highlighted', '')
   const removePointerColor = await removeItem.evaluate((element) => getComputedStyle(element).color)
-  const removePointerBackground = await removeItem.evaluate((element) => getComputedStyle(element).backgroundColor)
+  const removePointerBackground = await removeItem.evaluate((element) => getComputedStyle(element, '::before').backgroundColor)
   expect(removePointerColor).toBe(removeRestColor)
   expect(removePointerBackground).not.toBe(removeRestBackground)
 
@@ -3932,7 +3933,7 @@ test('destructive menu actions stay red at rest and through pointer and keyboard
   await page.keyboard.press('ArrowDown')
   await expect(removeItem).toHaveAttribute('data-highlighted', '')
   const removeKeyboardColor = await removeItem.evaluate((element) => getComputedStyle(element).color)
-  const removeKeyboardBackground = await removeItem.evaluate((element) => getComputedStyle(element).backgroundColor)
+  const removeKeyboardBackground = await removeItem.evaluate((element) => getComputedStyle(element, '::before').backgroundColor)
   expect(removeKeyboardColor).toBe(removeRestColor)
   expect(removeKeyboardBackground).toBe(removePointerBackground)
 

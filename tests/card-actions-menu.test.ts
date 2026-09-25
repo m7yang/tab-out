@@ -132,7 +132,7 @@ test('menu primitives share one persistent destructive variant', () => {
 
   assert.match(menuStylesSource, /export type MenuItemVariant = 'default' \| 'destructive'/)
   assert.match(menuStylesSource, /destructiveMenuItemClassName\s*=\s*\n?\s*'[^']*text-destructive/)
-  assert.match(menuStylesSource, /destructiveMenuItemClassName\s*=\s*\n?\s*'[^']*data-highlighted:bg-destructive\/10/)
+  assert.match(menuStylesSource, /destructiveMenuItemClassName\s*=\s*\n?\s*'[^']*data-highlighted:\[--capsule-fill:color-mix\(in_oklab,var\(--color-destructive\)_10%,transparent\)\]/)
   assert.match(menuStylesSource, /destructiveMenuItemClassName\s*=\s*\n?\s*'[^']*data-highlighted:text-destructive/)
 
   for (const primitiveSource of [menuSource, contextMenuSource]) {
