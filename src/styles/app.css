@@ -230,6 +230,16 @@ body::before {
   outline-color: transparent;
 }
 
+/* Native border-shape outlines can notch the capsule's ends. SVG paints the
+   explicit offset contour with room outside the frame for the whole stroke. */
+[data-history-match-capsule] {
+  outline-color: transparent;
+}
+
+[data-history-match-capsule] > .history-match-capsule {
+  display: block;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-chips-overflow-reveal .chip-slot {
     transition:

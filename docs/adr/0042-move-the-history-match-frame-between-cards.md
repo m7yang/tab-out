@@ -19,6 +19,14 @@ button, retaining the native 1px outline, 1px outline offset, and target radius.
 Only the replaced match outline is suppressed; resting trim, focus indicators,
 and per-URL row emphasis keep their existing behavior.
 
+Collapsed-overflow targets use the same Fleet continuous-capsule contour as the
+button. An SVG stroke paints the package's explicit offset contour; Chromium's
+native `border-shape` outline introduces artifacts at the ends. The SVG allows
+visible overflow so the full 1px stroke and 1px gap remain outside the chip box.
+A ResizeObserver updates that contour after animated layout and before paint,
+including interrupted motion and resizing, without scaling the stroke. Ordinary
+Page Chips restore their native squircle outline when they become the target.
+
 First entry, keyboard focus, reduced motion, and transitions involving offscreen
 cards are immediate. Multiple matches retain every card's existing local frame
 without selecting an arbitrary destination. Departure hides the frame without a

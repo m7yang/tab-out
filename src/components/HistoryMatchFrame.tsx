@@ -1,4 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react'
+import { createCapsuleGeometry } from '@fleet/continuous-capsule'
 
 const DURATION = 120
 type FrameKind = 'card' | 'page-chip'
@@ -23,6 +24,7 @@ const FRAME_OPTIONS = {
 /** Presentation only: matching and preview ownership stay with the Page Chips. */
 export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRegionRef: RefObject<HTMLDivElement | null>, kind?: FrameKind }) {
   const frameRef = useRef<HTMLDivElement>(null)
+  const capsulePathRef = useRef<SVGPathElement>(null)
   const options = FRAME_OPTIONS[kind]
 
   useEffect(() => {
@@ -39,6 +41,19 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
     let departedAt = -Infinity
     let departedBounds: DOMRect | undefined
     let destination = ''
+    let capsule = false
+
+    function paintCapsule(width: number, height: number) {
+      const path = capsulePathRef.current
+      if (!frame || !path) return
+      const geometry = capsule ? createCapsuleGeometry({ width, height, borderWidth: 0, focusGap: 1, focusWidth: 1 }) : null
+      if (geometry) {
+        path.setAttribute('d', geometry.focusPath)
+        frame.dataset.historyMatchCapsule = ''
+      } else {
+        delete frame.dataset.historyMatchCapsule
+      }
+    }
 
     function cancelMotion() {
       animation?.cancel()
@@ -80,6 +95,7 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
       const y = bounds.top - container.top - root.clientTop + root.scrollTop - options.outset
       const width = bounds.width + options.outset * 2
       const height = bounds.height + options.outset * 2
+      capsule = kind === 'page-chip' && next.matches('[data-tabout-part="overflow-expander"]')
       const nextDestination = `${x},${y},${width},${height}`
       if (next === target && nextDestination === destination) return
 
@@ -100,12 +116,17 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
       frame.style.transform = `translate(${x}px, ${y}px)`
       frame.style.width = `${width}px`
       frame.style.height = `${height}px`
-      if (kind === 'page-chip') frame.style.borderRadius = getComputedStyle(next).borderRadius
+      if (kind === 'page-chip') {
+        const targetStyle = getComputedStyle(next)
+        frame.style.borderRadius = targetStyle.borderRadius
+        frame.style.setProperty('corner-shape', targetStyle.getPropertyValue('corner-shape'))
+        paintCapsule(move ? previous.width : width, move ? previous.height : height)
+      }
       root.setAttribute(options.attribute, '')
 
       if (move) {
         // Animate the isolated, absolutely positioned frame's dimensions:
-        // scaling the border would distort its 1px stroke and squircle corners.
+        // scaling the border would distort its 1px stroke and target contour.
         animation = frame.animate([
           {
             transform: `translate(${previous.left - container.left - root.clientLeft + root.scrollLeft}px, ${previous.top - container.top - root.clientTop + root.scrollTop}px)`,
@@ -134,8 +155,20 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
       if (reducedMotion.matches) cancelMotion()
     }
 
-    const resizeObserver = new ResizeObserver(schedule)
+    const resizeObserver = new ResizeObserver((entries) => {
+      // ResizeObserver runs after animated layout and before paint. Draw the
+      // offset contour at the rendered size, avoiding Chromium's native
+      // border-shape outline artifacts without scaling the 1px SVG stroke.
+      for (const entry of entries) {
+        if (entry.target === frame) {
+          const box = entry.borderBoxSize[0]
+          if (box) paintCapsule(box.inlineSize, box.blockSize)
+        }
+      }
+      if (entries.some((entry) => entry.target !== frame)) schedule()
+    })
     resizeObserver.observe(root)
+    if (kind === 'page-chip') resizeObserver.observe(frame, { box: 'border-box' })
     const mutations = new MutationObserver((records) => {
       // The overlay's own animation and geometry writes cannot feed back into
       // the observer. Root class/style changes do matter: card-motion-bleed
@@ -173,6 +206,12 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
       aria-hidden="true"
       hidden
       className={options.className}
-    />
+    >
+      {kind === 'page-chip' && (
+        <svg className="history-match-capsule absolute inset-0 hidden size-full overflow-visible" aria-hidden="true" focusable="false">
+          <path ref={capsulePathRef} fill="none" stroke="var(--accent-amber)" strokeWidth={1} />
+        </svg>
+      )}
+    </div>
   )
 }

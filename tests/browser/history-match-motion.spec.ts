@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { createCapsuleGeometry } from '@fleet/continuous-capsule'
 
 const frameSelector = '[data-tabout-part="history-match-frame"]'
 const pageFrameSelector = '[data-tabout-part="history-page-match-frame"]'
@@ -33,6 +34,67 @@ async function expectAligned(frame: Locator, card: Locator, outset = 8) {
 test.beforeEach(async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?historyHoverFrame&historyFrameMotion')
   await expect(historyChip(page, 'History Alpha')).toBeVisible()
+})
+
+test('overflow match outlines keep the capsule contour throughout resizing and interruption', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html?historyHoverFrame&historyFrameMotion&historyFrameOverflow')
+  const frame = page.locator(pageFrameSelector)
+  const expander = page.locator('[data-tabout-domain="alpha.test"] [data-tabout-part="overflow-expander"]')
+  await pointAt(historyChip(page, 'History Charlie'))
+  await expect(frame).toBeVisible()
+  await frame.evaluate((element) => {
+    new MutationObserver(() => {
+      for (const animation of element.getAnimations()) {
+        if (animation.playState === 'paused') continue
+        animation.pause()
+        animation.currentTime = 60
+      }
+    }).observe(element, { attributes: true, attributeFilter: ['style'] })
+  })
+  await pointAt(historyChip(page, 'History Bravo'))
+  await expect(expander).toHaveClass(/page-chip-overflow-hover-match/)
+  await expect.poll(() => frame.evaluate((element) => element.getAnimations()[0]?.playState)).toBe('paused')
+
+  async function expectCapsule() {
+    const actual = await frame.evaluate((element) => {
+      const style = getComputedStyle(element)
+      return {
+        width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height,
+        shape: element.querySelector('path')!.getAttribute('d')!, corner: style.getPropertyValue('corner-shape'),
+        stroke: style.outlineWidth, offset: style.outlineOffset,
+      }
+    })
+    const geometry = createCapsuleGeometry({ ...actual, borderWidth: 0, focusGap: 1, focusWidth: 1 })!
+    const coordinates = (path: string) => path.match(/-?\d*\.?\d+(?:e[+-]?\d+)?/gi)!.map(Number)
+    const expected = coordinates(geometry.focusPath)
+    const rendered = coordinates(actual.shape)
+    expect(rendered).toHaveLength(expected.length)
+    rendered.forEach((value, index) => expect(value).toBeCloseTo(expected[index]!, 3))
+    await expect(frame.locator('svg')).toBeVisible()
+    await expect(frame).toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)')
+    expect(actual).toMatchObject({ corner: 'superellipse(1)', stroke: '1px', offset: '1px' })
+  }
+  await expectCapsule()
+  await page.screenshot({ path: test.info().outputPath('overflow-frame-midpoint.png') })
+  await frame.evaluate((element) => element.getAnimations().forEach((animation) => animation.finish()))
+  await expectAligned(frame, expander, 0)
+  await expectCapsule()
+  await expect(expander).toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)')
+  await page.screenshot({ path: test.info().outputPath('overflow-frame-settled.png') })
+
+  await pointAt(historyChip(page, 'History Charlie'))
+  await expect.poll(() => frame.evaluate((element) => element.getAnimations()[0]?.playState)).toBe('paused')
+  await pointAt(historyChip(page, 'History Bravo'))
+  await expect(expander).toHaveClass(/page-chip-overflow-hover-match/)
+  await expect.poll(() => frame.evaluate((element) => element.getAnimations()[0]?.playState)).toBe('paused')
+  await expectCapsule()
+
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await expectAligned(frame, expander, 0)
+  await expectCapsule()
+  await pointAt(historyChip(page, 'History Charlie'))
+  await expect(frame).toHaveCSS('border-shape', 'none')
+  await expect(frame).toHaveCSS('corner-shape', 'superellipse(2)')
 })
 
 test('the frame travels, resizes without scaling its stroke, and retargets from its interrupted position', async ({ page }) => {

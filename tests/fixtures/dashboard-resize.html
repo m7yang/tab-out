@@ -868,6 +868,16 @@
           favIconUrl: ''
         })))
         windows.push({ id: 2, type: 'normal', focused: false })
+        if (fixtureParams.has('historyFrameOverflow')) {
+          const hidden = frameEntries[1]
+          hidden.url = 'https://alpha.test/page-99'
+          tabs.find((tab) => tab.id === hidden.tabId).url = hidden.url
+          tabs.unshift(...Array.from({ length: 12 }, (_, index) => ({
+            id: 9200 + index, windowId: 1, url: `https://alpha.test/page-${index + 10}`,
+            title: `Example ${index + 10}`, active: false, pinned: false, groupId: -1,
+            index: index + 10, favIconUrl: ''
+          })))
+        }
       }
       if (fixtureParams.has('historyHoverSeam')) {
         const newTabs = [1, 2].map((id) => ({

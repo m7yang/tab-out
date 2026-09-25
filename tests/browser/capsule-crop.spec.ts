@@ -1,10 +1,73 @@
 import { readdirSync } from 'node:fs'
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { createCapsuleGeometry } from '@fleet/continuous-capsule'
+
+async function maximumPixelDifference(page: Page, actual: Buffer, reference: Buffer) {
+  return await page.evaluate(async (shots) => {
+    const pixels = await Promise.all(shots.map(async (shot) => {
+      const image = new Image()
+      image.src = `data:image/png;base64,${shot}`
+      await image.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = image.width
+      canvas.height = image.height
+      const context = canvas.getContext('2d')!
+      context.drawImage(image, 0, 0)
+      return context.getImageData(0, 0, canvas.width, canvas.height).data
+    }))
+    let maximum = 0
+    for (let i = 0; i < pixels[0]!.length; i++) {
+      maximum = Math.max(maximum, Math.abs(pixels[0]![i]! - pixels[1]![i]!))
+    }
+    return maximum
+  }, [actual.toString('base64'), reference.toString('base64')])
+}
 
 for (const deviceScaleFactor of [1, 2, 3]) {
   test.describe(`at ${deviceScaleFactor}x display scale`, () => {
     test.use({ deviceScaleFactor })
+
+    test('the history overflow outline paints the full offset contour at fractional positions', async ({ page }) => {
+      await page.goto('/tests/fixtures/dashboard-resize.html?historyHoverFrame&historyFrameMotion&historyFrameOverflow')
+      await page.locator('[data-tabout-context="activation-history"][data-tabout="page-chip"]').filter({ hasText: 'History Bravo' }).hover()
+      const frame = page.locator('[data-tabout-part="history-page-match-frame"]')
+      await expect(frame).toBeVisible()
+      await frame.evaluate((element) => {
+        element.style.setProperty('--accent-amber', 'black')
+        const backdrop = document.createElement('div')
+        backdrop.style.cssText = `position:absolute;top:-3px;left:-3px;width:calc(${element.style.width} + 6px);height:calc(${element.style.height} + 6px);transform:${element.style.transform};background:white;z-index:2;pointer-events:none`
+        element.before(backdrop)
+      })
+      const transform = await frame.evaluate((element) => element.style.transform)
+      for (const fraction of [0, 0.25, 0.5, 0.75]) {
+        await frame.evaluate((element, { transform, fraction }) => {
+          element.style.transform = `${transform} translate(${fraction}px, ${fraction}px)`
+        }, { transform, fraction })
+        const rect = (await frame.boundingBox())!
+        const geometry = createCapsuleGeometry({ ...rect, borderWidth: 0, focusGap: 1, focusWidth: 1 })!
+        const clip = { x: Math.floor(rect.x) - 3, y: Math.floor(rect.y) - 3, width: Math.ceil(rect.width) + 6, height: Math.ceil(rect.height) + 6 }
+        const actual = await page.screenshot({ clip, path: test.info().outputPath(`outline-${fraction}.png`) })
+        await frame.evaluate((element, { rect, path }) => {
+          element.setAttribute('hidden', '')
+          const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+          svg.id = 'capsule-outline-reference'
+          svg.style.cssText = `position:absolute;left:0;top:0;transform:${element.style.transform};width:${rect.width}px;height:${rect.height}px;overflow:visible;z-index:3;pointer-events:none`
+          const outline = document.createElementNS(svg.namespaceURI, 'path')
+          outline.setAttribute('d', path)
+          outline.setAttribute('fill', 'none')
+          outline.setAttribute('stroke', 'black')
+          outline.setAttribute('stroke-width', '1')
+          svg.append(outline)
+          element.after(svg)
+        }, { rect, path: geometry.focusPath })
+        const reference = await page.screenshot({ clip, path: test.info().outputPath(`reference-outline-${fraction}.png`) })
+        // Compare the rendered stroke, not just its path coordinates. A native
+        // border-shape outline passes geometry checks but changes tip pixels.
+        expect(await maximumPixelDifference(page, actual, reference)).toBeLessThanOrEqual(12)
+        await page.locator('#capsule-outline-reference').evaluate((element) => element.remove())
+        await frame.evaluate((element) => element.removeAttribute('hidden'))
+      }
+    })
 
     for (const selector of ['.open-tabs-badge', '.pathgroup-header .chip-pathgroup', '.page-chip-expanded .chip-strip-indicator', '.title-suppression-token', '.page-chip-expanded .chip-title-suppression-marker', '[data-tabout-part="overflow-expander"]', '[data-tabout="toast"] [data-tabout-part="action-button"]']) {
       test(`${selector} retains its native shoulders at fractional pixel positions`, async ({ page }) => {
@@ -68,24 +131,7 @@ for (const deviceScaleFactor of [1, 2, 3]) {
             document.documentElement.append(svg)
           }, { rect, path: geometry.surfacePath, borderWidth, inset: geometry.inset })
           const reference = await page.screenshot({ clip, animations: 'disabled', path: test.info().outputPath(`reference-${top}.png`) })
-          const difference = await page.evaluate(async (shots) => {
-            const pixels = await Promise.all(shots.map(async (shot) => {
-              const image = new Image()
-              image.src = `data:image/png;base64,${shot}`
-              await image.decode()
-              const canvas = document.createElement('canvas')
-              canvas.width = image.width
-              canvas.height = image.height
-              const context = canvas.getContext('2d')!
-              context.drawImage(image, 0, 0)
-              return context.getImageData(0, 0, canvas.width, canvas.height).data
-            }))
-            let maximum = 0
-            for (let i = 0; i < pixels[0]!.length; i++) {
-              maximum = Math.max(maximum, Math.abs(pixels[0]![i]! - pixels[1]![i]!))
-            }
-            return maximum
-          }, [actual.toString('base64'), reference.toString('base64')])
+          const difference = await maximumPixelDifference(page, actual, reference)
           // Different rasterizers can differ slightly in antialiasing; the cropped
           // background loses entire black pixels (difference 255 at a half pixel).
           if (difference > 12) {
