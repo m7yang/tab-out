@@ -56,23 +56,30 @@ test('overflow match outlines keep the capsule contour throughout resizing and i
   await expect.poll(() => frame.evaluate((element) => element.getAnimations()[0]?.playState)).toBe('paused')
 
   async function expectCapsule() {
-    const actual = await frame.evaluate((element) => {
-      const style = getComputedStyle(element)
-      return {
-        width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height,
-        shape: element.querySelector('path')!.getAttribute('d')!, corner: style.getPropertyValue('corner-shape'),
-        stroke: style.outlineWidth, offset: style.outlineOffset,
-      }
-    })
-    const geometry = createCapsuleGeometry({ ...actual, borderWidth: 0, focusGap: 1, focusWidth: 1 })!
-    const coordinates = (path: string) => path.match(/-?\d*\.?\d+(?:e[+-]?\d+)?/gi)!.map(Number)
-    const expected = coordinates(geometry.focusPath)
-    const rendered = coordinates(actual.shape)
-    expect(rendered).toHaveLength(expected.length)
-    rendered.forEach((value, index) => expect(value).toBeCloseTo(expected[index]!, 3))
-    await expect(frame.locator('svg')).toBeVisible()
-    await expect(frame).toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)')
-    expect(actual).toMatchObject({ corner: 'superellipse(1)', stroke: '1px', offset: '1px' })
+    // Finishing WAAPI forces layout before ResizeObserver refreshes the path.
+    // Retry the complete snapshot so both measurements describe one paint.
+    await expect(async () => {
+      const actual = await frame.evaluate((element) => {
+        const style = getComputedStyle(element)
+        return {
+          width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height,
+          shape: element.querySelector('path')!.getAttribute('d')!, corner: style.getPropertyValue('corner-shape'),
+          stroke: style.outlineWidth, offset: style.outlineOffset,
+        }
+      })
+      const geometry = createCapsuleGeometry({ ...actual, borderWidth: 0, focusGap: 1, focusWidth: 1 })!
+      const coordinates = (path: string) => path.match(/-?\d*\.?\d+(?:e[+-]?\d+)?/gi)!.map(Number)
+      const expected = coordinates(geometry.focusPath)
+      const rendered = coordinates(actual.shape)
+      expect(rendered).toHaveLength(expected.length)
+      // One comparison keeps the original three-decimal tolerance without
+      // thousands of matcher calls competing with browser rendering.
+      const maximumError = Math.max(...rendered.map((value, index) => Math.abs(value - expected[index]!)))
+      expect(maximumError).toBeLessThan(0.0005)
+      await expect(frame.locator('svg')).toBeVisible()
+      await expect(frame).toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)')
+      expect(actual).toMatchObject({ corner: 'superellipse(1)', stroke: '1px', offset: '1px' })
+    }).toPass({ timeout: 5000 })
   }
   await expectCapsule()
   await page.screenshot({ path: test.info().outputPath('overflow-frame-midpoint.png') })
