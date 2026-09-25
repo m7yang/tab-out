@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { attachMenuItemBorder } from './capsule-border'
+import { attachCapsuleBorder, attachMenuItemBorder } from './capsule-border'
 import { useRetimer } from 'foxact/use-retimer'
 import {
   DESKTOP_WINDOW_MERGE_OPEN_MESSAGE,
@@ -35,9 +35,9 @@ const popupItemClassName =
   'relative flex w-full min-h-6 cursor-pointer items-center gap-1.5 rounded-full border-0 [--capsule-fill:transparent] bg-(--capsule-fill) px-2 py-1.5 text-left text-sm leading-tight text-foreground outline-none select-none [corner-shape:round] data-menu-multiline:rounded-[26px] data-menu-multiline:[corner-shape:squircle] hover:[--capsule-fill:var(--color-accent)] hover:text-accent-foreground focus-visible:[--capsule-fill:var(--color-accent)] focus-visible:text-accent-foreground disabled:pointer-events-none disabled:opacity-50'
 
 const popupSecondaryButtonClassName =
-  'inline-flex h-7 cursor-pointer items-center justify-center rounded-lg border border-border bg-transparent px-2.5 text-sm text-foreground outline-none [corner-shape:squircle] hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber)'
+  'inline-flex h-7 cursor-pointer items-center justify-center rounded-full border [--capsule-border-color:var(--color-border)] [--capsule-fill:transparent] border-(--capsule-border-color) bg-(--capsule-fill) px-2.5 text-sm text-foreground outline-none [corner-shape:round] hover:[--capsule-fill:var(--color-accent)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber)'
 const popupPrimaryButtonClassName =
-  'inline-flex h-7 cursor-pointer items-center justify-center rounded-lg border border-foreground bg-foreground px-2.5 text-sm text-background outline-none [corner-shape:squircle] hover:opacity-[0.88] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber)'
+  'inline-flex h-7 cursor-pointer items-center justify-center rounded-full border [--capsule-border-color:var(--color-foreground)] [--capsule-fill:var(--color-foreground)] border-(--capsule-border-color) bg-(--capsule-fill) px-2.5 text-sm text-background outline-none [corner-shape:round] hover:opacity-[0.88] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber)'
 
 type PopupMergePreview = {
   previewId: string
@@ -357,6 +357,7 @@ export function TabActionsPopup() {
               type="button"
               data-tabout-part="cancel-button"
               autoFocus
+              ref={attachCapsuleBorder}
               className={popupSecondaryButtonClassName}
               onClick={() => setMergeConfirm(null)}
             >
@@ -365,6 +366,7 @@ export function TabActionsPopup() {
             <button
               type="button"
               data-tabout-part="confirm-button"
+              ref={attachCapsuleBorder}
               className={popupPrimaryButtonClassName}
               onClick={confirmMergeHandoff}
             >
@@ -391,6 +393,7 @@ export function TabActionsPopup() {
               type="button"
               data-tabout-part="cancel-button"
               autoFocus
+              ref={attachCapsuleBorder}
               className={popupSecondaryButtonClassName}
               disabled={pendingAction === 'profile-transfer'}
               onClick={() => setProfileTransferConfirm(null)}
@@ -400,6 +403,7 @@ export function TabActionsPopup() {
             <button
               type="button"
               data-tabout-part="confirm-button"
+              ref={attachCapsuleBorder}
               className={popupPrimaryButtonClassName}
               disabled={pendingAction === 'profile-transfer'}
               onClick={transferNativeIntegrationProfile}
