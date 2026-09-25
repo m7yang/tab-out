@@ -40,6 +40,15 @@
   --ease-swift: cubic-bezier(0.2, 0, 0, 1);
 }
 
+/* Keep the canvas identical to the opaque History row animation backings. */
+body {
+  background-color: var(--card-bg);
+}
+
+body::before {
+  content: none;
+}
+
 .dashboard-view-capsule {
   position: absolute;
   overflow: visible;

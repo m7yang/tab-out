@@ -246,7 +246,7 @@ export function TabHistoryPanel({
             className="history-entry-scroll-hit-area h-screen w-full pointer-events-auto"
           />
         </div>
-        {/* Match moving row backings at rest, including over the page texture. */}
+        {/* Match moving row backings at rest to avoid flashes when motion settles. */}
         <div ref={historyContentRef} className="history-entry-list-content pointer-events-auto flex self-start w-65 min-w-0 flex-col gap-0 bg-tab-card pt-3 pr-3.5 pb-10 max-[980px]:w-full max-[980px]:pr-0 max-[980px]:pb-3">
           {rows.map((row) => {
             const layoutKey = historyPanelRowLayoutKey(row)
