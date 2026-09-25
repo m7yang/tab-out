@@ -1,0 +1,34 @@
+/* Chromium pixel-snaps border-shape background bounds. Paint inside a box with
+   1px of extra room, leaving layout and the control's focus outline untouched.
+   capsule-border.ts owns paint mode, the exceptional child, and cleanup. */
+:where([data-capsule-paint][data-capsule-ready]) {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-capsule-paint][data-capsule-ready] {
+  background-color: transparent;
+  border-color: transparent;
+  --capsule-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow, 0 0 #0000);
+  box-shadow: none;
+}
+
+.capsule-fill {
+  display: none;
+}
+
+[data-capsule-paint="pseudo"][data-capsule-ready]::before,
+[data-capsule-paint="child"][data-capsule-ready] > .capsule-fill {
+  content: '';
+  display: block;
+  position: absolute;
+  inset: calc(-1px - var(--capsule-border-width));
+  z-index: -1;
+  box-sizing: border-box;
+  pointer-events: none;
+  background: var(--capsule-fill);
+  border: var(--capsule-border-width) solid var(--capsule-border-color, transparent);
+  border-shape: var(--capsule-fill-shape) border-box;
+  box-shadow: var(--capsule-shadow);
+  transition: inherit;
+}

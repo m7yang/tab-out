@@ -138,7 +138,6 @@ export function usePageChipOverflow({
           onClick={onExpand}
           onTransitionEnd={onExpanderTransitionEnd}
         >
-          <span className="capsule-fill" aria-hidden="true" />
           <span className="chip-text block min-w-0 flex-1 overflow-hidden hyphens-auto break-normal text-[13px] max-h-[calc(2lh)] [hyphenate-character:'']">+{hiddenCount} more</span>
           {hiddenSuppressionMatchCount > 0 && (
             <span className={cn('page-chip-overflow-suppression-badge relative z-2 inline-flex h-4 min-w-4 items-center justify-center rounded-lg border border-transparent px-1 text-xs leading-none font-semibold text-foreground [corner-shape:squircle]', titleSuppressionBadgeClass(activeSuppressionTone))}>

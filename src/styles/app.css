@@ -2,6 +2,7 @@
 
 @import "tailwindcss/theme.css" layer(theme);
 @import "../../extension/base.css";
+@import "../components/capsule-border.css";
 
 @source "../";
 
@@ -287,39 +288,4 @@ body::before {
 .title-suppression-token,
 .chip-title-suppression-marker {
   border-color: var(--capsule-border-color, transparent);
-}
-
-/* Chromium pixel-snaps border-shape background bounds. Paint inside a box with
-   1px of extra room, leaving layout and the control's focus outline untouched.
-   Overflow expanders already use both pseudos, so they supply a fill child. */
-:where([data-capsule-ready]:not(svg)) {
-  position: relative;
-  isolation: isolate;
-}
-
-[data-capsule-ready]:not(svg) {
-  background-color: transparent;
-  border-color: transparent;
-  --capsule-shadow: var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000), var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow, 0 0 #0000);
-  box-shadow: none;
-}
-
-.capsule-fill {
-  display: none;
-}
-
-[data-capsule-ready]:not(svg):not([data-tabout-part="overflow-expander"])::before,
-[data-capsule-ready] > .capsule-fill {
-  content: '';
-  display: block;
-  position: absolute;
-  inset: calc(-1px - var(--capsule-border-width));
-  z-index: -1;
-  box-sizing: border-box;
-  pointer-events: none;
-  background: var(--capsule-fill, var(--tab-count-fill));
-  border: var(--capsule-border-width) solid var(--capsule-border-color, transparent);
-  border-shape: var(--capsule-fill-shape) border-box;
-  box-shadow: var(--capsule-shadow);
-  transition: inherit;
 }

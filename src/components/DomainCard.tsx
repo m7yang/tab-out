@@ -113,7 +113,7 @@ function TabBadge({
       ref={attachCapsuleBorder}
       aria-label={accessibleLabel}
       className={cn(
-        'open-tabs-badge tab-count-badge inline-flex h-5.5 box-border items-center [--tab-count-fill:rgba(82,82,82,0.08)] bg-(--tab-count-fill) px-2 py-0 text-[12px] font-medium tabular-nums text-(--accent-amber)',
+        'open-tabs-badge tab-count-badge inline-flex h-5.5 box-border items-center [--capsule-fill:rgba(82,82,82,0.08)] bg-(--capsule-fill) px-2 py-0 text-[12px] font-medium tabular-nums text-(--accent-amber)',
         isFiltered && 'tab-count-badge-filtered',
       )}
     >

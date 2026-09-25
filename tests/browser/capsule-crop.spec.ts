@@ -90,7 +90,6 @@ for (const deviceScaleFactor of [1, 2, 3]) {
         await expect(capsule).toBeVisible()
         await capsule.evaluate((element, selector) => {
           if (selector === '.open-tabs-badge') element.textContent = '3 closed'
-          element.style.setProperty('--tab-count-fill', 'black')
           element.style.setProperty('--capsule-fill', 'black')
           element.style.setProperty('--capsule-border-color', 'black')
           element.style.setProperty('--capsule-shadow', 'none')
@@ -146,6 +145,39 @@ for (const deviceScaleFactor of [1, 2, 3]) {
     }
   })
 }
+
+test('overflow capsule owns its paint through fallback, resize, and React removal', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html?motion=1')
+  const expander = page.locator('[data-tabout-part="overflow-expander"]').first()
+  await expect(expander).toHaveAttribute('data-capsule-ready', '')
+  await expect(expander.locator(':scope > .capsule-fill')).toHaveCount(1)
+  await expect(expander.locator(':scope > .capsule-fill')).toHaveAttribute('aria-hidden', 'true')
+  const attached = await expander.elementHandle()
+  if (!attached) throw new Error('Overflow expander is missing')
+
+  await expander.evaluate((element) => {
+    Object.assign(element.style, { width: '24px', height: '24px', minWidth: '0' })
+  })
+  await expect(expander).not.toHaveAttribute('data-capsule-ready')
+  await expect(expander.locator(':scope > .capsule-fill')).toBeHidden()
+  await expect(expander).toHaveCSS('border-shape', 'none')
+
+  await expander.evaluate((element) => { element.style.width = '240px' })
+  await expect(expander).toHaveAttribute('data-capsule-ready', '')
+  await expect(expander.locator(':scope > .capsule-fill')).toHaveCount(1)
+  await expect(expander.locator(':scope > .capsule-fill')).toBeVisible()
+  await expander.click()
+  await expect.poll(() => attached.evaluate((element) => element.isConnected)).toBe(false)
+  expect(await attached.evaluate((element) => ({
+    paint: element.getAttribute('data-capsule-paint'),
+    ready: element.getAttribute('data-capsule-ready'),
+    shape: element.style.getPropertyValue('border-shape'),
+    fillShape: element.style.getPropertyValue('--capsule-fill-shape'),
+    borderWidth: element.style.getPropertyValue('--capsule-border-width'),
+    paintChildren: element.querySelectorAll('.capsule-fill').length,
+  }))).toEqual({ paint: null, ready: null, shape: '', fillShape: '', borderWidth: '', paintChildren: 0 })
+  await attached.dispose()
+})
 
 test('capsule paint preserves token hover, focus, marker tones, and overflow decoration', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?motion=1')

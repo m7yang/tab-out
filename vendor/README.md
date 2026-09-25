@@ -28,11 +28,20 @@ outlines app-owned, including the original outline offsets. The adapter observes
 size and content changes; expanded and clamped captured labels are rebuilt with
 live refs.
 Narrow/circular dimensions and fragmented inline labels retain CSS pill rounding.
+Compact suppression and structural markers instead use a round path through the
+same padded painter, preserving pixel alignment when they expand.
 
 Chromium clips CSS `border-shape` backgrounds at fractional positions. Tab Out's
 padded paint layer works around this without changing Fleet's geometry or the
 vendored tarball. For consumer paint changes, consult the shared
-[adapter](../src/components/capsule-border.ts) and [styles](../src/styles/app.css).
+[adapter](../src/components/capsule-border.ts) and its
+[paint styles](../src/components/capsule-border.css).
+The ref owns observation, fallback selection, paint placement, and cleanup,
+including the decorative child used when overflow expanders reserve both pseudos.
+Callers provide their existing control and theme states through `--capsule-fill`
+and `--capsule-border-color`; fallback theme styles stay in
+[app.css](../src/styles/app.css). Paint-mode attributes, contour properties, and
+paint children are internal to the adapter.
 Preserve colors, borders, shadows, focus outlines, layout, and hit targets.
 
 After changing consumer paint, rebuild the extension and run

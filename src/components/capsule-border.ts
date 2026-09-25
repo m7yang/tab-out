@@ -12,13 +12,33 @@ function roundFallbackGeometry(width: number, height: number, borderWidth: numbe
   return { surfacePath, inset: borderWidth / 2 }
 }
 
-/** React ref adapter: change only the contour; CSS still owns all paint/states. */
+/** Owns measured contour, paint placement and cleanup; callers own theme/state. */
 export function attachCapsuleBorder(element: HTMLElement | null) {
   if (!element || !CSS.supports('border-shape', 'path("M0 0L1 0L1 1Z")')) return
 
   const roundMarkerFallback = element.matches('.chip-strip-indicator, .chip-title-suppression-marker')
+  // Overflow expanders reserve both pseudos for their own decoration. Keep the
+  // exceptional paint node outside the caller's React children and remove it
+  // with this attachment. Ordinary labels keep their existing pseudo paint.
+  const fill = element.matches('[data-tabout-part="overflow-expander"]')
+    ? element.ownerDocument.createElement('span')
+    : null
+  element.dataset.capsulePaint = fill ? 'child' : 'pseudo'
+  if (fill) {
+    fill.className = 'capsule-fill'
+    fill.setAttribute('aria-hidden', 'true')
+    element.append(fill)
+  }
   let previousSize = ''
   let borderBox: ResizeObserverSize | undefined
+
+  function clearGeometry() {
+    element?.style.removeProperty('border-shape')
+    element?.style.removeProperty('--capsule-fill-shape')
+    element?.style.removeProperty('--capsule-border-width')
+    if (element) delete element.dataset.capsuleReady
+  }
+
   function update() {
     if (!element) return
     const style = getComputedStyle(element)
@@ -46,10 +66,7 @@ export function attachCapsuleBorder(element: HTMLElement | null) {
       element.style.setProperty('--capsule-fill-shape', `path("${paddedPath}")`)
       element.dataset.capsuleReady = ''
     } else {
-      element.style.removeProperty('border-shape')
-      element.style.removeProperty('--capsule-fill-shape')
-      element.style.removeProperty('--capsule-border-width')
-      delete element.dataset.capsuleReady
+      clearGeometry()
     }
   }
 
@@ -67,9 +84,8 @@ export function attachCapsuleBorder(element: HTMLElement | null) {
   return () => {
     resize.disconnect()
     mutations.disconnect()
-    element.style.removeProperty('border-shape')
-    element.style.removeProperty('--capsule-fill-shape')
-    element.style.removeProperty('--capsule-border-width')
-    delete element.dataset.capsuleReady
+    clearGeometry()
+    fill?.remove()
+    delete element.dataset.capsulePaint
   }
 }
