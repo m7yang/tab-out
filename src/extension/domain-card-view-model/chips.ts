@@ -240,6 +240,13 @@ export function createChipBuilders({ filtering, isTabOutGroup, currentWindowId, 
         titleKey: titleKeyOf(tab),
       }
     })
+    // New tabs already have physical state buckets. Dashboard URL state must
+    // not merge those buckets back into a same-title URL variant group.
+    if (isTabOutGroup) {
+      return sortPageChipsInScope(entries.map(({ tab, chip }) => (
+        annotatePageChipPin(chip, pinScopeId, pageChipPinKeyForUrl(tab.url))
+      )))
+    }
     const entriesByTitle = Map.groupBy(entries, (entry) => entry.titleKey)
     entriesByTitle.delete('')
     const groupedTitleKeys = new Set(

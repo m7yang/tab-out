@@ -2,7 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { computeDomainCardViewModel } from '../src/extension/domain-card-view-model.js'
+import { titleForFilterInput } from '../src/extension/app-url.js'
+import { domainCardId } from '../src/extension/domain-card-id.js'
+import type { MissionOrderMap } from '../src/extension/dashboard-intake.js'
 import type { DomainGroup } from '../src/extension/types'
+import { rememberMissionOrder, type DashboardChipOrderMemoryMap } from '../src/hooks/useDashboardViewModels.js'
 import { collectDashboardChips, makeDashboardTab } from './helpers/domain-card-view-model.js'
 import { sameTitlePageChipTargets } from './helpers/same-title-page-chip-plan.js'
 
@@ -406,6 +410,94 @@ test('current and ordinary Tab Out aliases share one closable identity while sta
     assert.deepEqual(chips.map((chip) => chip.dupeCount), [1, 1])
     assert.equal(chips.find((chip) => chip.tabUrl === base)?.isCurrentTabOut, true)
     assert.equal(chips.find((chip) => chip.tabUrl === newTab)?.isCurrentTabOut, false)
+  } finally {
+    if (previous === undefined) delete g.chrome
+    else g.chrome = previous
+  }
+})
+
+test('New tabs keep current and duplicate chips stable across Dashboard View URL changes with remembered order', () => {
+  const g = globalThis as { chrome?: unknown }
+  const previous = g.chrome
+  g.chrome = { runtime: { id: 'tab-out' } }
+  try {
+    const base = 'chrome-extension://tab-out/index.html'
+    const previousOrder: MissionOrderMap = { tabs: new Map(), bookmarks: new Map(), history: new Map() }
+    const chipOrder: DashboardChipOrderMemoryMap = { tabs: new Map(), bookmarks: new Map(), history: new Map() }
+    const snapshots = ['', '?view=open-saved', '', '?view=open-saved'].map((search) => {
+      const tabs = Array.from({ length: 5 }, (_, index) => makeDashboardTab({
+        id: index + 1,
+        url: index === 0 ? `${base}${search}` : base,
+        title: titleForFilterInput(),
+        windowId: 1,
+        active: index === 0,
+        isTabOut: true,
+      }))
+      const group: DomainGroup = { domain: '__tab-out__', tabs }
+      const vm = computeDomainCardViewModel(group, {
+        currentWindowId: 1,
+        chipOrder: chipOrder.tabs.get(domainCardId(group.domain)) ?? new Map(),
+      })
+      const chips = collectDashboardChips(vm)
+      assert.equal(chips.length, 2)
+      assert.ok(chips.every((chip) => chip.sameTitlePageChipPlan === undefined))
+      const current = chips.find((chip) => chip.isCurrentTabOut)
+      assert.equal(current?.tabUrl, `${base}${search}`)
+      assert.equal(current?.tabId, 1)
+      assert.equal(vm.closableExtras, 4)
+      rememberMissionOrder({
+        previousOrder,
+        chipOrder,
+        source: 'tabs',
+        view: search ? 'open-saved' : 'all-tabs',
+        filter: '',
+        matchedCards: [{ group, vm }],
+        bookmarkMatchedCards: [],
+        historyMatchedCards: [],
+      })
+      return chips.map((chip) => ({
+        renderKey: chip.renderKey,
+        count: chip.dupeCount,
+        current: chip.isCurrentTabOut,
+      }))
+    })
+    assert.deepEqual(snapshots[1], snapshots[0])
+    assert.deepEqual(snapshots[2], snapshots[0])
+    assert.deepEqual(snapshots[3], snapshots[0])
+    assert.deepEqual(snapshots[0]?.map((chip) => chip.count), [1, 4])
+  } finally {
+    if (previous === undefined) delete g.chrome
+    else g.chrome = previous
+  }
+})
+
+test('New tabs keep current, pinned, Chrome-grouped, and ordinary bucket order despite URL priority and memory', () => {
+  const g = globalThis as { chrome?: unknown }
+  const previous = g.chrome
+  g.chrome = { runtime: { id: 'tab-out' } }
+  try {
+    const base = 'chrome-extension://tab-out/index.html'
+    const tabs = [
+      makeDashboardTab({ id: 1, url: `${base}?view=open-saved`, active: true }),
+      makeDashboardTab({ id: 2, url: `${base}?focusFilter=1`, pinned: true }),
+      makeDashboardTab({ id: 3, url: `${base}#example`, groupId: 7 }),
+      makeDashboardTab({ id: 4, url: base }),
+      makeDashboardTab({ id: 5, url: 'chrome://newtab/' }),
+    ].map((tab) => ({ ...tab, title: titleForFilterInput(), isTabOut: true }))
+    const vm = computeDomainCardViewModel({ domain: '__tab-out__', tabs }, {
+      currentWindowId: 1,
+      chipOrder: new Map(tabs.map((tab, index) => [`tab:url:${tab.url}`, tabs.length - index])),
+      chipPriority: new Map([[base, 100]]),
+    })
+    const chips = collectDashboardChips(vm)
+    assert.equal(chips.length, 4)
+    assert.deepEqual(chips.map((chip) => chip.tabId), [1, 2, 3, 4])
+    assert.ok(chips.every((chip) => chip.sameTitlePageChipPlan === undefined))
+    assert.equal(chips.find((chip) => chip.isCurrentTabOut)?.tabId, 1)
+    assert.equal(chips.find((chip) => chip.chromePinned)?.tabId, 2)
+    assert.equal(chips.find((chip) => chip.chromeGroupId === 7)?.tabId, 3)
+    assert.equal(chips.find((chip) => chip.tabId === 4)?.dupeCount, 2)
+    assert.equal(vm.closableExtras, 2)
   } finally {
     if (previous === undefined) delete g.chrome
     else g.chrome = previous

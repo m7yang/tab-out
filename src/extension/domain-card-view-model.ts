@@ -285,35 +285,39 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   function tabOpenStateRank(tab: DashboardTab): number {
     return isClosedSavedDashboardTab(tab) ? 1 : 0
   }
-  const uniqueTabSortMeta = new Map(uniqueTabs.map((tab) => [tab, {
-    priority: chipPriorityScore(tab),
-    openStateRank: tabOpenStateRank(tab),
-    sortLabel: sortLabel(tab),
-    ...(hasRememberedChipOrder
-      ? {
-          orderKey: dashboardChipOrderKeyForTab(tab),
-          orderAltKey: dashboardChipOrderAltKeyForTab(tab),
-        }
-      : {}),
-  }]))
-  uniqueTabs.sort((a, b) => {
-    const aMeta = uniqueTabSortMeta.get(a)!
-    const bMeta = uniqueTabSortMeta.get(b)!
-    const fallback = () => aMeta.openStateRank - bMeta.openStateRank ||
-      compareNumericText(aMeta.sortLabel, bMeta.sortLabel)
-    if (!hasRememberedChipOrder) {
-      return compareWithPriority(aMeta.priority, bMeta.priority, fallback)
-    }
-    return compareWithPriorityThenRememberedChipOrder(
-      aMeta.orderKey!,
-      bMeta.orderKey!,
-      aMeta.priority,
-      bMeta.priority,
-      fallback,
-      aMeta.orderAltKey,
-      bMeta.orderAltKey,
-    )
-  })
+  // New tabs arrive in current/pinned/grouped/ordinary bucket order.
+  // URL-based priority and memory must not reorder them when view state changes.
+  if (!isTabOutGroup) {
+    const uniqueTabSortMeta = new Map(uniqueTabs.map((tab) => [tab, {
+      priority: chipPriorityScore(tab),
+      openStateRank: tabOpenStateRank(tab),
+      sortLabel: sortLabel(tab),
+      ...(hasRememberedChipOrder
+        ? {
+            orderKey: dashboardChipOrderKeyForTab(tab),
+            orderAltKey: dashboardChipOrderAltKeyForTab(tab),
+          }
+        : {}),
+    }]))
+    uniqueTabs.sort((a, b) => {
+      const aMeta = uniqueTabSortMeta.get(a)!
+      const bMeta = uniqueTabSortMeta.get(b)!
+      const fallback = () => aMeta.openStateRank - bMeta.openStateRank ||
+        compareNumericText(aMeta.sortLabel, bMeta.sortLabel)
+      if (!hasRememberedChipOrder) {
+        return compareWithPriority(aMeta.priority, bMeta.priority, fallback)
+      }
+      return compareWithPriorityThenRememberedChipOrder(
+        aMeta.orderKey!,
+        bMeta.orderKey!,
+        aMeta.priority,
+        bMeta.priority,
+        fallback,
+        aMeta.orderAltKey,
+        bMeta.orderAltKey,
+      )
+    })
+  }
 
   const { foldGroups, foldedTabUrls } = collectCrossEnvFolds({
     uniqueTabs,

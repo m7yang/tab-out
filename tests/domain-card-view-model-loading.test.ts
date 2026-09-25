@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { computeDomainCardViewModel } from '../src/extension/domain-card-view-model.js'
 import type { DashboardTab, DomainGroup } from '../src/extension/types'
+import { collectDashboardChips } from './helpers/domain-card-view-model.js'
 
 function makeTab(overrides: Partial<DashboardTab> = {}): DashboardTab {
   return {
@@ -26,11 +27,6 @@ function makeTab(overrides: Partial<DashboardTab> = {}): DashboardTab {
 
 function firstChip(tabs: DashboardTab[]) {
   const group: DomainGroup = { domain: 'example.test', tabs }
-  return computeDomainCardViewModel(group, { currentWindowId: 1 }).sections?.[0]?.flatVisibleChips[0]
-}
-
-function firstNewTabChip(tabs: DashboardTab[]) {
-  const group: DomainGroup = { domain: '__tab-out__', label: 'New tabs', tabs }
   return computeDomainCardViewModel(group, { currentWindowId: 1 }).sections?.[0]?.flatVisibleChips[0]
 }
 
@@ -99,28 +95,45 @@ test('only awake open tabs can make a Page Chip loading', () => {
   )
 })
 
-test('the New tabs Page Chip clears after every represented alias completes', () => {
-  const loadingTabs = [
-    makeTab({
-      id: 1,
-      active: true,
-      isTabOut: true,
-      url: 'chrome://newtab/',
-      rawUrl: 'chrome://newtab/',
-    }),
-    makeTab({
-      id: 2,
-      isTabOut: true,
-      status: 'loading',
-      url: 'chrome-extension://tab-out-runtime/index.html',
-      rawUrl: 'chrome-extension://tab-out-runtime/index.html',
-    }),
-  ]
+test('New tabs loading stays within its physical bucket and clears after its aliases complete', () => {
+  const g = globalThis as { chrome?: unknown }
+  const previous = g.chrome
+  g.chrome = { runtime: { id: 'tab-out-runtime' } }
+  try {
+    const loadingTabs = [
+      makeTab({
+        id: 1,
+        active: true,
+        isTabOut: true,
+        url: 'chrome://newtab/',
+        rawUrl: 'chrome://newtab/',
+      }),
+      makeTab({
+        id: 2,
+        isTabOut: true,
+        status: 'loading',
+        url: 'chrome-extension://tab-out-runtime/index.html',
+        rawUrl: 'chrome-extension://tab-out-runtime/index.html',
+      }),
+      makeTab({ id: 3, isTabOut: true, url: 'chrome://newtab/', rawUrl: 'chrome://newtab/' }),
+    ]
 
-  assert.equal(firstNewTabChip(loadingTabs)?.loading, true)
-  assert.equal(firstNewTabChip(
-    loadingTabs.map((tab) => ({ ...tab, status: 'complete' })),
-  )?.loading, false)
+    const chipsFor = (tabs: DashboardTab[]) => collectDashboardChips(computeDomainCardViewModel(
+      { domain: '__tab-out__', label: 'New tabs', tabs },
+      { currentWindowId: 1 },
+    ))
+    const loadingChips = chipsFor(loadingTabs)
+    assert.equal(loadingChips.length, 2)
+    assert.equal(loadingChips.find((chip) => chip.isCurrentTabOut)?.loading, false)
+    const duplicates = loadingChips.find((chip) => !chip.isCurrentTabOut)
+    assert.equal(duplicates?.dupeCount, 2)
+    assert.equal(duplicates?.loading, true)
+    assert.deepEqual(chipsFor(loadingTabs.map((tab) => ({ ...tab, status: 'complete' })))
+      .map((chip) => chip.loading), [false, false])
+  } finally {
+    if (previous === undefined) delete g.chrome
+    else g.chrome = previous
+  }
 })
 
 test('duplicate, same-title, and folded Page Chips recompute after loading completes', () => {
