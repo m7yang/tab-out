@@ -251,15 +251,36 @@ single-line item is 24.25px tall; the 160px minimum popup gives it 152px width.
 
 With that zero-border capsule path and a fixed 4px clear band, the general
 convex-contour function fits an ideal outer squircle radius of about 28.200px.
-Sampling at 90, 180, and 360 subdivisions selects the existing **28px token**;
-its modeled clearance is about 3.70–4.36px. No optical bias is added. The popup
-ring remains the preset's 1px outward ring and does not reduce the inner gap.
+Sampling at 90, 180, and 360 subdivisions keeps that fit stable. Use **28.2px**
+for this pattern after the user's explicit request to find the best rendered
+fit. This retains the measured value instead of the usual half-pixel token
+rounding; it supersedes the preliminary 30px optical adjustment.
+
+Native Chromium 153 opaque fill masks were sampled at 16× and 32×, sweeping
+radii from 24px to 36px in 0.5px steps, then refined from 28px to 28.5px in
+0.1px steps at 32× and 64×. Interpolated midpoint pixel crossings supplied the
+outer contour; nearest-segment distances to the actual capsule path minimized
+the largest deviation from the 4px straight clear band. Both refinement scales
+select 28.2px. The native clearance ranges are approximately:
+
+| Outer radius | Corner clearance | Maximum deviation from 4px |
+| --- | --- | --- |
+| 28px | 3.70–4.36px | 0.36px |
+| **28.2px** | **3.69–4.31px** | **0.31px** |
+| 30px | 3.54–4.00px | 0.46px |
+
+A squircle and the measured capsule have different profiles, so one radius
+cannot produce an exact parallel contour. This is the best sampled scalar
+fit, not a claim of perceptual perfection. The preset's 1px outward ring and
+shadow remain unchanged; the measurements concern the popup fill boundary.
 
 For a one-item menu, CSS caps the used radius at half the 32.25px popup height
 (16.125px). This is the best available radius under the unchanged dimensions,
 but its modeled corner clearance can reach about 7px. Preserve that compact
-height. Wrapped rows likewise retain their content-driven height; the
-28px token is fitted to the normal single-line row, not every possible height.
+height. A two-item menu has room for the full 28.2px radius. Wrapped rows
+retain their content-driven height; the 28.2px token follows the normal single-line
+row pattern, not every possible height. This adjustment applies to click/context
+menu shells; the Select and toolbar-popup patterns retain their own geometry.
 
 ### Toolbar popup geometry
 
