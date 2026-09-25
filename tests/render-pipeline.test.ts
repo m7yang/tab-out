@@ -1288,6 +1288,41 @@ test('computeDomainCardViewModel treats Google Search as shared hidden title tex
   assert.equal(section.hasFlat, true)
 })
 
+test('GitHub owner headings persist as a repository shrinks to one page', () => {
+  const tabs = [
+    makeTab({ url: 'https://github.com/example/repo', title: 'Repository overview' }),
+    makeTab({ id: 2, url: 'https://github.com/example/repo/issues', title: 'Repository issues' }),
+  ]
+  const section = firstSection(computeDomainCardViewModel({ domain: 'github.com', tabs }))
+  const owner = atOrThrow(section.websitePathSections, 0)
+  assert.equal(owner.label, '/example')
+  assert.deepEqual(owner.clusters.map(({ key, label }) => ({ key, label })), [{ key: 'example/repo', label: 'repo' }])
+  assert.equal(section.clusters.length, 0)
+
+  const singleOwner = atOrThrow(firstSection(computeDomainCardViewModel({ domain: 'github.com', tabs: tabs.slice(0, 1) })).websitePathSections, 0)
+  assert.equal(singleOwner.label, '/example')
+  assert.equal(singleOwner.clusters.length, 0)
+  assert.equal(singleOwner.flatVisibleChips.length, 1)
+})
+
+test('GitHub owner sections separate same-named repositories and preserve PR cluster identities', () => {
+  const tabs = ['example', 'sample'].flatMap((owner, index) => [
+    makeTab({ id: index * 3 + 1, url: `https://github.com/${owner}/repo`, title: 'Repository overview' }),
+    makeTab({ id: index * 3 + 2, url: `https://github.com/${owner}/repo/pull/1`, title: 'First change' }),
+    makeTab({ id: index * 3 + 3, url: `https://github.com/${owner}/repo/pull/2`, title: 'Second change' }),
+  ])
+  const owners = firstSection(computeDomainCardViewModel({ domain: 'github.com', tabs })).websitePathSections
+  assert.deepEqual(owners.map(({ label }) => label), ['/example', '/sample'])
+  for (const owner of owners) {
+    assert.deepEqual(owner.clusters.map(({ key, label, isPR }) => ({ key, label, isPR })), [
+      { key: `${owner.label.slice(1)}/repo`, label: 'repo', isPR: false },
+      { key: `${owner.label.slice(1)}/repo:pr`, label: 'repo', isPR: true },
+    ])
+  }
+  assert.equal(resolveWebsitePathSection('https://github.com/settings/profile'), null)
+  assert.equal(resolveWebsitePathSection('https://github.com/'), null)
+})
+
 test('resolveWebsitePathSection returns raw Google document product paths', () => {
   assert.deepEqual(resolveWebsitePathSection('https://docs.google.com/document/d/doc-alpha/edit'), {
     key: '/document',
@@ -2289,7 +2324,7 @@ test('computeDomainCardViewModel ranks path groups by their strongest chip prior
     },
   )
 
-  assert.deepEqual(firstSection(vm).clusters.map((cluster) => cluster.label), ['example/bravo', 'example/alpha'])
+  assert.deepEqual(atOrThrow(firstSection(vm).websitePathSections, 0).clusters.map((cluster) => cluster.label), ['bravo', 'alpha'])
 })
 
 test('parseFilterQuery separates tokens, quoted phrases, and open-ended phrases', () => {

@@ -64,7 +64,7 @@
 
 - A **Website Path Section** uses known-host URL path rules first, then falls back to a generic first-segment section only when that segment has multiple pages in the current root/subdomain section and grouping reduces clutter.
 - Tenant-style **Domain Cards** keep subdomain sections outside **Website Path Sections**, so unrelated tenants are not mixed before their website paths are grouped.
-- A **Website Path Section** is visible only when it reduces ambiguity: multiple website path sections are present, or one section groups multiple pages while sibling pages remain outside it.
+- A **Website Path Section** is visible when it reduces ambiguity: multiple website path sections are present, or one section groups multiple pages while sibling pages remain outside it. GitHub owner sections always remain visible, including for a single owner or page, because repository labels rely on that owner context.
 - **Website Path Sections** do not introduce a new indentation level unless their title-suppression summaries can stay visually aligned with the group that owns them.
 - A **Website Path Section** may contain one or more **Path Groups**, and a **Path Group** may contain one or more **Domain Card Page Chips**.
 - **Path Group** singleton behavior belongs to the Path Group rule itself; adding a **Website Path Section** does not change whether a single site-specific object stays grouped.
@@ -79,6 +79,7 @@
 - A **Domain Card Page Chip** pin is Tabs-source ordering state for an exact page identity inside one rendered sibling scope; pinned chips sort before Working Set priority but do not move across Domain Cards, subdomain sections, Website Path Sections, Path Groups, or Sources. Standalone pinned chips show a favicon-corner pin marker. Same-title URL distinguishers remain in one visual group regardless of pin state: pinned variants sort first and show a pin marker in the existing left action gutter, while the group enters the local pinned order at its earliest pinned variant.
 - For `docs.google.com`, **Website Path Sections** start with document-creation product paths: `/document`, `/spreadsheets`, `/presentation`, `/forms`, and `/drawings`.
 - For `*.atlassian.net`, **Website Path Sections** start with workflow/product path prefixes: `/browse`, `/issues`, `/wiki`, `/jira`, and `/servicedesk`.
+- For `github.com`, owner **Website Path Sections** show `/owner` as a plain heading, and repository **Path Groups** show only `/repo` in their pill. Group identity retains `owner/repo`, repository singleton and PR-splitting rules remain unchanged, and reserved GitHub routes do not become owner sections.
 - For other sites, **Website Path Sections** may use the first path segment such as `/resource`, but singleton generic segments stay flat.
 - A **Filter Query** is the app-owned matching contract for eligible **Dashboard Items** from the selected **Dashboard View** and enabled **Companion Results**.
 - A **Dashboard Item's** first-pass searchable text is its title and URL.

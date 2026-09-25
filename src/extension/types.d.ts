@@ -93,6 +93,7 @@ export interface UrlCanonicalizerRule {
 export interface WebsitePathSectionResult {
   key: string
   label: string
+  alwaysShow?: boolean
 }
 
 export interface WebsitePathSectionRule {

@@ -459,7 +459,9 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
       const clusterClosable = allowMutations ? orderedTabs.filter(isBulkClosableTab) : []
       return {
         key,
-        label,
+        // GitHub owners always have a Website Path Section; keep the full
+        // cluster identity above, but don't repeat its owner in the pill.
+        label: group.domain === 'github.com' ? label.slice(label.indexOf('/') + 1) : label,
         isPR,
         count: tabs.length,
         closableUrls: clusterClosable.map((t) => t.url),
@@ -631,6 +633,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
       () => compareNumericText(a.label, b.label),
     ))
     const showWebsitePathSections =
+      websitePathBucketList.some((section) => section.alwaysShow) ||
       websitePathBucketList.length > 1 ||
       ((websitePathBucketList[0]?.tabs.length ?? 0) >= 2 && tabsWithoutWebsitePathSection.length > 0)
     const parentTabs = showWebsitePathSections ? tabsWithoutWebsitePathSection : sectionTabs

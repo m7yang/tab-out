@@ -100,10 +100,8 @@ test('computeDomainCardViewModel floats a pinned website-path section to the top
 })
 
 test('computeDomainCardViewModel floats a pinned pathgroup cluster to the top within its parent', () => {
-  // Two github.com repo clusters under the same owner so the generic
-  // website-path bucketing collapses to a single bucket (which then doesn't
-  // emit a website-path section) — leaving the per-repo clusters at the
-  // apex subdomain. Default order is alphabetical: acme/one, acme/two.
+  // Both repository clusters stay under the visible /acme owner section.
+  // Default order is alphabetical: acme/one, acme/two.
   const tabs = [
     makeTab({ id: 1, url: 'https://github.com/acme/one' }),
     makeTab({ id: 2, url: 'https://github.com/acme/one/issues' }),
@@ -113,17 +111,15 @@ test('computeDomainCardViewModel floats a pinned pathgroup cluster to the top wi
   const group = groupFor('github.com', tabs)
 
   const baseline = computeDomainCardViewModel(group)
-  const baselineSection = baseline.sections?.find((s) => s.key === '')
+  const baselineSection = baseline.sections?.find((s) => s.key === '')?.websitePathSections[0]
   assert.ok(baselineSection)
   assert.deepEqual(baselineSection.clusters.map((c) => c.key), ['acme/one', 'acme/two'])
 
-  // Pathgroup directly under the subdomain (no website-path parent), so the
-  // website-path slot is empty.
   const pinnedSections = new Set([
-    pathgroupPinId('github.com', '', '', 'acme/two'),
+    pathgroupPinId('github.com', '', '/acme', 'acme/two'),
   ])
   const vm = computeDomainCardViewModel(group, { pinnedSections })
-  const section = vm.sections?.find((s) => s.key === '')
+  const section = vm.sections?.find((s) => s.key === '')?.websitePathSections[0]
   assert.ok(section)
   assert.deepEqual(section.clusters.map((c) => c.key), ['acme/two', 'acme/one'])
   assert.deepEqual(section.clusters.map((c) => c.isPinned), [true, false])

@@ -1,3 +1,4 @@
+import { isGitHubRepositoryOwnerPathSegment } from './github-url.js'
 import type { WebsitePathSectionResult, WebsitePathSectionRule } from './types'
 
 function recognizedPathPrefix(pathname: string, prefixes: string[]): string {
@@ -33,6 +34,15 @@ const ATLASSIAN_PREFIXES = [
 ]
 
 const BUILT_IN_WEBSITE_PATH_SECTION_RULES: WebsitePathSectionRule[] = [
+  {
+    hostname: 'github.com',
+    extract: (url) => {
+      const prefix = firstPathSegment(url.pathname)
+      return isGitHubRepositoryOwnerPathSegment(prefix.slice(1))
+        ? { key: prefix, label: prefix, alwaysShow: true }
+        : null
+    },
+  },
   {
     hostname: 'docs.google.com',
     extract: (url) => pathSection(recognizedPathPrefix(url.pathname, GOOGLE_DOCS_PREFIXES)),
