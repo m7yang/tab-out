@@ -29,7 +29,7 @@
   --color-foreground: var(--color-black);
   --color-muted-foreground: var(--color-neutral-500);
   --color-tab-live: var(--color-foreground);
-  --color-tab-closed: var(--color-neutral-600);
+  --color-tab-closed: color-mix(in oklab, var(--color-neutral-700) 50%, var(--color-neutral-800));
   --color-tab-card: var(--card-bg);
   --color-background: var(--paper);
   --color-popover: var(--card-bg);
@@ -51,6 +51,11 @@
 /* Keep the canvas identical to the opaque History row animation backings. */
 body {
   background-color: var(--card-bg);
+}
+
+/* Balance thicker strokes only in closed titles; open titles keep full ink. */
+.text-tab-closed .chip-title-fixation {
+  color: color-mix(in srgb, currentColor 85%, transparent);
 }
 
 body::before {
