@@ -85,7 +85,7 @@ function TabBadgeCount({ count }: { count: string }) {
 
   return slashIndex > 0 ? (
     <span className="inline-flex items-center gap-0">
-      <span className="tab-count-badge-current font-bold text-(--accent-amber)">{count.slice(0, slashIndex)}</span>
+      <span className="tab-count-badge-current font-[BlinkMacSystemFont] font-bold font-stretch-150% text-(--accent-amber)">{count.slice(0, slashIndex)}</span>
       <span className="tab-count-badge-total font-medium text-muted-foreground">{count.slice(slashIndex)}</span>
     </span>
   ) : count
@@ -172,12 +172,11 @@ function ReorderPinnedDomainButton({
 
 function DomainTitle({ displayName, subdomainKey = '' }: { displayName: string, subdomainKey?: string }) {
   const { name, suffix } = splitDomainForDisplay(displayName)
-  if (!suffix && !subdomainKey) return displayName
 
   return (
     <>
       {subdomainKey && <span className="domain-title-subdomain font-semibold text-muted-foreground">{subdomainKey}.</span>}
-      <span className="domain-title-name">{suffix ? name : displayName}</span>
+      <span className="domain-title-name font-[BlinkMacSystemFont] font-stretch-150%">{suffix ? name : displayName}</span>
       {suffix && <span className="domain-title-suffix font-semibold text-muted-foreground">{suffix}</span>}
     </>
   )

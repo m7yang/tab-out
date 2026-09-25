@@ -3458,7 +3458,7 @@ test('DomainCard renders the public suffix as less prominent title text', () => 
     }),
   )
 
-  assert.match(html, /<span class="domain-title-name">example<\/span>/)
+  assert.match(html, /<span class="domain-title-name[^"]*">example<\/span>/)
   assert.match(html, /<span class="domain-title-suffix[^"]*\bfont-semibold\b[^"]*\btext-muted-foreground\b[^"]*">\.co\.uk<\/span>/)
   assert.doesNotMatch(html, /domain-title-suffix[^"]*\bopacity-/)
   assert.match(html, /<span class="mission-name[^"]*font-black[^"]*"/)
@@ -3489,7 +3489,7 @@ test('DomainCard inlines a single non-port subdomain into the title', () => {
 
   assert.match(html, /<span class="domain-title-subdomain[^"]*\bfont-semibold\b[^"]*\btext-muted-foreground\b[^"]*">docs\.<\/span>/)
   assert.doesNotMatch(html, /domain-title-subdomain[^"]*\bopacity-/)
-  assert.match(html, /<span class="domain-title-name">example<\/span>/)
+  assert.match(html, /<span class="domain-title-name[^"]*">example<\/span>/)
   assert.match(html, /<span class="domain-title-suffix[^"]*">\.com<\/span>/)
   assert.doesNotMatch(html, /\bmission-subdomain\b/)
 })
@@ -3517,7 +3517,7 @@ test('DomainCard keeps a single localhost port in the subdomain pill', () => {
   )
 
   assert.doesNotMatch(html, /domain-title-subdomain/)
-  assert.match(html, /<span class="mission-name[^"]*">localhost<\/span>/)
+  assert.match(html, /<span class="mission-name[^"]*"><span class="domain-title-name[^"]*">localhost<\/span><\/span>/)
   assert.match(html, /<span class="[^"]*\bmission-subdomain\b[^"]*before:content-\[[^"]*:[^"]*\][^"]*">3001<\/span>/)
 })
 

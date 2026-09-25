@@ -1630,6 +1630,8 @@ test('Page Chip keeps hydrated title details and interaction chrome in one expan
     text.style.flex = '0 0 130px'
     text.style.maxWidth = '130px'
     text.style.maxHeight = 'calc(1lh)'
+    // Give the rectangular retention test a reliably non-hit-tested corner.
+    element.style.clipPath = 'inset(0 round 8px)'
   })
 
   const readExpansionState = (surface: HTMLElement) => {
@@ -1683,7 +1685,8 @@ test('Page Chip keeps hydrated title details and interaction chrome in one expan
 
   const nonHoverPoint = await chip.evaluate((surface) => {
     const rect = surface.getBoundingClientRect()
-    const offsets = [0, 0.05, 0.1, 0.25, 0.5, 0.75, 1]
+    // Keep pointer coordinates inside the rectangle after browser pixel rounding.
+    const offsets = [1, 2, 3]
     for (const offset of offsets) {
       const points: Array<[number, number]> = [
         [rect.left + offset, rect.top + offset],
@@ -4414,7 +4417,10 @@ test('closing the final Page Chip in a scope keeps that retained scope in place'
   const followingSlot = followingChip.locator('xpath=ancestor::*[@data-tabout-removal-item][1]')
   await expect(followingSlot).toHaveCount(1)
   const followingRemovalKey = await followingSlot.getAttribute('data-tabout-removal-key')
-  const beforeTop = await followingSlot.evaluate((element) => element.getBoundingClientRect().top)
+  // Header badges may wrap as the open/closed counts change; measure within the card body.
+  const scopeTop = (element: HTMLElement) => element.getBoundingClientRect().top
+    - element.closest('.mission-card')!.getBoundingClientRect().top
+  const beforeTop = await followingSlot.evaluate(scopeTop)
 
   await chip.hover()
   await chip.locator('[data-tabout-part="close-button"]').click({ force: true })
@@ -4422,7 +4428,7 @@ test('closing the final Page Chip in a scope keeps that retained scope in place'
   await expect(slot).toBeVisible()
   await expect(card.locator(`[data-tabout-layout-scope="${scope}"][data-tabout-layout-item]`)).toHaveCount(1)
   await expect(followingSlot).toHaveAttribute('data-tabout-removal-key', followingRemovalKey || '')
-  const afterTop = await followingSlot.evaluate((element) => element.getBoundingClientRect().top)
+  const afterTop = await followingSlot.evaluate(scopeTop)
   expect(Math.abs(afterTop - beforeTop)).toBeLessThanOrEqual(1)
   await expect(page.locator('.page-chip-closing-ghost')).toHaveCount(0)
   await expect(card.locator('.intra-card-layout-moving')).toHaveCount(0)
