@@ -1,13 +1,20 @@
 # Continuous capsule
 
-`fleet-continuous-capsule-0.2.0.tgz` is produced by `pnpm pack` from
-`/Users/ian/Developer/continuous-capsule`, based on standalone commit
-`f71c24a3222e4f8ae8cbd6ea9b437a3470fec344` plus the uncommitted native-rectangle
-addition dated 2026-09-26. Its SHA-256 is
-`711efbfc49ea14f1c2e4fdf398506909dd64232eba5bc73de148bb3d93264528`.
-Version 0.2.0 adds `createContinuousRectangleGeometry`; existing capsule output
-is unchanged. The pinned profile is `swiftui-macos-27.0-26A428`. Its independent
-561-sample native corpus and exporter stay in the package source repository.
+`fleet-continuous-capsule-0.3.0.tgz` is produced by `pnpm pack` from
+`/Users/ian/Developer/continuous-capsule` at standalone commit
+`fcd069cd97a05e6188ee196694cb46cd4e414b76` (2026-09-26).
+Its SHA-256 is
+`79091b0f2dfd76b444b9cbeeb7fabca79ff0efc4323d6f943968397733d2309c`.
+Version 0.3.0 adopts the frozen capsule render fit and includes the zero-radius
+rectangle focus-ring fix. The profile is
+`swiftui-macos-27.0-26A428-render-fit-v1`. Original native exports, the training
+capture, frozen fit, comparison report, and reproduction scripts remain in the
+package repository. The 0.2.0 tarball is retained unchanged as the prior artifact.
+
+The fit improves all eight high-resolution holdouts and seven of eight 2×
+holdouts; 180×24 worsens by 0.0176 CSS px at 2×. It approximates native filled
+silhouettes on the recorded OS, not every Apple control or browser pixel.
+See [ADR 0056](../docs/adr/0056-adopt-native-render-fitted-capsules.md).
 
 Tab Out now uses CSS midpoint corners for tall Page Chips and card outlines
 ([ADR 0055](../docs/adr/0055-use-midpoint-corners.md)); compact capsules still use
@@ -33,7 +40,7 @@ The History match frame retains full geometry for its animated offset outline.
 Overflow expanders, open-tab count badges, title-suppression tokens, chip
 suppression markers, path-group labels (including PR badges), structural strip
 indicators, toast buttons, Select controls/options, and click/context/toolbar-popup menu items
-apply the measured path through CSS `border-shape`. This
+apply the fitted path through CSS `border-shape`. This
 keeps their existing backgrounds, borders, inset highlights, shadows, and focus
 outlines app-owned, including the original outline offsets. The adapter observes
 size and content changes; expanded and clamped captured labels are rebuilt with
@@ -46,8 +53,7 @@ Compact suppression and structural markers instead use a round path through the
 same padded painter, preserving pixel alignment when they expand.
 
 Chromium clips CSS `border-shape` backgrounds at fractional positions. Tab Out's
-padded paint layer works around this without changing Fleet's geometry or the
-vendored tarball. For consumer paint changes, consult the shared
+padded paint layer works around this without changing the capsule geometry. For consumer paint changes, consult the shared
 [adapter](../src/components/capsule-border.ts) and its
 [paint styles](../src/components/capsule-border.css).
 The ref owns observation, fallback selection, paint placement, and cleanup,

@@ -56,7 +56,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
-    "@fleet/continuous-capsule": "file:vendor/fleet-continuous-capsule-0.2.0.tgz",
+    "@fleet/continuous-capsule": "file:vendor/fleet-continuous-capsule-0.3.0.tgz",
     "cn": "^0.2.6",
     "effect": "4.0.0-rc.113",
     "es-toolkit": "^1.52.0",
