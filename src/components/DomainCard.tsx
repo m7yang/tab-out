@@ -85,7 +85,7 @@ function TabBadgeCount({ count }: { count: string }) {
 
   return slashIndex > 0 ? (
     <span className="inline-flex items-center gap-0">
-      <span className="tab-count-badge-current font-[BlinkMacSystemFont] font-bold font-stretch-150% text-(--accent-amber)">{count.slice(0, slashIndex)}</span>
+      <span className="tab-count-badge-current font-bold text-(--accent-amber)">{count.slice(0, slashIndex)}</span>
       <span className="tab-count-badge-total font-medium text-muted-foreground">{count.slice(slashIndex)}</span>
     </span>
   ) : count
