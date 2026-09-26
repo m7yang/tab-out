@@ -77,6 +77,8 @@ interface PageChipProps {
   chip: DashboardChipData
   filter?: string | undefined
   layoutScope?: string | undefined
+  groupContinuesAbove?: boolean | undefined
+  groupContinuesBelow?: boolean | undefined
   suppressedTitleToneByText?: Readonly<Record<string, TitleSuppressionTone | ''>> | undefined
 }
 
@@ -254,7 +256,7 @@ function ChipFaviconFrame({ chip, dupeCount, showDefaultFavicon, showFaviconClos
   )
 }
 
-function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTitleToneByText }: PageChipProps) {
+function usePageChipElement({ chip, filter = '', layoutScope = '', groupContinuesAbove = false, groupContinuesBelow = false, suppressedTitleToneByText }: PageChipProps) {
   const { activeSuppressedTitle, highlightTerms: cardHighlightTerms } = useDomainCardContext()
   const { onHoverUrlChange, onLayoutChange, onTogglePinnedPageChip } = useDashboardActions()
   const envs = Array.isArray(chip.envs) ? chip.envs : []
@@ -1091,7 +1093,6 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     '--chip-interaction-bg': trim.styleVars.interactionBg,
     '--chip-target-interaction-bg': PAGE_CHIP_TARGET_INTERACTION_BG,
     '--chip-rest-bg': trim.styleVars.restBg,
-    '--group-color': chip.isGrouped ? chip.groupDotColor ?? undefined : undefined,
   })
   const hasTitleSuppressionMarkers = suppressedTitleParts.length > 0 || chip.displaySegments.some(isTitleSuppressionSegment)
   const hasStructuralPlaceholders = chip.displaySegments.some((segment) => isStructuralPlaceholderSegment(segment) && !!(segment.label || chip.pathGroupLabel))
@@ -1829,7 +1830,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       data-title-collapsed={shouldExpandChip && !chipExpanded ? '' : undefined}
       data-loading={chip.loading ? 'true' : undefined}
       className={cn(
-        "page-chip group/page-chip relative flex items-start gap-2 rounded-page-chip border-0 [--capsule-fill:transparent] bg-(--capsule-fill) pt-1.25 pl-3 text-left text-[13px] leading-tight text-tab-live font-[inherit] [corner-shape:superellipse(1.7)] transition-[color] duration-100 before:pointer-events-none before:absolute before:top-1.75 before:bottom-1.75 before:left-1 before:w-0.5 before:rounded-[1px] before:bg-(--group-color,transparent) before:[corner-shape:squircle] before:content-[''] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-(--chip-hover-fade-width) after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--chip-hover-fade-bg)_34%,var(--chip-hover-fade-bg)_100%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none",
+        "page-chip group/page-chip relative flex items-start gap-2 rounded-page-chip border-0 [--capsule-fill:transparent] bg-(--capsule-fill) pt-1.25 pl-3 text-left text-[13px] leading-tight text-tab-live font-[inherit] [corner-shape:superellipse(1.7)] transition-[color] duration-100 after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-(--chip-hover-fade-width) after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--chip-hover-fade-bg)_34%,var(--chip-hover-fade-bg)_100%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none",
         isTitleVariantGroup ? 'pr-[2.5px] pb-[2.5px]' : 'pr-1 pb-1.25',
         !chip.iconOnly && 'w-full',
         chipCursorClass,
@@ -1971,6 +1972,18 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       ref={chipSlotRef}
       {...variantGroupInteractionProps}
     >
+      {chip.isGrouped && !chip.iconOnly && (
+        <span
+          data-tabout-part="group-rail"
+          className={cn(
+            'pointer-events-none absolute -left-1.5 w-0.5',
+            groupContinuesAbove ? 'top-0' : 'top-1.75 rounded-t-[1px]',
+            groupContinuesBelow ? 'bottom-0' : 'bottom-1.75 rounded-b-[1px]',
+          )}
+          style={{ backgroundColor: chip.groupDotColor ?? undefined }}
+          aria-hidden="true"
+        />
+      )}
       {renderedChipElement}
       {!chipExpanded && hoverMatchOutline}
     </div>

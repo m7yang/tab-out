@@ -909,11 +909,35 @@
           }]
         }
       }
+      if (fixtureParams.has('groupRails')) {
+        const mixedGroups = fixtureParams.has('mixedGroupRails')
+        const titles = mixedGroups
+          ? ['A Overview', 'B Shared', 'B Shared', 'C Details', 'D Unified', 'D Unified', 'E End']
+          : ['A Overview', 'B Setup guide', 'C Inbox', 'D Roadmap', 'E Tasks', 'F Notes', 'G Other project', 'H Reference']
+        const groupIds = mixedGroups ? [101, 101, 202, 101, 101, 101, 101] : [101, 101, -1, 202, 202, 202, 303, 101]
+        tabs.splice(0, tabs.length, ...titles.map((title, index) => ({
+          id: 9500 + index,
+          windowId: 1,
+          url: `https://rails.example.test/page-${index}`,
+          title,
+          active: false,
+          pinned: false,
+          groupId: groupIds[index],
+          index,
+          favIconUrl: ''
+        })))
+        tabHistorySnapshot = { ...tabHistorySnapshot, entries: [] }
+      }
       let dashboardServiceStateRequestCount = 0
       window.__tabOutSmokeDashboardServiceStateRequestCount = () => dashboardServiceStateRequestCount
       const chromeApi = createFakeChromeApi({
         tabs,
         windows,
+        tabGroups: fixtureParams.has('groupRails') ? [
+          { id: 101, windowId: 1, title: 'Research', color: 'blue' },
+          { id: 202, windowId: 1, title: 'Planning', color: 'purple' },
+          { id: 303, windowId: 1, title: 'Other project', color: 'purple' }
+        ] : [],
         getBookmarkTree: () => {
           if (fixtureParams.has('failBookmarks')) throw new Error('Fixture Bookmarks failure')
           return bookmarkTree

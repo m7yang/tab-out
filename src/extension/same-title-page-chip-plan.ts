@@ -313,7 +313,12 @@ export function compileSameTitlePageChip(
   })
   const allTargetIndexes = targets.map((_, targetIndex) => targetIndex)
   const groupRemoval = removalPlan(targets, allTargetIndexes)
+  const chromeGroupId = selectedDefaultTarget.chromeGroupId
   const view: SameTitlePageChipView = {
+    chromeGroupId: chromeGroupId != null && chromeGroupId !== -1 &&
+      targets.every((target) => target.isGrouped && target.chromeGroupId === chromeGroupId)
+      ? chromeGroupId
+      : null,
     defaultRowId: defaultRow.id,
     groupRemoval: groupRemoval
       ? {

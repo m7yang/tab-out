@@ -44,6 +44,25 @@ function compiledPlan(targets: readonly DashboardChipData[]): SameTitlePageChipP
   return result.plan
 }
 
+test('shared Chrome group membership requires every same-title target to agree', () => {
+  for (const otherGroupId of [101, 202, -1, undefined]) {
+    const targets = [
+      chip(1, 'https://example.test/first', { isGrouped: true, chromeGroupId: 101 }),
+      chip(2, 'https://example.test/second', {
+        isGrouped: otherGroupId != null && otherGroupId !== -1,
+        ...(otherGroupId == null ? {} : { chromeGroupId: otherGroupId }),
+      }),
+    ]
+    const plan = compiledPlan(targets)
+    assert.equal(plan.view.chromeGroupId, otherGroupId === 101 ? 101 : null)
+    const decision = resolveSameTitlePageChip(plan, { kind: 'debug-targets' })
+    assert.equal(decision.kind, 'debug-targets')
+    if (decision.kind === 'debug-targets') {
+      assert.deepEqual(decision.exactTargets.map(({ target }) => target.chromeGroupId), [101, otherGroupId])
+    }
+  }
+})
+
 test('compiled same-title plans preserve repeated exact URL occurrences', () => {
   const repeatedUrl = 'https://example.test/content/item?state=open'
   const plan = compiledPlan([

@@ -25,10 +25,17 @@ interface PageChipOverflowOptions {
 }
 
 const OVERFLOW_BUTTON_CLASS_NAME =
-  "page-chip page-chip-overflow clickable relative flex cursor-pointer items-start gap-2 border-0 [--capsule-fill:transparent] bg-(--capsule-fill) py-[5px] pr-1 text-left text-[13px] leading-tight tabular-nums text-muted-foreground [font-family:inherit] transition-[color,box-shadow,opacity] duration-100 ease-swift before:pointer-events-none before:absolute before:top-[7px] before:bottom-[7px] before:left-1 before:w-0.5 before:rounded-[1px] before:bg-(--group-color,transparent) before:[corner-shape:squircle] before:content-[''] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-[72px] after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,color-mix(in_srgb,var(--card-bg)_92%,rgb(82_82_82))_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] hover:[--capsule-fill:rgba(82,82,82,0.08)] [&:has(.chip-actions):hover::after]:opacity-100"
+  "page-chip page-chip-overflow clickable relative flex cursor-pointer items-start gap-2 border-0 [--capsule-fill:transparent] bg-(--capsule-fill) py-[5px] pr-1 text-left text-[13px] leading-tight tabular-nums text-muted-foreground [font-family:inherit] transition-[color,box-shadow,opacity] duration-100 ease-swift after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-[72px] after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,color-mix(in_srgb,var(--card-bg)_92%,rgb(82_82_82))_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] hover:[--capsule-fill:rgba(82,82,82,0.08)] [&:has(.chip-actions):hover::after]:opacity-100"
 
 function resolveClassName(className: OverflowContainerClassName | undefined, expanded: boolean) {
   return typeof className === 'function' ? className({ expanded }) : className
+}
+
+function shareChromeGroup(a: DashboardChipData, b: DashboardChipData | undefined): boolean {
+  const aGroup = a.sameTitlePageChipPlan ? a.sameTitlePageChipPlan.view.chromeGroupId : a.chromeGroupId
+  const bGroup = b?.sameTitlePageChipPlan ? b.sameTitlePageChipPlan.view.chromeGroupId : b?.chromeGroupId
+  return !!b && a.isGrouped && b.isGrouped && !a.iconOnly && !b.iconOnly &&
+    aGroup != null && aGroup !== -1 && aGroup === bGroup
 }
 
 function chipMatchesActiveHover(chip: DashboardChipData, state: HoverState): boolean {
@@ -105,11 +112,25 @@ export function usePageChipOverflow({
     onLayoutChange?.()
   }, [expansionPhase, onLayoutChange])
 
+  const displayedChips = expanded ? [...visibleChips, ...hiddenChips] : visibleChips
+
+  function renderChip(chip: DashboardChipData, index: number) {
+    return (
+      <PageChip
+        key={pageChipRenderKey(chip)}
+        chip={chip}
+        filter={filter}
+        layoutScope={layoutScope}
+        groupContinuesAbove={shareChromeGroup(chip, displayedChips[index - 1])}
+        groupContinuesBelow={shareChromeGroup(chip, displayedChips[index + 1])}
+        suppressedTitleToneByText={suppressedTitleToneByText}
+      />
+    )
+  }
+
   const pageChips = (
     <>
-      {visibleChips.map((chip) => (
-        <PageChip key={pageChipRenderKey(chip)} chip={chip} filter={filter} layoutScope={layoutScope} suppressedTitleToneByText={suppressedTitleToneByText} />
-      ))}
+      {visibleChips.map(renderChip)}
       {hiddenCount > 0 && (
         <div
           // `display: contents` visually continues the Page Chip run, but the
@@ -118,9 +139,7 @@ export function usePageChipOverflow({
           // boundary paints one shared trim line too.
           className={cn('page-chips-overflow page-chips-overflow-reveal [&>.chip-slot-row:first-child]:-mt-px', resolveClassName(overflowContainerClassName, expanded), expanded ? 'contents' : 'hidden')}
         >
-          {expansionPhase !== 'collapsed' && hiddenChips.map((chip) => (
-            <PageChip key={pageChipRenderKey(chip)} chip={chip} filter={filter} layoutScope={layoutScope} suppressedTitleToneByText={suppressedTitleToneByText} />
-          ))}
+          {expansionPhase !== 'collapsed' && hiddenChips.map((chip, index) => renderChip(chip, visibleChips.length + index))}
         </div>
       )}
       {expansionPhase !== 'expanded' && hiddenCount > 0 && (

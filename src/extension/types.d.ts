@@ -190,6 +190,8 @@ export type SameTitlePageChipOrderEntry = {
 }
 
 export type SameTitlePageChipView = {
+  /** Shared Chrome group membership; null when targets are ungrouped or mixed. */
+  chromeGroupId: number | null
   defaultRowId: SameTitlePageChipRowId
   groupRemoval: SameTitlePageChipRemovalView | null
   orderEntries: readonly SameTitlePageChipOrderEntry[]
