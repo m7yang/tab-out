@@ -175,9 +175,9 @@ function DomainTitle({ displayName, subdomainKey = '' }: { displayName: string, 
 
   return (
     <>
-      {subdomainKey && <span className="domain-title-subdomain font-semibold text-muted-foreground">{subdomainKey}.</span>}
+      {subdomainKey && <span className="domain-title-subdomain font-semibold">{subdomainKey}.</span>}
       <span className="domain-title-name font-[BlinkMacSystemFont] font-stretch-150%">{suffix ? name : displayName}</span>
-      {suffix && <span className="domain-title-suffix font-semibold text-muted-foreground">{suffix}</span>}
+      {suffix && <span className="domain-title-suffix font-semibold">{suffix}</span>}
     </>
   )
 }
@@ -375,7 +375,7 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
           )}
         >
           <div className="domain-header-flow flex min-w-0 flex-row flex-wrap items-center justify-start gap-x-2.5 gap-y-1">
-            <span className="mission-name min-w-0 flex-[0_1_auto] overflow-hidden text-ellipsis whitespace-nowrap text-[15px] leading-5.5 font-black tracking-[0.1px] text-foreground">
+            <span className="mission-name min-w-0 flex-[0_1_auto] overflow-hidden font-[BlinkMacSystemFont] text-ellipsis whitespace-nowrap text-[15px] leading-5.5 font-black font-stretch-70% tracking-[0.1px] text-black">
               <DomainTitle displayName={displayName} subdomainKey={inlineSubdomainKey} />
             </span>
             {group.pinned && (

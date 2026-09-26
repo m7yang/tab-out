@@ -5,7 +5,7 @@ type DashboardGeometry = {
   columns: number
   firstWidth: number
   headerControlsRight: number | null
-  missionsRight: number | null
+  pageChipsRight: number
   sourceSwitchRight: number | null
 }
 
@@ -472,7 +472,8 @@ async function measureDashboard(page: Page, width: number): Promise<DashboardGeo
     const rects = cards.map((card) => card.getBoundingClientRect()).filter((rect) => rect.width > 0)
     const sourceSwitchRect = document.querySelector('[data-tabout="dashboard-view"]')?.getBoundingClientRect()
     const headerControlsRect = document.querySelector('.header-controls')?.getBoundingClientRect()
-    const missionsRect = document.querySelector('.missions:not(.missions-empty)')?.getBoundingClientRect()
+    const pageChipRects = Array.from(document.querySelectorAll('[data-tabout="page-chip"][data-tabout-context="domain-card"]'))
+      .map((chip) => chip.getBoundingClientRect()).filter((rect) => rect.width > 0)
     const round = (value: number) => Math.round(value * 100) / 100
 
     return {
@@ -480,7 +481,7 @@ async function measureDashboard(page: Page, width: number): Promise<DashboardGeo
       columns: new Set(rects.map((rect) => Math.round(rect.left))).size,
       firstWidth: Math.round(rects[0]?.width || 0),
       headerControlsRight: headerControlsRect ? round(headerControlsRect.right) : null,
-      missionsRight: missionsRect ? round(missionsRect.right) : null,
+      pageChipsRight: round(Math.max(...pageChipRects.map((rect) => rect.right))),
       sourceSwitchRight: sourceSwitchRect ? round(sourceSwitchRect.right) : null,
     }
   })
@@ -514,8 +515,10 @@ test('dashboard repacks across viewport sizes', async ({ page }) => {
 
   expect(wide.columns).toBeGreaterThan(narrow.columns)
   expect(wide.firstWidth).not.toBe(narrow.firstWidth)
-  expect(Math.abs((wide.headerControlsRight ?? 0) - (wide.missionsRight ?? 0))).toBeLessThanOrEqual(1)
-  expect(Math.abs((wide.sourceSwitchRight ?? 0) - (wide.missionsRight ?? 0))).toBeLessThanOrEqual(1)
+  for (const geometry of [wide, narrow]) {
+    expect(Math.abs((geometry.headerControlsRight ?? 0) - geometry.pageChipsRight)).toBeLessThanOrEqual(1)
+    expect(Math.abs((geometry.sourceSwitchRight ?? 0) - geometry.pageChipsRight)).toBeLessThanOrEqual(1)
+  }
   expect(pageErrors).toEqual([])
 })
 

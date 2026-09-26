@@ -3458,9 +3458,9 @@ test('DomainCard renders the public suffix as less prominent title text', () => 
   )
 
   assert.match(html, /<span class="domain-title-name[^"]*">example<\/span>/)
-  assert.match(html, /<span class="domain-title-suffix[^"]*\bfont-semibold\b[^"]*\btext-muted-foreground\b[^"]*">\.co\.uk<\/span>/)
-  assert.doesNotMatch(html, /domain-title-suffix[^"]*\bopacity-/)
-  assert.match(html, /<span class="mission-name[^"]*font-black[^"]*"/)
+  assert.match(html, /<span class="domain-title-suffix[^"]*\bfont-semibold\b[^"]*">\.co\.uk<\/span>/)
+  assert.doesNotMatch(html, /domain-title-suffix[^"]*\b(?:opacity-|text-muted-foreground)/)
+  assert.match(html, /<span class="mission-name[^"]*font-black[^"]*\btext-black\b[^"]*"/)
   assert.doesNotMatch(html, /domain-title-subdomain/)
 })
 
@@ -3486,8 +3486,8 @@ test('DomainCard inlines a single non-port subdomain into the title', () => {
     }),
   )
 
-  assert.match(html, /<span class="domain-title-subdomain[^"]*\bfont-semibold\b[^"]*\btext-muted-foreground\b[^"]*">docs\.<\/span>/)
-  assert.doesNotMatch(html, /domain-title-subdomain[^"]*\bopacity-/)
+  assert.match(html, /<span class="domain-title-subdomain[^"]*\bfont-semibold\b[^"]*">docs\.<\/span>/)
+  assert.doesNotMatch(html, /domain-title-subdomain[^"]*\b(?:opacity-|text-muted-foreground)/)
   assert.match(html, /<span class="domain-title-name[^"]*">example<\/span>/)
   assert.match(html, /<span class="domain-title-suffix[^"]*">\.com<\/span>/)
   assert.doesNotMatch(html, /\bmission-subdomain\b/)

@@ -132,7 +132,7 @@ export function HeaderBar({
 
   return (
     <header className="flex flex-col">
-      <div className="header-row flex items-center justify-between gap-4 pl-2">
+      <div className="header-row flex items-center justify-between gap-4 px-2">
         <div className="header-left flex min-w-0 flex-1 items-center gap-4">
           <div
             data-tabout="filter-query"
