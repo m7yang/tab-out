@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useUrlPreview } from './useUrlPreview'
 import { createNativeTabHighlightController } from '../extension/native-tab-highlight.js'
 import { createHoverStateStore, type HoverUrlSource } from '../lib/hover-state.js'
+import { isTabOutPageUrl } from '../extension/tab-out-url.js'
 
 /**
  * Owns the cross-dashboard hover-match state (which url/source is being hovered
@@ -14,7 +15,7 @@ export function useHoverMatch() {
   const [nativeTabHighlightController] = useState(createNativeTabHighlightController)
   const hoverOwnerRef = useRef<string | undefined>(undefined)
 
-  const handleHoverUrlChange = useCallback(function handleHoverUrlChange(url: string, source: HoverUrlSource = 'chip', matchUrls?: readonly string[], tabId?: number, owner?: string) {
+  const handleHoverUrlChange = useCallback(function handleHoverUrlChange(url: string, source: HoverUrlSource = 'chip', matchUrls?: readonly string[], tabId?: number, owner?: string, matchTabIds?: readonly number[]) {
     const nextUrl = url || ''
     if (!nextUrl && owner !== undefined && hoverOwnerRef.current !== owner) return
     hoverOwnerRef.current = nextUrl ? owner : undefined
@@ -22,7 +23,8 @@ export function useHoverMatch() {
       ? [...new Set((matchUrls && matchUrls.length > 0 ? matchUrls : [nextUrl]).filter(Boolean))]
       : []
     const nextSource = nextUrls.length > 0 ? source : null
-    hoverStateStore.setSnapshot({ url: nextUrl, urls: nextUrls, source: nextSource })
+    const tabIds = isTabOutPageUrl(nextUrl) ? matchTabIds ?? (typeof tabId === 'number' ? [tabId] : []) : undefined
+    hoverStateStore.setSnapshot({ url: nextUrl, urls: nextUrls, source: nextSource, tabIds })
     setUrlPreview(nextUrl)
     return nativeTabHighlightController.setTarget(nextUrl ? tabId : null)
   }, [hoverStateStore, nativeTabHighlightController, setUrlPreview])

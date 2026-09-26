@@ -205,6 +205,8 @@ export type SameTitlePageChipPlan = {
 
 export interface DashboardChipData {
   tabId?: number | string
+  /** Physical membership of a new-tab display bucket for cross-surface hover. */
+  hoverTabIds?: readonly number[]
   /** Stable rendered-sibling identity when physical raw URLs are non-unique. */
   renderKey?: string
   tabUrl: string

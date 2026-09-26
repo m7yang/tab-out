@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { computeDomainCardViewModel } from '../src/extension/domain-card-view-model.js'
+import { TAB_OUT_FAVICON_URL } from '../src/extension/tab-out-url.js'
 import type { DashboardTab, DomainGroup } from '../src/extension/types'
 import { collectDashboardChips } from './helpers/domain-card-view-model.js'
 
@@ -107,6 +108,7 @@ test('New tabs loading stays within its physical bucket and clears after its ali
         isTabOut: true,
         url: 'chrome://newtab/',
         rawUrl: 'chrome://newtab/',
+        favIconUrl: TAB_OUT_FAVICON_URL,
       }),
       makeTab({
         id: 2,
@@ -115,7 +117,7 @@ test('New tabs loading stays within its physical bucket and clears after its ali
         url: 'chrome-extension://tab-out-runtime/index.html',
         rawUrl: 'chrome-extension://tab-out-runtime/index.html',
       }),
-      makeTab({ id: 3, isTabOut: true, url: 'chrome://newtab/', rawUrl: 'chrome://newtab/' }),
+      makeTab({ id: 3, isTabOut: true, url: 'chrome://newtab/', rawUrl: 'chrome://newtab/', favIconUrl: TAB_OUT_FAVICON_URL }),
     ]
 
     const chipsFor = (tabs: DashboardTab[]) => collectDashboardChips(computeDomainCardViewModel(

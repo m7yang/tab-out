@@ -4,7 +4,7 @@ import {
   DESKTOP_WINDOW_MERGE_START_CONFIRM_MESSAGE,
   isDesktopWindowMergeStartConfirmAcknowledgement,
 } from '../desktop-window-merge-contract.js'
-import { isTabOutPageUrl, tabOutDashboardCanonicalUrl } from '../tab-out-url.js'
+import { isTabOutDashboardUrl, TAB_OUT_FAVICON_URL, tabOutDashboardCanonicalUrl } from '../tab-out-url.js'
 import type { ChromeApi } from './chrome-api.js'
 
 const START_CONFIRM_DELIVERY_ATTEMPTS = 40
@@ -56,7 +56,11 @@ export const ensureDashboardTabInWindowEffect = Effect.fn(
   'desktopWindowMergeHandoff.ensureDashboardTab',
 )(function* (chromeApi: ChromeApi, windowId: number) {
   const tabs = yield* queryWindowTabs(chromeApi, windowId)
-  const dashboardTabs = tabs.filter((tab) => isTabOutPageUrl(tab.url, chromeApi.runtime.id))
+  // Native new tabs belong in the dashboard, but cannot host its message listener.
+  const dashboardTabs = tabs.filter((tab) =>
+    isTabOutDashboardUrl(tab.url, chromeApi.runtime.id) ||
+    (tab.url === 'chrome://newtab/' && tab.favIconUrl === TAB_OUT_FAVICON_URL),
+  )
   const runnable = preferredDashboardTab(
     dashboardTabs.filter((tab) => tab.discarded !== true && tab.frozen !== true),
   )

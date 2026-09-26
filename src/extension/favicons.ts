@@ -15,6 +15,9 @@ function faviconCacheUrl(url: string): string {
 
 export function pickFavicon(tab?: (Pick<DashboardTab, 'favIconUrl' | 'url'> & Partial<Pick<DashboardTab, 'sourceType' | 'closedSaved'>>) | null): string {
   const fav = tab?.favIconUrl || ''
+  // The alias may represent an override. Keep its reported icon, otherwise
+  // ask for the native document's icon rather than the overriding extension's.
+  if (tab?.url === 'chrome://newtab/') return fav || faviconCacheUrl('chrome://new-tab-page/')
   // Closed snapshots can contain a suspender's pre-faded data: image without
   // retaining its provenance. Resolve the effective page before dimming it,
   // including for snapshots saved before this policy was introduced.
@@ -42,6 +45,7 @@ export function pickTabFavicon(tab: Pick<DashboardTab, 'favIconUrl' | 'url' | 's
   const fav = tab.favIconUrl || ''
   if (tab.suspended) return faviconCacheUrl(tab.url || '') || fav
   if (fav.startsWith('data:')) return fav
-  if (fav) return faviconCacheUrl(tab.url || '') || fav
+  // Chrome supplies no favIconUrl for its native new-tab document.
+  if (fav || tab.url === 'chrome://newtab/' || tab.url === 'chrome://new-tab-page/') return pickFavicon(tab) || fav
   return ''
 }

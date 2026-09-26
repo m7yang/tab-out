@@ -3,6 +3,7 @@ import { it, vi } from '@effect/vitest'
 import { Schema } from 'effect'
 
 import { canonicalDedupeKey } from '../../src/extension/url-canonical.js'
+import { TAB_OUT_FAVICON_URL } from '../../src/extension/tab-out-url.js'
 
 const longForm =
   'https://example.atlassian.net/browse/ABC-123?focusedCommentId=100&sourceType=mention&page=com.atlassian.jira.plugin.system.issuetabpanels%3Acomment-tabpanel#comment-100'
@@ -140,10 +141,14 @@ it('Tab Out dashboard variants collapse to a single dedupe key', () => {
   })
 })
 
-it('chrome://newtab/ folds into the Tab Out dashboard key', () => {
+it('only a confirmed Tab Out new-tab alias folds into the dashboard key', () => {
   withExtensionId('tab-out', () => {
+    assert.equal(canonicalDedupeKey('chrome://newtab/'), 'chrome://newtab/')
+    assert.equal(canonicalDedupeKey('chrome://new-tab-page/'), 'chrome://newtab/')
+    assert.equal(canonicalDedupeKey('chrome://new-tab-page/', TAB_OUT_FAVICON_URL), 'chrome://newtab/')
+    assert.equal(canonicalDedupeKey('chrome://newtab/', 'data:image/png;base64,AAAA'), 'chrome://newtab/')
     assert.equal(
-      canonicalDedupeKey('chrome://newtab/'),
+      canonicalDedupeKey('chrome://newtab/', TAB_OUT_FAVICON_URL),
       'chrome-extension://tab-out/index.html',
     )
   })

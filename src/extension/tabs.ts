@@ -17,7 +17,7 @@ import { BrowserTabs } from './browser-tabs-service.js'
 import { normalizeChromeTabToDashboardItem } from './dashboard-tab-normalization.js'
 import { isSuspended, rememberSuspendTargetFromTabsEffect, unwrapSuspenderUrl } from './suspension.js'
 import { compareForKeep, isGroupedTab, fetchTabGroupColorsEffect } from './groups.js'
-import { pickDuplicateTabsToClose } from './tab-dedupe-policy.js'
+import { isLoadingNewTab, pickDuplicateTabsToClose } from './tab-dedupe-policy.js'
 import { canonicalDedupeKey } from './url-canonical.js'
 import { isTabOutPageUrl } from './tab-out-url.js'
 import { focusExactTabTargetEffect, focusTabTargetEffect } from './tab-focus.js'
@@ -96,7 +96,7 @@ export function snapshotChromeTabs(chromeTabs: SnapshotTab[], opts: SnapshotOpti
     })
     .filter((s) => {
       if (!s.url) return false
-      if (s.url.startsWith('chrome://')) return includeTabOutUrls && s.url === 'chrome://newtab/'
+      if (s.url.startsWith('chrome://')) return includeTabOutUrls && isTabOutPageUrl(s.url)
       if (!s.url.startsWith('chrome-extension://')) return true
       return includeTabOutUrls && isTabOutPageUrl(s.url)
     })
@@ -440,7 +440,7 @@ export const closeDuplicateTabsEffect = Effect.fn('tabs.closeDuplicates')(functi
   keepOne = true,
   opts: DedupeOptions = {},
 ) {
-  const requestedUrls = [...new Set(urls.map(canonicalDedupeKey).filter(Boolean))]
+  const requestedUrls = [...new Set(urls.map((url) => canonicalDedupeKey(url)).filter(Boolean))]
   if (requestedUrls.length === 0) return emptyTabCloseResult('complete')
   const { preservePinned = false, preservePinnedTabOut = false } = opts
   const suppliedCurrentWindowId = opts.currentWindowId
@@ -470,7 +470,7 @@ export const closeDuplicateTabsEffect = Effect.fn('tabs.closeDuplicates')(functi
   const requestedUrlSet = new Set(requestedUrls)
   const tabsByDedupeKey = new Map<string, chrome.tabs.Tab[]>()
   for (const tab of allTabs) {
-    const key = canonicalDedupeKey(unwrapSuspenderUrl(liveTabUrlForIdentity(tab)))
+    const key = canonicalDedupeKey(unwrapSuspenderUrl(liveTabUrlForIdentity(tab)), tab.favIconUrl)
     if (!requestedUrlSet.has(key)) continue
     tabsByDedupeKey.getOrInsertComputed(key, () => []).push(tab)
   }
@@ -494,7 +494,7 @@ export const closeDuplicateTabsEffect = Effect.fn('tabs.closeDuplicates')(functi
     const closeIds = new Set(tabIds(closeTargets))
     const groupedTarget = closeTargets.find(isGroupedTab)
     const survivor = matching
-      .filter((tab) => typeof tab.id === 'number' && !closeIds.has(tab.id) &&
+      .filter((tab) => typeof tab.id === 'number' && !closeIds.has(tab.id) && !isLoadingNewTab(tab) &&
         (!groupedTarget || tab.groupId === groupedTarget.groupId))
       .toSorted((a, b) => compareForKeep(a, b, currentWindowId))[0]
     const guard = { key: url, survivorId: survivor?.id, stopped: false }
@@ -512,7 +512,7 @@ export const closeDuplicateTabsEffect = Effect.fn('tabs.closeDuplicates')(functi
         ? await getTab(guard.survivorId)
         : null
       if ((keepOne || typeof guard.survivorId === 'number') && (
-        !survivor || canonicalDedupeKey(unwrapSuspenderUrl(liveTabUrlForIdentity(survivor))) !== guard.key
+        !survivor || isLoadingNewTab(survivor) || canonicalDedupeKey(unwrapSuspenderUrl(liveTabUrlForIdentity(survivor)), survivor.favIconUrl) !== guard.key
       )) {
         guard.stopped = true
         return false
@@ -525,6 +525,8 @@ export const closeDuplicateTabsEffect = Effect.fn('tabs.closeDuplicates')(functi
         url: liveTabUrlForIdentity(tab),
       })
       if (!validatedTab) return false
+      if (isLoadingNewTab(validatedTab)) return false
+      if (canonicalDedupeKey(unwrapSuspenderUrl(liveTabUrlForIdentity(validatedTab)), validatedTab.favIconUrl) !== guard.key) return false
       const isTabOut = isTabOutPageUrl(unwrapSuspenderUrl(liveTabUrlForIdentity(validatedTab)))
       if (validatedTab.pinned && (preservePinned || (preservePinnedTabOut && isTabOut))) return false
       if (preservePinnedTabOut && isTabOut && validatedTab.active && validatedTab.windowId === currentWindowId) return false

@@ -2,19 +2,20 @@
    Tab Out page URL helpers
 
    Single source of truth for "is this URL the Tab Out dashboard?",
-   shared by dedup canonicalization (url-canonical.ts), the
-   close-duplicates protection (tabs.ts), and startup detection
-   (app.tsx). One definition guarantees the dedup identity and the
-   "protect the active dashboard" logic agree on the dashboard base.
+   shared by close-duplicates protection (tabs.ts) and startup detection
+   (app.tsx). Duplicate identity additionally checks the declared favicon
+   before treating a chrome://newtab/ alias as the dashboard.
 
    The dashboard overrides the native new tab. Callers that need the actual
-   extension document keep using isTabOutDashboardUrl, while callers that own
-   Tab Out page identity use isTabOutPageUrl, so:
+   extension document keep using isTabOutDashboardUrl, while callers that
+   include native new tabs for protection use isTabOutPageUrl, so:
      - isTabOutDashboardUrl EXCLUDES chrome://newtab/
-     - isTabOutPageUrl (dedupe / protection / startup) INCLUDES it
+     - isTabOutPageUrl (dedupe / protection / startup) INCLUDES it and
+       the native chrome://new-tab-page/ document
    ================================================================ */
 
 const NEW_TAB_URL = 'chrome://newtab/'
+export const TAB_OUT_FAVICON_URL = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"
 
 /**
  * The Tab Out dashboard's canonical URL (no search/hash), or null when no
@@ -41,5 +42,5 @@ export function isTabOutDashboardUrl(url?: string, runtimeId: string | null | un
  * native new tab. Used for active-tab protection and startup detection.
  */
 export function isTabOutPageUrl(url?: string, runtimeId: string | null | undefined = globalThis.chrome?.runtime?.id): boolean {
-  return url === NEW_TAB_URL || isTabOutDashboardUrl(url, runtimeId)
+  return url === NEW_TAB_URL || url === 'chrome://new-tab-page/' || isTabOutDashboardUrl(url, runtimeId)
 }

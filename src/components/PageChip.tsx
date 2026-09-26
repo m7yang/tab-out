@@ -84,8 +84,8 @@ interface PageChipProps {
 
 function chipMatchesHoverState(target: DashboardChipData, state: HoverState): boolean {
   return (
-    pageTargetMatchesHover(target, state.url, state.urls) ||
-    !!target.envs?.some((env) => pageTargetMatchesHover(env, state.url, state.urls))
+    pageTargetMatchesHover(target, state.url, state.urls, state.tabIds) ||
+    !!target.envs?.some((env) => pageTargetMatchesHover(env, state.url, state.urls, state.tabIds))
   )
 }
 
@@ -517,9 +517,9 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', groupContinue
     await activateChipTarget(e, env.tabUrl, env.sourceType || chip.sourceType, env, e.currentTarget)
   }
 
-  function setPreview(url: string, matchUrls: readonly string[] = [url], target?: Pick<DashboardChipData, 'tabId'>) {
+  function setPreview(url: string, matchUrls: readonly string[] = [url], target?: Pick<DashboardChipData, 'tabId' | 'hoverTabIds'>) {
     const tabId = typeof target?.tabId === 'number' ? target.tabId : undefined
-    return onHoverUrlChange?.(url || '', 'chip', matchUrls, tabId)
+    return onHoverUrlChange?.(url || '', 'chip', matchUrls, tabId, undefined, target?.hoverTabIds)
   }
 
   function previewUrlsForChip(target: DashboardChipData): string[] {

@@ -1,12 +1,13 @@
 export type HoverUrlSource = 'chip' | 'history' | 'working-set'
 // An owner scopes departure/cleanup to the interaction that published the
 // preview. Calls without an owner still support dashboard-wide clears.
-export type HoverUrlChangeHandler = (url: string, source?: HoverUrlSource, matchUrls?: readonly string[], tabId?: number, owner?: string) => void | Promise<void>
+export type HoverUrlChangeHandler = (url: string, source?: HoverUrlSource, matchUrls?: readonly string[], tabId?: number, owner?: string, matchTabIds?: readonly number[]) => void | Promise<void>
 
 export type HoverState = {
   url: string
   urls: readonly string[]
   source: HoverUrlSource | null
+  tabIds?: readonly number[] | undefined
 }
 
 export type HoverStateSelector<Selection> = (state: HoverState) => Selection
@@ -38,6 +39,8 @@ function sameHoverState(left: HoverState, right: HoverState): boolean {
   return (
     left.url === right.url &&
     left.source === right.source &&
+    left.tabIds?.length === right.tabIds?.length &&
+    (left.tabIds?.every((id, index) => id === right.tabIds?.[index]) ?? true) &&
     left.urls.length === right.urls.length &&
     left.urls.every((url, index) => url === right.urls[index])
   )

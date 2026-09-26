@@ -28,6 +28,7 @@ import {
   type GlobalTabHistoryInput,
 } from './tab-history-state.js'
 import { normalizeWorkingSetActivity, pageIdentityForWorkingSet } from '../working-set.js'
+import { titleForFilterInput } from '../app-url.js'
 import type { ChromeApi } from './chrome-api.js'
 import { readChromeStorageValue, writeChromeStorageValue } from './chrome-storage.js'
 import { WorkingSetActivityStorage } from './working-set-activity-storage.js'
@@ -861,7 +862,10 @@ const makeTabHistoryEffectService = Effect.fn('TabHistory.make')(function* (
                 const url = unwrapSuspenderUrl(rawUrl)
                 const suspended = isSuspended(rawUrl, url)
                 const displayUrl = displayUrlForHistory(url)
-                const cleanTitle = (tab?.title || '').replaceAll('\u200E', '').trim()
+                // Preserve the dashboard's deliberate blank title instead of substituting its URL.
+                const cleanTitle = tab?.title === titleForFilterInput()
+                  ? tab.title
+                  : (tab?.title || '').replaceAll('\u200E', '').trim()
                 const title = unwrapSuspenderTitle(rawUrl) || (cleanTitle ? cleanTitle : displayUrl)
                 const activityKey = pageIdentityForWorkingSet(url)
                 return {

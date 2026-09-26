@@ -189,7 +189,7 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
 
   // Count duplicates per URL and delegate the closeability rules to the
   // shared dedupe policy so dashboard counts mirror tab mutation behavior.
-  const keyOf = (t: DashboardTab) => canonicalKey(t.url)
+  const keyOf = (t: DashboardTab) => t.url === 'chrome://newtab/' ? canonicalDedupeKey(t.url, t.favIconUrl) : canonicalKey(t.url)
   const tabsByUrl = Map.groupBy(openTabs, keyOf)
 
   function closableForUrl(u: string): number {
@@ -228,7 +228,8 @@ export function computeDomainCardViewModel(group: DomainGroup, { filter = '', fi
   }
 
   const titlePresentationByUrl = computeTitlePresentations(
-    uniqueTabs.map((tab): TitlePresentationSeedRow => {
+    // Native and overridden new tabs can share a URL but have different titles.
+    isTabOutGroup ? [] : uniqueTabs.map((tab): TitlePresentationSeedRow => {
       const baseTitle = baseTitlePresentation(tab)
       const pathGroup = structuralPathGroup(tab)
       return {

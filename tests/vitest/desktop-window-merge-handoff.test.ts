@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { it } from '@effect/vitest'
 import { Effect, Fiber } from 'effect'
 import { TestClock } from 'effect/testing'
+import { TAB_OUT_FAVICON_URL } from '../../src/extension/tab-out-url.js'
 
 import type { ChromeApi } from '../../src/extension/background/chrome-api.js'
 import {
@@ -127,7 +128,7 @@ it.effect('handoff prefers a pinned dashboard tab when none is active', () => Ef
   const { calls, chromeApi } = createHandoffApi({
     tabs: [
       dashboardTab({ id: 21 }),
-      dashboardTab({ id: 22, pinned: true, url: 'chrome://newtab/' }),
+      dashboardTab({ id: 22, pinned: true, url: 'chrome://newtab/', favIconUrl: TAB_OUT_FAVICON_URL }),
     ],
   })
 
@@ -136,6 +137,27 @@ it.effect('handoff prefers a pinned dashboard tab when none is active', () => Ef
   assert.equal(delivered, true)
   assert.deepEqual(calls.tabUpdate, [])
   assert.deepEqual(calls.sentMessages, [{ tabId: 22, message: START_CONFIRM_MESSAGE }])
+}))
+
+it.effect('native new tabs never replace the dashboard message host', () => Effect.gen(function* () {
+  for (const url of ['chrome://newtab/', 'chrome://new-tab-page/']) {
+    for (const hasDashboard of [false, true]) {
+      const { calls, chromeApi } = createHandoffApi({
+        tabs: [
+          tab({ id: 81, url, active: true, pinned: true }),
+          ...(hasDashboard ? [dashboardTab({ id: 82 })] : []),
+        ],
+        createdTabId: 83,
+      })
+      const delivered = yield* handoffDesktopWindowMergeToWindowEffect(chromeApi, 7, 'preview-test')
+
+      assert.equal(delivered, true)
+      assert.deepEqual(calls.sentMessages, [{ tabId: hasDashboard ? 82 : 83, message: START_CONFIRM_MESSAGE }])
+      assert.deepEqual(calls.tabCreate, hasDashboard ? [] : [{ windowId: 7, url: DASHBOARD_URL, active: false }])
+      assert.deepEqual(calls.tabUpdate, [])
+      assert.deepEqual(calls.tabReload, [])
+    }
+  }
 }))
 
 it.effect('handoff skips a frozen pinned dashboard for a runnable page', () => Effect.gen(function* () {

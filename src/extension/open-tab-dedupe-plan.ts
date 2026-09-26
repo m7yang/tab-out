@@ -29,7 +29,7 @@ export function buildOpenTabDedupePlan(
     if (!url) return false
     return isTabOutPageUrl(rawUrl) || !isBrowserInternalUrl(url)
   })
-  const tabsByUrl = Map.groupBy(eligibleTabs, (tab) => canonicalDedupeKey(effectiveUrl(tab)))
+  const tabsByUrl = Map.groupBy(eligibleTabs, (tab) => canonicalDedupeKey(effectiveUrl(tab), tab.favIconUrl))
   const urls: string[] = []
   let closableCount = 0
 

@@ -220,16 +220,15 @@ test.describe('history hover beside an active frame', () => {
   }
 })
 
-test('history hover keeps both adjacent matching dashboard outlines above neighboring fills', async ({ page }) => {
+test('history hover keeps its matching dashboard outline above the adjacent fill', async ({ page }) => {
   await page.goto('/tests/fixtures/dashboard-resize.html?historyHoverSeam')
-  const history = page.locator('.history-entry-main').filter({ hasText: 'New Tab' }).first()
-  await history.hover()
-  const matches = page.locator('.page-chip-hover-match')
-  await expect(matches).toHaveCount(2)
-
+  const chips = page.locator('[data-tabout-context="domain-card"][data-tabout="page-chip"]')
+  await expect(chips).toHaveCount(2)
   for (const edge of ['bottom', 'top'] as const) {
-    const owner = matches.nth(edge === 'bottom' ? 0 : 1)
-    const neighbor = matches.nth(edge === 'bottom' ? 1 : 0)
+    await page.locator(`[data-tabout-layout-key="stack:${edge === 'bottom' ? '1:1' : '2:2'}"] .history-entry-main`).hover()
+    await expect(page.locator('.page-chip-hover-match')).toHaveCount(1)
+    const owner = chips.nth(edge === 'bottom' ? 0 : 1)
+    const neighbor = chips.nth(edge === 'bottom' ? 1 : 0)
     const rect = await owner.boundingBox()
     if (!rect) throw new Error('Highlighted dashboard tab is missing')
     const clip = {
@@ -258,6 +257,31 @@ test('history hover keeps both adjacent matching dashboard outlines above neighb
     // the outline; retain a tight bound and verify the reference contains ink.
     expect(Math.min(...samples[1]!)).toBeLessThan(160)
     const maximumDifference = Math.max(...samples[0]!.map((value, index) => Math.abs(value - samples[1]![index]!)))
-    expect(maximumDifference, `${edge} outline should remain visible beside another matching tab`).toBeLessThanOrEqual(3)
+    expect(maximumDifference, `${edge} outline should remain visible beside another tab`).toBeLessThanOrEqual(3)
+  }
+})
+
+test('new-tab hover matches physical stack membership in both directions', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html?newTabHoverIdentity')
+  const chips = page.locator('[data-tabout-context="domain-card"][data-tabout="page-chip"]')
+  await expect(chips).toHaveCount(3)
+  await expect(chips).toHaveText(['\u200e', '\u200e', 'New Tab'])
+  const buckets = [[1], [2, 3], [4, 5, 6, 7]]
+  for (const [index, tabIds] of buckets.entries()) {
+    for (const tabId of tabIds) {
+      const history = page.locator(`[data-tabout-layout-key="stack:${tabId === 1 ? 1 : 2}:${tabId}"] .history-entry-main`)
+      for (const input of ['pointer', 'keyboard']) {
+        if (input === 'pointer') await history.hover()
+        else await history.focus()
+        await expect(page.locator('.page-chip-hover-match')).toHaveCount(1)
+        await expect(chips.nth(index)).toHaveClass(/page-chip-hover-match/)
+      }
+    }
+    await chips.nth(index).hover()
+    const matches = page.locator('[data-tabout="activation-history-row"]').filter({ has: page.locator('.history-entry-hover-match') })
+    await expect(matches).toHaveCount(tabIds.length)
+    for (const tabId of tabIds) {
+      await expect(page.locator(`[data-tabout-layout-key="stack:${tabId === 1 ? 1 : 2}:${tabId}"] .history-entry-hover-match`)).toHaveCount(1)
+    }
   }
 })

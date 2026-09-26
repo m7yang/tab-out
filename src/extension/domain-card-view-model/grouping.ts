@@ -64,20 +64,16 @@ export function dedupeTabsForDisplay({ tabs, isTabOutGroup, currentWindowId, key
     const buckets = new Map<string, {
       key: string
       kind: TabOutDisplayBucketKind
-      rank: number
-      groupId: number
-      firstSeen: number
       tabs: DashboardTab[]
     }>()
-    urlTabs.forEach((tab, firstSeen) => {
+    urlTabs.forEach((tab) => {
       const bucket = tabOutBucketForTab(tab)
       buckets
-        .getOrInsertComputed(bucket.key, () => ({ ...bucket, firstSeen, tabs: [] }))
+        .getOrInsertComputed(bucket.key, () => ({ key: bucket.key, kind: bucket.kind, tabs: [] }))
         .tabs.push(tab)
     })
 
     return buckets.values().toArray()
-      .sort((a, b) => a.rank - b.rank || a.groupId - b.groupId || a.firstSeen - b.firstSeen)
       .flatMap((bucket) => {
         const representative = bucket.tabs[0]
         if (!representative) return []
@@ -98,6 +94,11 @@ export function dedupeTabsForDisplay({ tabs, isTabOutGroup, currentWindowId, key
     for (const [canonicalIdentity, urlTabs] of displayTabsByUrl) {
       uniqueTabs.push(...tabOutDisplayTabsForUrl(canonicalIdentity, urlTabs))
     }
+    uniqueTabs.sort((a, b) => {
+      const left = tabOutBucketForTab(a)
+      const right = tabOutBucketForTab(b)
+      return left.rank - right.rank || left.groupId - right.groupId
+    })
   } else {
     const seen = new Set<string>()
     for (const tab of tabs) {

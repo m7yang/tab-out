@@ -367,12 +367,14 @@ chromeApi.tabs.onRemoved.addListener((tabId, removeInfo) => {
   scheduleStartupSnapshotRefresh()
 })
 
-// Update badge when a tab's URL changes (e.g. navigating to/from chrome://)
+// New-tab metadata also changes duplicate identity and cleanup eligibility.
 chromeApi.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (
     changeInfo.url !== undefined ||
     changeInfo.groupId !== undefined ||
-    changeInfo.pinned !== undefined
+    changeInfo.pinned !== undefined ||
+    ((tab.pendingUrl || tab.url) === 'chrome://newtab/' &&
+      (changeInfo.status !== undefined || changeInfo.favIconUrl !== undefined))
   ) refreshBadge()
   openSurfaceCheckpointBatcher.enqueue(
     tabId,

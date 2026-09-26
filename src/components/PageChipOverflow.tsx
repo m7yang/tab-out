@@ -47,10 +47,10 @@ function chipMatchesActiveHover(chip: DashboardChipData, state: HoverState): boo
       })
     : null
   return (
-    pageTargetMatchesHover(chip, state.url, state.urls) ||
+    pageTargetMatchesHover(chip, state.url, state.urls, state.tabIds) ||
     sameTitleMatch?.kind === 'hover-match' && sameTitleMatch.rowMatches.some(Boolean) ||
     !!chip.envs?.some((env) => (
-      pageTargetMatchesHover(env, state.url, state.urls)
+      pageTargetMatchesHover(env, state.url, state.urls, state.tabIds)
     ))
   )
 }

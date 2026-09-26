@@ -415,11 +415,11 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
   }, [hoverIdentity, entryExpansionId, onHoverUrlChange])
   const hoverMatched = useHoverStateSelector((state) => (
     !!state.source && state.source !== hoverSource && (
-      pageTargetMatchesHover(entry, state.url, state.urls) ||
-      matchUrls.some((url) => url === state.url || state.urls.includes(url))
+      pageTargetMatchesHover(entry, state.url, state.urls, state.tabIds) ||
+      state.tabIds === undefined && matchUrls.some((url) => url === state.url || state.urls.includes(url))
     )
   ))
-  const entryLabel = entry.title || entry.displayUrl || entry.url
+  const entryLabel = entry.title.replaceAll('\u200E', '').trim() || entry.displayUrl || entry.url
   const faviconUrl = entry.favIconUrl || workingSetItem?.faviconUrl || ''
   // Same liveness rule as page chips: full strength only when an awake tab
   // backs the row. Open-ghost rows derive `suspended` from the suspender url

@@ -879,34 +879,36 @@
           })))
         }
       }
-      if (fixtureParams.has('historyHoverSeam')) {
-        const newTabs = [1, 2].map((id) => ({
+      if (fixtureParams.has('historyHoverSeam') || fixtureParams.has('newTabHoverIdentity')) {
+        const mixedNewTabs = fixtureParams.has('newTabHoverIdentity')
+        const newTabs = (mixedNewTabs ? [1, 4, 5, 6, 7, 2, 3] : [1, 2]).map((id) => ({
           id,
-          windowId: id,
-          url: 'chrome://newtab/',
-          title: 'New Tab',
-          active: true,
+          windowId: id === 1 ? 1 : 2,
+          url: mixedNewTabs && id === 4 ? 'chrome://new-tab-page/' : 'chrome://newtab/',
+          title: mixedNewTabs && id <= 3 ? '\u200e' : 'New Tab',
+          active: !mixedNewTabs || id === 1 || id === 4,
           pinned: false,
           groupId: -1,
-          index: 0,
-          favIconUrl: ''
+          index: id - 1,
+          favIconUrl: mixedNewTabs && id <= 3 ? "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" : ''
         }))
         tabs.splice(0, tabs.length, ...newTabs)
         windows.push({ id: 2, type: 'normal', focused: false })
         tabHistorySnapshot = {
           ...tabHistorySnapshot,
           currentIndex: 0,
-          entries: [{
+          entries: newTabs.map((tab) => ({
             ...tabHistorySnapshot.entries[0],
-            tabId: 1,
-            windowId: 1,
-            url: 'chrome://newtab/',
-            rawUrl: 'chrome://newtab/',
-            displayUrl: 'chrome://newtab/',
-            title: 'New Tab',
-            active: true,
-            current: true
-          }]
+            tabId: tab.id,
+            windowId: tab.windowId,
+            url: tab.url,
+            rawUrl: tab.url,
+            displayUrl: tab.url,
+            title: tab.title,
+            favIconUrl: tab.favIconUrl,
+            active: tab.active,
+            current: tab.id === 1
+          }))
         }
       }
       if (fixtureParams.has('groupRails')) {

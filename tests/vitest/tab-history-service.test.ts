@@ -132,6 +132,26 @@ it.effect('getTabHistorySnapshot populates lastActivatedAt from the activity log
   }).pipe(Effect.provide(tabHistoryLayer(chromeApi)))
 })
 
+it.effect('history preserves intentional blank titles through snapshot normalization', () => {
+  const tabs = [
+    { id: 10, windowId: 1, url: 'chrome://newtab/', title: '\u200e', active: true },
+    { id: 20, windowId: 1, url: 'chrome://new-tab-page/', title: 'New Tab', active: false },
+    { id: 30, windowId: 1, url: 'https://example.test/', title: '', active: false },
+  ] as chrome.tabs.Tab[]
+  const chromeApi = makeChromeApi({
+    history: { stack: tabs.map((tab) => ({ windowId: 1, tabId: tab.id! })), index: 0 },
+    tabs,
+  })
+  return Effect.gen(function* () {
+    const service = yield* TabHistoryService.TabHistory
+    const snapshot = normalizeTabHistorySnapshot(yield* service.getTabHistorySnapshot())
+    const titles = new Map(snapshot.entries.map((entry) => [entry.tabId, entry.title]))
+    assert.equal(titles.get(10), '\u200e')
+    assert.equal(titles.get(20), 'New Tab')
+    assert.equal(titles.get(30), 'example.test/')
+  }).pipe(Effect.provide(tabHistoryLayer(chromeApi)))
+})
+
 it.effect('getTabHistorySnapshot sets lastActivatedAt to null when the URL has no activity record', () => {
   const chromeApi = makeChromeApi({
     history: { stack: [{ windowId: 1, tabId: 10 }], index: 0 },

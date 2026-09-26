@@ -17,7 +17,7 @@
    path-groups.ts).
    ================================================================ */
 
-import { isTabOutPageUrl, tabOutDashboardCanonicalUrl } from './tab-out-url.js'
+import { isTabOutDashboardUrl, TAB_OUT_FAVICON_URL, tabOutDashboardCanonicalUrl } from './tab-out-url.js'
 import { isGitHubRepositoryRootPath } from './github-url.js'
 import type { UrlCanonicalizerRule } from './types'
 
@@ -53,14 +53,18 @@ const BUILT_IN_CANONICALIZERS: UrlCanonicalizerRule[] = [
   },
 ]
 
-export function canonicalDedupeKey(url: string): string {
+export function canonicalDedupeKey(url: string, favIconUrl?: string): string {
   if (!url) return url
 
-  // Tab Out's own dashboard: collapse the native chrome://newtab/ alias and
-  // every filter/search/hash variant to a single identity so redundant
-  // dashboards are counted + closable as dupes. Keep each tab's physical URL
-  // unchanged; this key is only for duplicate grouping and close selection.
-  if (isTabOutPageUrl(url)) return tabOutDashboardCanonicalUrl() ?? url
+  // Chrome gives native and overridden new tabs the same virtual URL.
+  // Only a reported Tab Out favicon identifies the alias as our dashboard;
+  // missing or unfamiliar metadata must not merge different documents.
+  if (isTabOutDashboardUrl(url) || (url === 'chrome://newtab/' && favIconUrl === TAB_OUT_FAVICON_URL)) {
+    return tabOutDashboardCanonicalUrl() ?? url
+  }
+
+  // Chrome exposes the native document through either spelling.
+  if (url === 'chrome://new-tab-page/') return 'chrome://newtab/'
 
   const parsed = URL.parse(url)
   if (!parsed) return url

@@ -136,6 +136,7 @@ export function createChipBuilders({ filtering, isTabOutGroup, currentWindowId, 
     const { activeInOtherWindow, activeChipFrame } = activeFrameStateForDuplicateSet(duplicateTabs, currentWindowId)
     return omitUndefined({
       tabId: tab.id,
+      hoverTabIds: tabOutMeta?.tabs.flatMap((member) => typeof member.id === 'number' ? [member.id] : []),
       renderKey: tabOutMeta?.renderKey,
       tabUrl: tab.url,
       rawUrl: tab.rawUrl || tab.url,

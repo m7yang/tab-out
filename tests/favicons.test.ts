@@ -52,6 +52,18 @@ test('pickTabFavicon: a live tab without any favicon stays empty', () => {
   assert.equal(pickTabFavicon({ favIconUrl: '', url: 'https://site.example/page', suspended: false }), '')
 })
 
+test('native new tabs resolve Chrome’s own icon while override data icons stay intact', () => {
+  const transparent = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"
+  for (const url of ['chrome://newtab/', 'chrome://new-tab-page/']) {
+    for (const resolve of [pickTabFavicon, pickFavicon]) {
+      const favicon = resolve({ url, favIconUrl: '', suspended: false })
+      assert.equal(URL.parse(favicon)?.searchParams.get('pageUrl'), 'chrome://new-tab-page/')
+      assert.equal(resolve({ url, favIconUrl: favicon, suspended: false }), favicon)
+      assert.equal(resolve({ url, favIconUrl: transparent, suspended: false }), transparent)
+    }
+  }
+})
+
 test('pickTabFavicon: a suspended tab recovers the real favicon from the unwrapped url', () => {
   const result = pickTabFavicon({ favIconUrl: '', url: 'https://real.example/page', suspended: true })
   assert.match(result, /\/_favicon\/\?pageUrl=https%3A%2F%2Freal\.example%2Fpage&size=32$/)

@@ -1703,6 +1703,12 @@ test('Undo Switch accepts matching ordinary and suspended restored targets', asy
   ])
 })
 
+test('native new-tab Undo snapshots retain the physical document URL', () => {
+  const tabs = [{ url: 'chrome://new-tab-page/', windowId: 1, index: 0, pinned: false, groupId: -1 }]
+  assert.deepEqual(snapshotChromeTabs(tabs), [])
+  assert.equal(snapshotChromeTabs(tabs, { includeTabOutUrls: true })[0]?.rawUrl, tabs[0]?.url)
+})
+
 test('snapshotChromeTabs stores raw suspended URL for undo and effective URL for matching', () => {
   const rawUrl = 'chrome-extension://marvellous/suspended.html#ttl=Docs&uri=https%3A%2F%2Fexample.com%2Fdocs%3Fq%3D1'
 

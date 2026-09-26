@@ -55,6 +55,8 @@ test('isTabOutDashboardUrl is false without a runtime id', () => {
 test('isTabOutPageUrl includes chrome://newtab/ as well as the dashboard', () => {
   withExtensionId('tab-out', () => {
     assert.equal(isTabOutPageUrl('chrome://newtab/'), true)
+    assert.equal(isTabOutPageUrl('chrome://new-tab-page/'), true)
+    assert.equal(isTabOutPageUrl('chrome-untrusted://new-tab-page/'), false)
     assert.equal(isTabOutPageUrl('chrome-extension://tab-out/index.html?filter=x'), true)
     assert.equal(isTabOutPageUrl('https://example.com/'), false)
   })
@@ -63,6 +65,8 @@ test('isTabOutPageUrl includes chrome://newtab/ as well as the dashboard', () =>
 test('isTabOutPageUrl still recognizes chrome://newtab/ without a runtime id', () => {
   withExtensionId(undefined, () => {
     assert.equal(isTabOutPageUrl('chrome://newtab/'), true)
+    assert.equal(isTabOutPageUrl('chrome://new-tab-page/'), true)
+    assert.equal(isTabOutPageUrl('chrome-untrusted://new-tab-page/'), false)
     assert.equal(isTabOutPageUrl('chrome-extension://tab-out/index.html'), false)
   })
 })

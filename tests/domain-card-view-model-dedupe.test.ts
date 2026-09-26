@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { computeDomainCardViewModel } from '../src/extension/domain-card-view-model.js'
 import { titleForFilterInput } from '../src/extension/app-url.js'
+import { TAB_OUT_FAVICON_URL } from '../src/extension/tab-out-url.js'
 import { domainCardId } from '../src/extension/domain-card-id.js'
 import type { MissionOrderMap } from '../src/extension/dashboard-intake.js'
 import type { DomainGroup } from '../src/extension/types'
@@ -397,7 +398,7 @@ test('current and ordinary Tab Out aliases share one closable identity while sta
       domain: '__tab-out__',
       tabs: [
         makeDashboardTab({ id: 1, url: base, title: 'Tab Out', windowId: 1, active: true, isTabOut: true }),
-        makeDashboardTab({ id: 2, url: newTab, title: 'New Tab', windowId: 1, isTabOut: true }),
+        makeDashboardTab({ id: 2, url: newTab, favIconUrl: TAB_OUT_FAVICON_URL, title: 'Tab Out', windowId: 1, isTabOut: true }),
       ],
     }
 
@@ -482,7 +483,7 @@ test('New tabs keep current, pinned, Chrome-grouped, and ordinary bucket order d
       makeDashboardTab({ id: 2, url: `${base}?focusFilter=1`, pinned: true }),
       makeDashboardTab({ id: 3, url: `${base}#example`, groupId: 7 }),
       makeDashboardTab({ id: 4, url: base }),
-      makeDashboardTab({ id: 5, url: 'chrome://newtab/' }),
+      makeDashboardTab({ id: 5, url: 'chrome://newtab/', favIconUrl: TAB_OUT_FAVICON_URL }),
     ].map((tab) => ({ ...tab, title: titleForFilterInput(), isTabOut: true }))
     const vm = computeDomainCardViewModel({ domain: '__tab-out__', tabs }, {
       currentWindowId: 1,
@@ -504,6 +505,40 @@ test('New tabs keep current, pinned, Chrome-grouped, and ordinary bucket order d
   }
 })
 
+test('native Chrome and Tab Out new tabs have separate stacks with the current page first', () => {
+  const g = globalThis as { chrome?: unknown }
+  const previous = g.chrome
+  g.chrome = { runtime: { id: 'tab-out', getURL: (path: string) => `chrome-extension://tab-out${path}` } }
+  try {
+    const url = 'chrome://newtab/'
+    const tabs = [
+      makeDashboardTab({ id: 2, url, title: 'New Tab', isTabOut: true }),
+      ...[1, 3, 4].map((id) => makeDashboardTab({
+        id, url, title: titleForFilterInput(), favIconUrl: TAB_OUT_FAVICON_URL, active: id === 1, isTabOut: true,
+      })),
+    ]
+    const vm = computeDomainCardViewModel({ domain: '__tab-out__', tabs }, { currentWindowId: 1 })
+    const chips = collectDashboardChips(vm)
+    assert.equal(vm.tabCount, 4)
+    assert.equal(vm.closableExtras, 2)
+    assert.deepEqual(chips.map((chip) => [chip.tabId, chip.dupeCount]), [[1, 1], [2, 1], [3, 2]])
+    assert.deepEqual(chips.map((chip) => chip.title), [titleForFilterInput(), 'New Tab', titleForFilterInput()])
+    assert.equal(chips[0]?.faviconUrl, TAB_OUT_FAVICON_URL)
+    assert.deepEqual(chips.map((chip) => chip.hoverTabIds), [[1], [2], [3, 4]])
+    assert.equal(URL.parse(chips[1]?.faviconUrl ?? '')?.searchParams.get('pageUrl'), 'chrome://new-tab-page/')
+    assert.equal(chips[2]?.faviconUrl, TAB_OUT_FAVICON_URL)
+    // Either scan order must preserve each page's title at the shared alias.
+    const pair = tabs.filter((tab) => tab.id === 1 || tab.id === 2)
+    for (const orderedTabs of [pair, pair.toReversed()]) {
+      const pairChips = collectDashboardChips(computeDomainCardViewModel({ domain: '__tab-out__', tabs: orderedTabs }, { currentWindowId: 1 }))
+      assert.deepEqual(pairChips.map((chip) => chip.title), [titleForFilterInput(), 'New Tab'])
+    }
+  } finally {
+    if (previous === undefined) delete g.chrome
+    else g.chrome = previous
+  }
+})
+
 test('ordinary Tab Out aliases collapse into one stacked display chip', () => {
   const g = globalThis as { chrome?: unknown }
   const previous = g.chrome
@@ -514,7 +549,7 @@ test('ordinary Tab Out aliases collapse into one stacked display chip', () => {
       domain: '__tab-out__',
       tabs: [
         makeDashboardTab({ id: 1, url: base, title: 'Tab Out', windowId: 2, isTabOut: true }),
-        makeDashboardTab({ id: 2, url: 'chrome://newtab/', title: 'New Tab', windowId: 2, isTabOut: true }),
+        makeDashboardTab({ id: 2, url: 'chrome://newtab/', favIconUrl: TAB_OUT_FAVICON_URL, title: 'Tab Out', windowId: 2, isTabOut: true }),
       ],
     }
 
@@ -544,10 +579,10 @@ test('an ordinary Tab Out bucket keeps its render identity when its representati
     })
     const before = collectDashboardChips(computeDomainCardViewModel(makeGroup([
       makeDashboardTab({ id: 20, url: base, title: 'Tab Out', windowId: 2, isTabOut: true }),
-      makeDashboardTab({ id: 21, url: newTab, title: 'New Tab', windowId: 2, isTabOut: true }),
+      makeDashboardTab({ id: 21, url: newTab, favIconUrl: TAB_OUT_FAVICON_URL, title: 'Tab Out', windowId: 2, isTabOut: true }),
     ]), { currentWindowId: 1 }))[0]
     const after = collectDashboardChips(computeDomainCardViewModel(makeGroup([
-      makeDashboardTab({ id: 21, url: newTab, title: 'New Tab', windowId: 2, isTabOut: true }),
+      makeDashboardTab({ id: 21, url: newTab, favIconUrl: TAB_OUT_FAVICON_URL, title: 'Tab Out', windowId: 2, isTabOut: true }),
     ]), { currentWindowId: 1 }))[0]
 
     assert.ok(before)

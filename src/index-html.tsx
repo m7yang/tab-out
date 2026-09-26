@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { prerender } from 'react-dom/static'
 
 import { AppRoot } from './components/App.js'
+import { TAB_OUT_FAVICON_URL } from './extension/tab-out-url.js'
 
 const APP_MARKUP_SLOT = '<!-- TAB_OUT_PRERENDERED_APP -->'
 const INDEX_HTML_TEMPLATE_URL = new URL('./index-html.template.html', import.meta.url)
@@ -26,5 +27,5 @@ export async function createIndexHtml(): Promise<string> {
     prerender(<AppRoot />),
   ])
   const appMarkup = await new Response(prelude).text()
-  return injectAppMarkup(indexHtmlTemplate, appMarkup)
+  return injectAppMarkup(indexHtmlTemplate.replace('__TAB_OUT_FAVICON_URL__', TAB_OUT_FAVICON_URL), appMarkup)
 }

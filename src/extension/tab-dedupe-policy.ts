@@ -10,6 +10,7 @@ export type DedupeTabCandidate = {
   windowId: number
   index?: number | undefined
   lastAccessed?: number | undefined
+  status?: string | undefined
 }
 
 export type DuplicateCloseOptions = {
@@ -28,6 +29,10 @@ export type DuplicateCountOptions = {
 
 function candidateUrl(tab: DedupeTabCandidate): string | undefined {
   return tab.pendingUrl || tab.url
+}
+
+export function isLoadingNewTab(tab: DedupeTabCandidate): boolean {
+  return tab.status === 'loading' && candidateUrl(tab) === 'chrome://newtab/'
 }
 
 function isCurrentTabOutPage(tab: DedupeTabCandidate, currentWindowId: number, isTabOutUrl: (url?: string) => boolean): boolean {
@@ -57,6 +62,8 @@ export function pickDuplicateTabsToClose<Tab extends DedupeTabCandidate>(
     isTabOutUrl = () => false,
   }: DuplicateCloseOptions = {},
 ): Tab[] {
+  // A loading new-tab alias may not have reported its document's favicon yet.
+  matching = matching.filter((tab) => !isLoadingNewTab(tab))
   if (matching.length === 0) return []
   const protectedCurrentTabOutTabs = preservePinnedTabOut
     ? matching.filter((tab) => isCurrentTabOutPage(tab, currentWindowId, isTabOutUrl))

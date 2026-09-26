@@ -52,6 +52,7 @@ import { parseDashboardStartupSeedBoundary } from '../../src/extension/startup-s
 import { normalizeChromeOpenTabs } from '../../src/extension/tabs.js'
 import type { TabHistorySnapshot } from '../../src/extension/types'
 import { buildWorkingSetSnapshot } from '../../src/extension/working-set.js'
+import { TAB_OUT_FAVICON_URL } from '../../src/extension/tab-out-url.js'
 
 const backgroundUrl = new URL('../../src/extension/background.ts', import.meta.url)
 const extensionUrl = 'chrome-extension://tab-out/index.html'
@@ -1065,6 +1066,26 @@ test('metadata-only tab updates do not trigger redundant badge tab queries', asy
   onUpdated(25, { url: 'https://example.test/next' }, { ...mock.state.tabsById[25], url: 'https://example.test/next' })
   await flushBackgroundWork()
   assert.equal(mock.calls.tabQuery.length, queriesBeforeUpdate + 1)
+})
+
+test('new-tab completion and favicon updates refresh the duplicate badge', async () => {
+  const mock = await loadBackground([
+    { id: 26, windowId: 1, url: 'chrome://newtab/', title: 'New Tab', status: 'complete', active: true, pinned: false, groupId: -1, index: 0 },
+    { id: 27, windowId: 1, url: 'chrome://newtab/', title: 'New Tab', status: 'loading', active: false, pinned: false, groupId: -1, index: 1 },
+  ])
+  assert.deepEqual(mock.calls.badgeText.at(-1), { text: '' })
+  for (const [changeInfo, expected] of [
+    [{ status: 'complete' }, '1'],
+    [{ favIconUrl: TAB_OUT_FAVICON_URL }, ''],
+    [{ favIconUrl: '' }, '1'],
+    [{ status: 'loading' }, ''],
+  ] as const) {
+    Object.assign(mock.state.tabsById[27], changeInfo)
+    mock.listeners.tabsOnUpdated[0](27, changeInfo, clone(mock.state.tabsById[27]))
+    await vi.advanceTimersByTimeAsync(STARTUP_SNAPSHOT_DEBOUNCE_MS + 1)
+    await flushBackgroundWork()
+    assert.deepEqual(mock.calls.badgeText.at(-1), { text: expected })
+  }
 })
 
 test('the worker registers no toolbar context menu now that the popup owns the move action', async () => {
