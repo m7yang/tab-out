@@ -9,7 +9,7 @@ const FRAME_OPTIONS = {
     attribute: 'data-history-match-frame',
     part: 'history-match-frame',
     outset: 8,
-    className: 'pointer-events-none absolute top-0 left-0 box-border rounded-history-match-card border border-neutral-600/35 contain-strict [corner-shape:squircle]',
+    className: 'pointer-events-none absolute top-0 left-0 box-border rounded-history-match-card border border-neutral-600/35 contain-strict [corner-shape:superellipse(1.7)]',
   },
   'page-chip': {
     selector: '.page-chip-hover-match, .page-chip-overflow-hover-match',
@@ -17,7 +17,7 @@ const FRAME_OPTIONS = {
     part: 'history-page-match-frame',
     outset: 0,
     // Keep the outside outline visible; paint containment would clip it.
-    className: 'pointer-events-none absolute top-0 left-0 z-3 box-border outline-1 outline-offset-1 outline-(--accent-amber) contain-layout [corner-shape:squircle]',
+    className: 'pointer-events-none absolute top-0 left-0 z-3 box-border outline-1 outline-offset-1 outline-(--accent-amber) contain-layout [corner-shape:superellipse(1.7)]',
   },
 }
 
@@ -43,9 +43,10 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
     let destination = ''
     let capsule = false
 
-    function paintCapsule(width: number, height: number) {
+    function paintContour(width: number, height: number) {
+      if (!frame) return
       const path = capsulePathRef.current
-      if (!frame || !path) return
+      if (!path) return
       const geometry = capsule ? createCapsuleGeometry({ width, height, borderWidth: 0, focusGap: 1, focusWidth: 1 }) : null
       if (geometry) {
         path.setAttribute('d', geometry.focusPath)
@@ -122,8 +123,8 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
       if (kind === 'page-chip') {
         frame.style.borderRadius = targetRadius
         frame.style.setProperty('corner-shape', targetCorner)
-        paintCapsule(move ? previous.width : width, move ? previous.height : height)
       }
+      if (kind === 'page-chip') paintContour(move ? previous.width : width, move ? previous.height : height)
       root.setAttribute(options.attribute, '')
 
       if (move) {
@@ -132,7 +133,7 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
         animation = frame.animate([
           {
             transform: `translate(${previous.left - container.left - root.clientLeft + root.scrollLeft}px, ${previous.top - container.top - root.clientTop + root.scrollTop}px)`,
-            // react-doctor-disable-next-line react-doctor/no-layout-property-animation -- ADR 0042: this contained, absolute decorative frame resizes to preserve a constant stroke and squircle radius; card layout is untouched.
+            // react-doctor-disable-next-line react-doctor/no-layout-property-animation -- ADR 0042: this contained, absolute decorative frame resizes to preserve a constant stroke and corner radius; card layout is untouched.
             width: `${previous.width}px`,
             // react-doctor-disable-next-line react-doctor/no-layout-property-animation -- Same isolated-frame geometry exception as width; scaling would distort the border.
             height: `${previous.height}px`,
@@ -164,7 +165,7 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
       for (const entry of entries) {
         if (entry.target === frame) {
           const box = entry.borderBoxSize[0]
-          if (box) paintCapsule(box.inlineSize, box.blockSize)
+          if (box) paintContour(box.inlineSize, box.blockSize)
         }
       }
       if (entries.some((entry) => entry.target !== frame)) schedule()

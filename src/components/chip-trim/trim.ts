@@ -78,7 +78,7 @@ export type ChipTrim = {
   expandedFill: null | { classes: string, top: string, bottom: string, background: string }
 }
 
-const EXPANDED_FILL_CLASSES = 'page-chip-expanded-fill bg-(--capsule-fill) pointer-events-none absolute inset-x-0 -z-1 rounded-[inherit] opacity-0 [corner-shape:squircle] title-interaction:group-hover/page-chip:opacity-100 group-focus-visible/page-chip:opacity-100 group-[.page-chip-expanded]/page-chip:opacity-100 title-interaction:group-[.page-chip-context-menu-open]/page-chip:opacity-100 title-interaction:group-[.page-chip-tooltip-open]/page-chip:opacity-100'
+const EXPANDED_FILL_CLASSES = 'page-chip-expanded-fill bg-(--capsule-fill) pointer-events-none absolute inset-x-0 -z-1 rounded-[inherit] opacity-0 [corner-shape:inherit] title-interaction:group-hover/page-chip:opacity-100 group-focus-visible/page-chip:opacity-100 group-[.page-chip-expanded]/page-chip:opacity-100 title-interaction:group-[.page-chip-context-menu-open]/page-chip:opacity-100 title-interaction:group-[.page-chip-tooltip-open]/page-chip:opacity-100'
 
 export function chipTrim(facts: ChipTrimFacts): ChipTrim {
   const hasActiveChipFrame = facts.activeChipFrame || facts.activeInOtherWindow
@@ -117,7 +117,7 @@ export function chipTrim(facts: ChipTrimFacts): ChipTrim {
   const frame = hasActiveChipFrame && !facts.iconOnly
     ? {
         classes: [
-          `${CHIP_TRIM_TOKENS.frame} pointer-events-none absolute inset-0 z-2 rounded-[inherit] [corner-shape:squircle]`,
+          `${CHIP_TRIM_TOKENS.frame} pointer-events-none absolute inset-0 z-2 rounded-[inherit] [corner-shape:inherit]`,
           'title-interaction:group-hover/page-chip:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] group-[.page-chip-expanded]/page-chip:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] title-interaction:group-[.page-chip-context-menu-open]/page-chip:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] title-interaction:group-[.page-chip-tooltip-open]/page-chip:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)]',
           isCurrentTabOutFrame
             ? 'active-history-entry-frame current-tab-out-chip-frame shadow-[inset_0_0_0_1px_rgba(82,82,82,0.48)]'

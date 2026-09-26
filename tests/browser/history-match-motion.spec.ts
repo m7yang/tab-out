@@ -101,7 +101,35 @@ test('overflow match outlines keep the capsule contour throughout resizing and i
   await expectCapsule()
   await pointAt(historyChip(page, 'History Charlie'))
   await expect(frame).toHaveCSS('border-shape', 'none')
-  await expect(frame).toHaveCSS('corner-shape', 'superellipse(2)')
+  await expect(frame).toHaveCSS('corner-shape', 'superellipse(1.7)')
+})
+
+test('midpoint corners follow both frames at intermediate animation sizes', async ({ page }) => {
+  const target = dashboardChip(page, 'History Charlie')
+  await target.evaluate((element) => { element.style.height = '80px' })
+  await pointAt(historyChip(page, 'History Alpha'))
+  const frames = page.locator(`${frameSelector}, ${pageFrameSelector}`)
+  await frames.evaluateAll((elements) => {
+    for (const element of elements) {
+      new MutationObserver(() => {
+        for (const animation of element.getAnimations()) {
+          if (animation.playState === 'paused') continue
+          animation.pause()
+          animation.currentTime = 60
+        }
+      }).observe(element, { attributes: true, attributeFilter: ['style'] })
+    }
+  })
+  await pointAt(historyChip(page, 'History Charlie'))
+  for (const selector of [frameSelector, pageFrameSelector]) {
+    const frame = page.locator(selector)
+    await expect.poll(() => frame.evaluate((element) => element.getAnimations()[0]?.playState)).toBe('paused')
+    expect((await frame.boundingBox())!.height).toBeGreaterThan(34)
+    await expect(frame).toHaveCSS('border-shape', 'none')
+    await expect(frame).toHaveCSS('corner-shape', 'superellipse(1.7)')
+    await expect(frame).toHaveCSS('border-radius', selector === frameSelector ? '38.5px' : '18.65px')
+    if (selector === pageFrameSelector) await expect(frame.locator('svg')).toBeHidden()
+  }
 })
 
 test('the frame travels, resizes without scaling its stroke, and retargets from its interrupted position', async ({ page }) => {
@@ -143,7 +171,7 @@ test('the frame travels, resizes without scaling its stroke, and retargets from 
     const style = getComputedStyle(element)
     const transform = new DOMMatrix(style.transform)
     return { stroke: style.borderTopWidth, radius: style.borderTopLeftRadius, scaleX: transform.a, scaleY: transform.d }
-  })).toEqual({ stroke: '1px', radius: '50px', scaleX: 1, scaleY: 1 })
+  })).toEqual({ stroke: '1px', radius: '38.5px', scaleX: 1, scaleY: 1 })
   await page.screenshot({ path: test.info().outputPath('history-frame-midpoint.png') })
 
   await pointAt(historyChip(page, 'History Delta'))
@@ -229,7 +257,7 @@ test('the page outline moves within a card and retargets across cards without a 
     const style = getComputedStyle(element)
     const transform = new DOMMatrix(style.transform)
     return { stroke: style.outlineWidth, offset: style.outlineOffset, radius: style.borderTopLeftRadius, scaleX: transform.a, scaleY: transform.d }
-  })).toEqual({ stroke: '1px', offset: '1px', radius: '23px', scaleX: 1, scaleY: 1 })
+  })).toEqual({ stroke: '1px', offset: '1px', radius: '18.65px', scaleX: 1, scaleY: 1 })
   await page.screenshot({ path: test.info().outputPath('page-frame-midpoint.png') })
 
   await pointAt(historyChip(page, 'History Charlie'))

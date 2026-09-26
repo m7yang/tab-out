@@ -1273,7 +1273,7 @@ test('truncated same-title URL labels fade at rest and use ellipsis when expande
     expect(gaps.right).toBeCloseTo(2.5, 1)
     expect(gaps.bottom).toBeCloseTo(2.5, 1)
     expect(gaps.height).toBe(21)
-    expect(gaps.radius).toBe('23px')
+    expect(gaps.radius).toBe('18.65px')
   }
   await checkNestedSpacing()
 

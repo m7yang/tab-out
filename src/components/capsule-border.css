@@ -46,8 +46,19 @@
 /* Keep the action fade inside the measured end without clipping controls. */
 .page-chip[data-capsule-ready]::after {
   width: 100%;
+  border-radius: 0;
   background-size: var(--chip-hover-fade-width) 100%;
   background-position: right;
   background-repeat: no-repeat;
   clip-path: var(--capsule-surface-shape);
+}
+
+/* Give the fade the full surface bounds so its radius cannot shrink separately. */
+.page-chip:not(.page-chip-icon-only):not([data-capsule-ready])::after {
+  width: 100%;
+  border-radius: inherit;
+  corner-shape: inherit;
+  background-size: var(--chip-hover-fade-width) 100%;
+  background-position: right;
+  background-repeat: no-repeat;
 }

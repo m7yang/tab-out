@@ -1,15 +1,17 @@
 # Continuous capsule
 
-`fleet-continuous-capsule-0.1.1.tgz` is the portable package produced by `pnpm pack`
-from standalone commit `f71c24a3222e4f8ae8cbd6ea9b437a3470fec344`, in the
-checkout `/Users/ian/Developer/continuous-capsule`.
-It was extracted from Fleet commit `32138d9e2e21568eb930efb2ea79c5dc07904c39`,
-directory `agent-tools/packages/continuous-capsule`. The extracted runtime
-matches the former 0.1.0 artifact from Fleet commit
-`dfa5cab9e1e3487d0880150a8c7ed9e3f3c56edf`; 0.1.1 adds optional focus calculation.
-The artifact's SHA-256 is
-`041d6762bc6e7173f3f0df2378a7c7b5ef15a7e2e7a12d90e3dd15a31b77c7ee`.
-Its measured profile is `swiftui-macos-27.0-26A428`.
+`fleet-continuous-capsule-0.2.0.tgz` is produced by `pnpm pack` from
+`/Users/ian/Developer/continuous-capsule`, based on standalone commit
+`f71c24a3222e4f8ae8cbd6ea9b437a3470fec344` plus the uncommitted native-rectangle
+addition dated 2026-09-26. Its SHA-256 is
+`711efbfc49ea14f1c2e4fdf398506909dd64232eba5bc73de148bb3d93264528`.
+Version 0.2.0 adds `createContinuousRectangleGeometry`; existing capsule output
+is unchanged. The pinned profile is `swiftui-macos-27.0-26A428`. Its independent
+561-sample native corpus and exporter stay in the package source repository.
+
+Tab Out now uses CSS midpoint corners for tall Page Chips and card outlines
+([ADR 0055](../docs/adr/0055-use-midpoint-corners.md)); compact capsules still use
+this package. Its native rectangle API remains available as the validated reference.
 
 The header Filter Query uses its 1px surface border. Focus repaints that same
 path blue with the existing soft blue shadow, without an offset ring or gap.

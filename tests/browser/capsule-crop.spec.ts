@@ -73,7 +73,7 @@ for (const deviceScaleFactor of [1, 2, 3]) {
       test(`${selector} retains its native shoulders at fractional pixel positions`, async ({ page }) => {
         await page.goto(selector === '[data-tabout-part="close-suspended-button"]'
           ? '/tests/fixtures/tab-actions-popup.html'
-          : selector === '.history-entry'
+          : selector.startsWith('.history-entry')
             ? '/tests/fixtures/dashboard-resize.html?historyHoverFrame&historyFrameMotion'
             : selector.includes('.chip-title-variant-list')
               ? '/tests/fixtures/dashboard-resize.html?filter=Plain%20Title%20Variant'
@@ -267,7 +267,7 @@ test('capsule paint preserves token hover, focus, marker tones, and overflow dec
 })
 
 for (const context of ['domain-card', 'activation-history']) {
-  test(`${context} Page Chip keeps capsule paint through hover, resize, and tall fallback`, async ({ page }) => {
+  test(`${context} Page Chip keeps capsule paint through hover, resize, and midpoint corners`, async ({ page }) => {
     await page.goto('/tests/fixtures/dashboard-resize.html?historyHoverFrame&historyFrameMotion')
     const chip = page.locator(`[data-tabout="page-chip"][data-tabout-context="${context}"]`).filter({ hasText: 'History Alpha' }).first()
     await expect(chip).toHaveAttribute('data-capsule-ready', '')
@@ -285,13 +285,23 @@ for (const context of ['domain-card', 'activation-history']) {
     await expect.poll(() => chip.evaluate((element) => element.style.getPropertyValue('border-shape'))).not.toBe(initialPath)
     await expect(fill).toHaveCount(1)
 
-    // The new 23px fallback must not turn a normal two-line chip into a capsule.
+    // Reflow changes the painter, while preserving the approved CSS shape.
     for (const height of [42.5, 80]) {
       await chip.evaluate((element, height) => { element.style.height = `${height}px` }, height)
       await expect(chip).not.toHaveAttribute('data-capsule-ready')
       await expect(chip).toHaveCSS('border-shape', 'none')
-      await expect(chip).toHaveCSS('border-top-left-radius', '23px')
+      await expect(chip).toHaveCSS('border-radius', '18.65px')
+      await expect(chip).toHaveCSS('corner-shape', 'superellipse(1.7)')
       await expect(fill).toBeHidden()
+      if (context === 'domain-card') {
+        const fade = await chip.evaluate((element) => {
+          const style = getComputedStyle(element, '::after')
+          return { radius: style.borderRadius, corner: style.getPropertyValue('corner-shape'), width: parseFloat(style.width), surfaceWidth: element.getBoundingClientRect().width }
+        })
+        expect(fade.radius).toBe('18.65px')
+        expect(fade.corner).toBe('superellipse(1.7)')
+        expect(fade.width).toBeCloseTo(fade.surfaceWidth, 2)
+      }
     }
     await chip.evaluate((element) => element.style.removeProperty('height'))
     await expect(chip).toHaveAttribute('data-capsule-ready', '')

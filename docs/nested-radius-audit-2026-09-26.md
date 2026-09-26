@@ -1,6 +1,22 @@
 # Page Chip nested-radius verification — 2026-09-26
 
-## Current fixed-corner contract
+## Current midpoint contour
+
+[ADR 0055](adr/0055-use-midpoint-corners.md) adopts CSS `superellipse(1.7)`:
+18.65px tall-chip radius and 38.5px card radius. Compact capsules, natural
+heights, 16px card gaps and 2.5px variant-row insets remain. These fixed tokens
+come from the approved compact-card and two-line-chip previews; they do not
+promise an exact average silhouette or parallel clearance at every size.
+
+## Historical native contour integration
+
+[ADR 0054](adr/0054-use-native-continuous-rectangles.md) supersedes the squircle
+choices below for tall Page Chips and card outlines. Native radii are 13.125px
+and 28.375px, respectively; layout gaps, natural height and equal corners remain.
+The earlier raster clearance measurements below describe the old CSS shapes,
+not the new native contours, and must not be cited as validation of this patch.
+
+## Historical fixed-corner contract
 
 The user clarified the design constraints: non-capsules remain squircles,
 each rectangle has four equal corners, every card outline uses one fixed

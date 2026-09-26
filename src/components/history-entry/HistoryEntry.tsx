@@ -490,7 +490,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
         data-next-target={entry.nextTarget ? 'true' : undefined}
         aria-hidden={expanded ? true : undefined}
         className={cn(
-          "history-entry group/history-entry relative min-w-0 flex-auto rounded-page-chip border-0 [--capsule-fill:transparent] bg-(--capsule-fill) text-tab-live [--history-entry-fade-bg:var(--card-bg)] [corner-shape:squircle] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-0 after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--history-entry-fade-bg)_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] group-has-[.history-entry-main:focus-visible]/history-row:outline-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-offset-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-(--accent-amber) focus-within:after:opacity-100",
+          "history-entry group/history-entry relative min-w-0 flex-auto rounded-page-chip border-0 [--capsule-fill:transparent] bg-(--capsule-fill) text-tab-live [--history-entry-fade-bg:var(--card-bg)] [corner-shape:superellipse(1.7)] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-0 after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--history-entry-fade-bg)_50%)] after:opacity-0 after:[corner-shape:inherit] after:content-[''] group-has-[.history-entry-main:focus-visible]/history-row:outline-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-offset-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-(--accent-amber) focus-within:after:opacity-100",
           entryCursorClass,
           entryClosed && 'history-entry-closed text-tab-closed',
           titleExpanded && 'history-entry-expanded-open',
@@ -511,7 +511,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
         {expanded && plainClickableEntry && (
           <span
             ref={attachPageChipBorder}
-            className="history-entry-expanded-fill bg-(--capsule-fill) pointer-events-none absolute inset-x-0 -z-1 rounded-[inherit] [corner-shape:squircle]"
+            className="history-entry-expanded-fill bg-(--capsule-fill) pointer-events-none absolute inset-x-0 -z-1 rounded-[inherit] [corner-shape:inherit]"
             style={{
               top: entryExpansionGeometry.y === 'up' ? expandedGrowingEdgeInset : '1px',
               bottom: entryExpansionGeometry.y === 'down' ? expandedGrowingEdgeInset : '1px',
@@ -523,7 +523,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
         {(entry.current || activeInOtherWindow) && (
           <span
             className={cn(
-              'active-history-entry-frame pointer-events-none absolute inset-0 z-2 rounded-[inherit] [corner-shape:squircle]',
+              'active-history-entry-frame pointer-events-none absolute inset-0 z-2 rounded-[inherit] [corner-shape:inherit]',
               entry.current
                 ? 'shadow-[inset_0_0_0_1px_rgba(82,82,82,0.48)]'
                 : 'shadow-[inset_0_0_0_1px_rgba(115,115,115,0.2)] title-interaction:group-hover/history-entry:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] group-[.history-entry-expanded-open]/history-entry:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)] title-interaction:group-data-context-menu-open/history-slot:shadow-[inset_0_0_0_1px_rgba(38,38,38,0.55)]',

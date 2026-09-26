@@ -17,7 +17,7 @@ export function attachCapsuleBorder(element: HTMLElement | null) {
   return attachBorder(element, 'capsule')
 }
 
-/** Compact Page Chips use capsules; tall content retains its existing corners. */
+/** Compact Page Chips use measured capsules; tall chips use the CSS midpoint. */
 export function attachPageChipBorder(element: HTMLElement | null) {
   return attachBorder(element, 'page-chip')
 }
@@ -88,7 +88,7 @@ function attachBorder(element: HTMLElement | null, kind: 'capsule' | 'menu-item'
       if (pageChip) element.style.setProperty('--capsule-surface-shape', `path("${geometry.surfacePath}")`)
       // Both contours contain only absolute M/L/C coordinates. Translate
       // them into the padded paint box, retaining the half-stroke inset.
-      const paddedPath = geometry.surfacePath.replace(/-?\d*\.?\d+/g, (value) => String(Number(value) + 1 + geometry.inset))
+      const paddedPath = geometry.surfacePath.replace(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi, (value) => String(Number(value) + 1 + geometry.inset))
       element.style.setProperty('--capsule-border-width', `${borderWidth}px`)
       element.style.setProperty('--capsule-fill-shape', `path("${paddedPath}")`)
       element.dataset.capsuleReady = ''
