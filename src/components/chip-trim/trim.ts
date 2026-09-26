@@ -9,7 +9,7 @@ import { PAGE_CHIP_CURRENT_CLASSES, PAGE_CHIP_PAINT } from '../page-chip-paint'
    candidates never emit. Marker names (no CSS of their own) may ride
    through CHIP_TRIM_TOKENS. */
 
-const FADE_INTERACTION_CLASSES = 'title-interaction:[&:has(.chip-actions):hover::after]:opacity-100 [&.page-chip-expanded:has(.chip-actions)::after]:opacity-100 title-interaction:[&.page-chip-context-menu-open:has(.chip-actions)::after]:opacity-100 title-interaction:[&.page-chip-tooltip-open:has(.chip-actions)::after]:opacity-100'
+const FADE_INTERACTION_CLASSES = 'title-interaction:[&:has(.chip-actions):hover]:[--chip-action-mask:var(--chip-hover-fade-mask)] [&.page-chip-expanded:has(.chip-actions)]:[--chip-action-mask:var(--chip-hover-fade-mask)] title-interaction:[&.page-chip-context-menu-open:has(.chip-actions)]:[--chip-action-mask:var(--chip-hover-fade-mask)] title-interaction:[&.page-chip-tooltip-open:has(.chip-actions)]:[--chip-action-mask:var(--chip-hover-fade-mask)]'
 const SURFACE_INTERACTION_CLASSES = 'title-interaction:hover:[--capsule-fill:var(--chip-interaction-bg)] [&.page-chip-expanded]:[--capsule-fill:var(--chip-interaction-bg)] title-interaction:[&.page-chip-context-menu-open]:[--capsule-fill:var(--chip-interaction-bg)] title-interaction:[&.page-chip-tooltip-open]:[--capsule-fill:var(--chip-interaction-bg)]'
 // The 1px interaction line, across the same states the fill responds to.
 // The color rides --chip-hover-border (per-kind value via styleVars) — an
@@ -60,9 +60,8 @@ export type ChipTrim = {
   slotClasses: string
   /** The inset ring overlay for framed kinds; null when the kind draws none. */
   frame: null | { classes: string }
-  /** CSS vars for fills and the interaction line. The fade bg stays the
-      opaque mix in every kind — the fade exists to hide chip text under the
-      action rail. Unframed chips share the closed-page hover treatment;
+  /** CSS vars for fills and the interaction line. The opaque bg backs
+      expanded surfaces. Unframed chips share the closed-page hover treatment;
       title and favicon styling carry liveness independently. */
   styleVars: {
     closedInteractionBg: string

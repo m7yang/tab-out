@@ -35,7 +35,7 @@ test('chip-trim: plain chips get the translucent fill, the shared hover line, an
   const trim = chipTrim(facts())
   assert.match(trim.chipClasses, /hover:\[--capsule-fill:var\(--chip-interaction-bg\)\]/)
   assert.match(trim.chipClasses, /\[&\.page-chip-expanded\]:\[--capsule-fill:var\(--chip-interaction-bg\)\]/)
-  assert.match(trim.chipClasses, /\[&\.page-chip-expanded:has\(\.chip-actions\)::after\]:opacity-100/)
+  assert.match(trim.chipClasses, /\[&\.page-chip-expanded:has\(\.chip-actions\)\]:\[--chip-action-mask:var\(--chip-hover-fade-mask\)\]/)
   assert.match(trim.chipClasses, /\[&\.page-chip-context-menu-open\]:\[--capsule-fill:var\(--chip-interaction-bg\)\]/)
   assert.match(trim.chipClasses, /\[&\.page-chip-tooltip-open\]:\[--capsule-fill:var\(--chip-interaction-bg\)\]/)
   assert.match(trim.chipClasses, OUTLINE_TRIO)

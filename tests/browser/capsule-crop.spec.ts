@@ -293,15 +293,6 @@ for (const context of ['domain-card', 'activation-history']) {
       await expect(chip).toHaveCSS('border-radius', '20.5px')
       await expect(chip).toHaveCSS('corner-shape', 'superellipse(1.7)')
       await expect(fill).toBeHidden()
-      if (context === 'domain-card') {
-        const fade = await chip.evaluate((element) => {
-          const style = getComputedStyle(element, '::after')
-          return { radius: style.borderRadius, corner: style.getPropertyValue('corner-shape'), width: parseFloat(style.width), surfaceWidth: element.getBoundingClientRect().width }
-        })
-        expect(fade.radius).toBe('20.5px')
-        expect(fade.corner).toBe('superellipse(1.7)')
-        expect(fade.width).toBeCloseTo(fade.surfaceWidth, 2)
-      }
     }
     await chip.evaluate((element) => element.style.removeProperty('height'))
     await expect(chip).toHaveAttribute('data-capsule-ready', '')

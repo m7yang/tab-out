@@ -17,7 +17,7 @@ for (const surface of ['page-chip', 'history-entry']) {
       return {
         background: getComputedStyle(element.matches('[data-capsule-ready]') ? element.querySelector(':scope > .capsule-fill')! : element).backgroundColor,
         outline: `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor}`,
-        fade: getComputedStyle(element, '::after').opacity,
+        fade: getComputedStyle(element.querySelector('.chip-text, .history-entry-title') ?? element).maskImage,
         close: close ? getComputedStyle(close).opacity : null,
         frame: frame ? getComputedStyle(frame).boxShadow : null,
       }
@@ -245,3 +245,52 @@ for (const audioState of ['playing', 'muted']) {
     expect(await canonicalAudio.evaluate((element) => element.closest('[aria-hidden="true"]') === null)).toBe(true)
   })
 }
+
+test('bookmark action fade stays on the title and leaves the chip outline intact', async ({ page }) => {
+  await page.goto('/tests/fixtures/dashboard-resize.html')
+  await page.evaluate(async () => {
+    await window.chrome.storage.local.set({
+      tabOutSavedPagesV1: {
+        version: 2,
+        pages: {
+          'https://bookmark.example/guide': {
+            key: 'https://bookmark.example/guide', surfaceKind: 'normal-tab', url: 'https://bookmark.example/guide',
+            title: '示例文档介绍页面布局与文字显示，帮助读者理解内容和操作方式', savedAt: Date.now(), updatedAt: Date.now(),
+          },
+        },
+      },
+    })
+    window.chrome.bookmarks.getTree = async () => [{
+      id: 'root',
+      title: '',
+      syncing: false,
+      children: [{ id: 'bookmark', syncing: false, title: '示例文档介绍页面布局与文字显示，帮助读者理解内容和操作方式', url: 'https://bookmark.example/guide' }],
+    }]
+  })
+  await page.getByRole('tab', { name: 'Bookmarks', exact: true }).click()
+  const chip = page.locator('[data-tabout="page-chip"][data-tabout-context="domain-card"]').filter({ hasText: '示例文档' })
+  const title = chip.locator('.chip-text')
+  await expect(chip).toBeVisible()
+  await expect(title).toHaveCSS('mask-image', 'none')
+  for (const width of [340, 640]) {
+    await chip.evaluate((element, width) => { element.parentElement!.style.width = `${width}px` }, width)
+    await chip.hover({ position: { x: 60, y: 12 } })
+    await expect(chip).toHaveCSS('width', `${width}px`)
+    await expect(chip.locator('.chip-saved-hint')).toHaveCSS('opacity', '1')
+    await expect(title).not.toHaveCSS('mask-image', 'none')
+    const paint = await chip.evaluate((element) => ({
+      outlineWidth: getComputedStyle(element).outlineWidth,
+      surfaceMask: getComputedStyle(element).maskImage,
+      overlay: getComputedStyle(element, '::after').content,
+      titleMask: getComputedStyle(element.querySelector('.chip-text')!).maskImage,
+    }))
+    expect(paint.outlineWidth).toBe('1px')
+    expect(paint.surfaceMask).toBe('none')
+    expect(paint.overlay).toBe('none')
+    expect(paint.titleMask).toContain('100% - 64px')
+    expect(paint.titleMask).toContain('100% - 28px')
+    await chip.screenshot({ animations: 'disabled', path: test.info().outputPath(`bookmark-fade-${width}.png`) })
+    await page.mouse.move(0, 0)
+    await expect(title).toHaveCSS('mask-image', 'none')
+  }
+})

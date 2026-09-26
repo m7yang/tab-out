@@ -513,7 +513,7 @@ test('PageChip renders the current active chip frame without the other-window la
   assert.match(requiredAt(chipMatch, 1), /\[--capsule-fill:var\(--color-neutral-100\)\]/)
   assert.match(requiredAt(chipMatch, 1), /\bring-neutral-400\b/)
   assert.doesNotMatch(requiredAt(chipMatch, 1), /\bhover:bg/)
-  assert.doesNotMatch(requiredAt(chipMatch, 1), /hover::after/)
+  assert.doesNotMatch(requiredAt(chipMatch, 1), /hover\]:\[--chip-action-mask:/)
   assert.doesNotMatch(requiredAt(chipMatch, 1), /\bbefore:bg-neutral-700\b/)
   assert.doesNotMatch(requiredAt(chipMatch, 1), /\bbefore:w-1\b/)
   assert.match(requiredAt(frameMatch, 1), /current-active-chip-frame\b/)
@@ -639,7 +639,7 @@ test('PageChip keeps the other-window active chip style separate from the curren
   assert.ok(frameMatch, 'active chip frame should render')
   assert.match(html, /Active in another window/)
   assert.match(requiredAt(chipMatch, 1), /\bhover:\[--capsule-fill:/)
-  assert.match(requiredAt(chipMatch, 1), /hover::after/)
+  assert.match(requiredAt(chipMatch, 1), /hover\]:\[--chip-action-mask:/)
   assert.match(html, /--chip-interaction-bg:color-mix\(in srgb, var\(--card-bg\) 88%, var\(--color-neutral-600\) 12%\)/)
   assert.match(html, /--chip-rest-bg:color-mix\(in srgb, var\(--card-bg\) 92\.5%, var\(--color-neutral-600\) 7\.5%\)/)
   assert.doesNotMatch(requiredAt(chipMatch, 1), /current-active-chip\b/)
@@ -658,22 +658,17 @@ test('PageChip hover fade appears and clears without its own transition lag', ()
   assert.ok(chipMatch, 'page chip should render')
   assert.match(requiredAt(chipMatch, 1), /\bhover:\[--capsule-fill:var\(--chip-interaction-bg\)\]/)
   assert.doesNotMatch(requiredAt(chipMatch, 1), /\bhover:bg-\[rgba\(82,82,82,0\.08\)\]/)
-  assert.match(requiredAt(chipMatch, 1), /:has\(\.chip-actions\):hover::after\]:opacity-100/)
-  assert.match(requiredAt(chipMatch, 1), /page-chip-expanded:has\(\.chip-actions\)::after\]:opacity-100/)
+  assert.match(requiredAt(chipMatch, 1), /:has\(\.chip-actions\):hover\]:\[--chip-action-mask:var\(--chip-hover-fade-mask\)\]/)
+  assert.match(requiredAt(chipMatch, 1), /page-chip-expanded:has\(\.chip-actions\)\]:\[--chip-action-mask:var\(--chip-hover-fade-mask\)\]/)
   assert.match(html, /chip-saved-hint[^\"]*group-\[\.page-chip-expanded\]\/page-chip:opacity-100/)
-  assert.match(requiredAt(chipMatch, 1), /after:w-\(--chip-hover-fade-width\)/)
-  assert.match(requiredAt(chipMatch, 1), /var\(--chip-hover-fade-bg\)_34%/)
-  // Plain chips fill with the TRANSLUCENT overlay (a bordered neighbour's
-  // line on the overlapped seam row must show through), while the fade stays
-  // the OPAQUE mix so it can hide chip text under the action rail.
+  assert.match(html, /chip-text[^"]*mask-\(--chip-action-mask,none\)/)
+  // The translucent fill preserves adjacent trim; only the title is masked.
   assert.match(html, /--chip-interaction-bg:color-mix\(in srgb, var\(--color-neutral-600\) 3\.5%, transparent\)/)
-  assert.match(html, /--chip-hover-fade-bg:color-mix\(in srgb, var\(--card-bg\) 96\.5%, var\(--color-neutral-600\) 3\.5%\)/)
   assert.doesNotMatch(requiredAt(chipMatch, 1), /\bafter:transition-/)
   assert.doesNotMatch(requiredAt(chipMatch, 1), /\bafter:duration-/)
   assert.doesNotMatch(requiredAt(chipMatch, 1), /\bafter:ease-/)
   assert.match(requiredAt(chipMatch, 1), /transition-\[color\] duration-100/)
   assert.doesNotMatch(requiredAt(chipMatch, 1), /transition-\[color,box-shadow\]/)
-  assert.match(html, /--chip-hover-fade-width:56px/)
 })
 
 test('PageChip keeps clickable hover background on expandable chips before expansion opens', () => {
@@ -693,7 +688,7 @@ test('PageChip keeps clickable hover background on expandable chips before expan
   assert.match(requiredAt(chipMatch, 1), /page-chip-expanded\]:\[--capsule-fill:var\(--chip-interaction-bg\)\]/)
   assert.match(requiredAt(chipMatch, 1), /page-chip-tooltip-open\]:\[--capsule-fill:var\(--chip-interaction-bg\)\]/)
   assert.match(html, /--chip-interaction-bg:color-mix\(in srgb, var\(--color-neutral-600\) 3\.5%, transparent\)/)
-  assert.match(requiredAt(chipMatch, 1), /:has\(\.chip-actions\):hover::after\]:opacity-100/)
+  assert.match(requiredAt(chipMatch, 1), /:has\(\.chip-actions\):hover\]:\[--chip-action-mask:var\(--chip-hover-fade-mask\)\]/)
 
   // Hover can paint the interaction before React opens the title. Once open,
   // expansion itself owns that same paint so title details and chrome cannot
@@ -762,7 +757,6 @@ test('PageChip exposes save action through a context menu for unsaved live tabs'
   assert.doesNotMatch(html, /aria-label="Save page"/)
   assert.doesNotMatch(html, /aria-pressed="false"/)
   assert.doesNotMatch(html, /<div[^>]*class="chip-actions\b/)
-  assert.match(html, /--chip-hover-fade-width:0px/)
   assert.match(html, /aria-label="Close this tab"/)
 })
 
@@ -804,7 +798,6 @@ test('PageChip renders a favicon-slot close action without right-side actions', 
 
   assert.match(html, /chip-favicon-frame[\s\S]*chip-close-favicon/)
   assert.match(html, /aria-label="Delete from history"/)
-  assert.match(html, /--chip-hover-fade-width:0px/)
   assert.doesNotMatch(html, /<div[^>]*class="chip-actions\b/)
 })
 

@@ -1084,11 +1084,8 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', groupContinue
   const showFaviconCloseAction = !chip.iconOnly && (canCloseChip || canCloseFoldedGroup || canCloseVariantGroup)
   const showDefaultFavicon = !chip.faviconUrl && (!isReadOnlySource || isClosedSavedPage)
   const showFaviconFrame = !!chip.faviconUrl || showDefaultFavicon || dupeCount > 1 || showFaviconCloseAction
-  const rightActionCount = showSavedHint ? 1 : 0
-  const chipHoverFadeWidth = rightActionCount === 0 ? '0px' : rightActionCount === 1 ? '56px' : '88px'
   const style: CSSVariableProperties = omitUndefined({
-    '--chip-hover-fade-bg': trim.styleVars.fadeBg,
-    '--chip-hover-fade-width': chipHoverFadeWidth,
+    '--chip-hover-fade-mask': 'linear-gradient(to right, black calc(100% - 64px), transparent calc(100% - 28px))',
     '--chip-hover-border': trim.styleVars.hoverBorder,
     '--chip-interaction-bg': trim.styleVars.interactionBg,
     '--chip-target-interaction-bg': PAGE_CHIP_TARGET_INTERACTION_BG,
@@ -1748,13 +1745,13 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', groupContinue
   const chipTextElement = (
     <span
       className={cn(
-        "chip-text relative block min-w-0 flex-1 overflow-clip [overflow-clip-margin:2px] hyphens-auto break-normal max-h-[calc(2lh)] [hyphenate-character:''] [&.chip-text-truncated]:mask-(--title-fade-mask)",
+        "chip-text relative block min-w-0 flex-1 mask-(--chip-action-mask,none) overflow-clip [overflow-clip-margin:2px] hyphens-auto break-normal max-h-[calc(2lh)] [hyphenate-character:''] [&.chip-text-truncated]:mask-(--title-fade-mask)",
         isOpenPage && 'font-medium',
         hasFilter && !isClosedSavedPage && 'text-[color-mix(in_srgb,var(--color-tab-live)_72%,var(--color-muted-foreground))]',
         chip.pathSuffix && 'max-h-[calc(3lh)]',
         isTitleVariantGroup && 'max-h-none overflow-visible!',
         isFolded && 'max-h-none',
-        chipExpanded && 'max-h-none! max-w-none! flex-1! overflow-visible! mask-none! whitespace-normal wrap-break-word',
+        chipExpanded && 'max-h-none! max-w-none! flex-1! overflow-visible! mask-(--chip-action-mask,none)! whitespace-normal wrap-break-word',
       )}
       ref={chipTextRef}
       onPointerEnter={onChipTextPointerEnter}
@@ -1830,7 +1827,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', groupContinue
       data-title-collapsed={shouldExpandChip && !chipExpanded ? '' : undefined}
       data-loading={chip.loading ? 'true' : undefined}
       className={cn(
-        "page-chip group/page-chip relative flex items-start gap-2 rounded-page-chip border-0 [--capsule-fill:transparent] bg-(--capsule-fill) pt-1.25 pl-3 text-left text-[13px] leading-tight text-tab-live font-[inherit] [corner-shape:superellipse(1.7)] transition-[color] duration-100 after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-(--chip-hover-fade-width) after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--chip-hover-fade-bg)_34%,var(--chip-hover-fade-bg)_100%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none",
+        'page-chip group/page-chip relative flex items-start gap-2 rounded-page-chip border-0 [--capsule-fill:transparent] bg-(--capsule-fill) pt-1.25 pl-3 text-left text-[13px] leading-tight text-tab-live font-[inherit] [corner-shape:superellipse(1.7)] transition-[color] duration-100 [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none',
         isTitleVariantGroup ? 'pr-[4.5px] pb-[4.5px]' : 'pr-1 pb-1.25',
         !chip.iconOnly && 'w-full',
         chipCursorClass,

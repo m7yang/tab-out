@@ -1496,7 +1496,7 @@ test('Page Chip closes its expansion and interaction chrome as soon as the point
         boxShadow: style.boxShadow,
         outline: style.outline,
       },
-      actionFadeOpacity: getComputedStyle(element, '::after').opacity,
+      actionMask: style.getPropertyValue('--chip-action-mask'),
       expandedFillOpacity: expandedFill ? getComputedStyle(expandedFill).opacity : null,
     }
   }
