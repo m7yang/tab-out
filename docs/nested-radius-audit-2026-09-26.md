@@ -3,8 +3,10 @@
 ## Current midpoint contour
 
 [ADR 0055](adr/0055-use-midpoint-corners.md) adopts CSS `superellipse(1.7)`:
-18.65px tall-chip radius and 38.5px card radius. Compact capsules, natural
-heights, 16px card gaps and 2.5px variant-row insets remain. These fixed tokens
+[ADR 0059](adr/0059-increase-tall-page-chip-radius.md) increases the tall-chip
+radius to 20.5px; the card radius remains 38.5px. Compact capsules, natural
+heights, 16px card gaps remain. [ADR 0058](adr/0058-compact-url-rows-with-wider-insets.md)
+updates URL rows to 20px capsules, 1px row gaps and 4.5px right/bottom insets. These fixed tokens
 come from the approved compact-card and two-line-chip previews; they do not
 promise an exact average silhouette or parallel clearance at every size.
 

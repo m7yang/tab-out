@@ -74,8 +74,8 @@ test('variant groups share the Page Chip curve without changing the card radius'
   await expect(chip.locator('.chip-title-variant')).toHaveCount(2)
   await chip.evaluate((element) => element.classList.add('page-chip-hover-match'))
   await expect(page.locator(cardFrame)).toHaveCSS('border-radius', '38.5px')
-  await expect(page.locator(pageFrame)).toHaveCSS('border-radius', '18.65px')
-  await expect(chip).toHaveCSS('border-radius', '18.65px')
+  await expect(page.locator(pageFrame)).toHaveCSS('border-radius', '20.5px')
+  await expect(chip).toHaveCSS('border-radius', '20.5px')
   await page.setViewportSize({ width: 760, height: 900 })
   await expect(page.locator(cardFrame)).toHaveCSS('border-radius', '38.5px')
   const spacing = await chip.locator('.chip-title-variant').last().evaluate((row) => {
@@ -83,7 +83,13 @@ test('variant groups share the Page Chip curve without changing the card radius'
     const child = row.getBoundingClientRect()
     return [parent.right - child.right, parent.bottom - child.bottom]
   })
-  expect(spacing).toEqual([2.5, 2.5])
+  expect(spacing).toEqual([4.5, 4.5])
+  const rows = await chip.locator('.chip-title-variant').evaluateAll((elements) => elements.map((element) => {
+    const rect = element.getBoundingClientRect()
+    return { top: rect.top, bottom: rect.bottom, height: rect.height }
+  }))
+  expect(rows.map((row) => row.height)).toEqual([20, 20])
+  expect(rows[1]!.top - rows[0]!.bottom).toBe(1)
   // Coincident outlines must also refresh when only a corner token changes.
   await chip.evaluate((element) => element.style.setProperty('--radius-page-chip', '24px'))
   await expect(page.locator(cardFrame)).toHaveCSS('border-radius', '38.5px')

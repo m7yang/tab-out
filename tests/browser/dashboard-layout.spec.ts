@@ -1270,10 +1270,10 @@ test('truncated same-title URL labels fade at rest and use ellipsis when expande
       const rect = row.getBoundingClientRect()
       return { right: parent.right - rect.right, bottom: parent.bottom - rect.bottom, height: rect.height, radius: getComputedStyle(chip).borderRadius }
     })
-    expect(gaps.right).toBeCloseTo(2.5, 1)
-    expect(gaps.bottom).toBeCloseTo(2.5, 1)
-    expect(gaps.height).toBe(21)
-    expect(gaps.radius).toBe('18.65px')
+    expect(gaps.right).toBeCloseTo(4.5, 1)
+    expect(gaps.bottom).toBeCloseTo(4.5, 1)
+    expect(gaps.height).toBe(20)
+    expect(gaps.radius).toBe('20.5px')
   }
   await checkNestedSpacing()
 

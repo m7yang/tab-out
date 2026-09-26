@@ -1467,7 +1467,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', groupContinue
         data-tabout-removal-key={row.removalKey}
         data-tabout-default-variant={row.id === sameTitlePageChipView?.defaultRowId ? 'true' : undefined}
         className={cn(
-          'chip-title-variant clickable flex w-full max-w-full min-w-0 items-center gap-1 rounded-full border-0 bg-(--capsule-fill) [--capsule-fill:transparent] px-1.5 py-0.75 [font-size:inherit] leading-tight font-normal text-tab-live title-interaction:hover:[--capsule-fill:var(--chip-target-interaction-bg)] title-interaction:hover:text-tab-live focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:[--capsule-fill:var(--chip-target-interaction-bg)] data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:-outline-offset-1 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
+          'chip-title-variant clickable flex w-full max-w-full min-w-0 items-center gap-1 rounded-full border-0 bg-(--capsule-fill) [--capsule-fill:transparent] px-1.5 py-[2.5px] [font-size:inherit] leading-tight font-normal text-tab-live title-interaction:hover:[--capsule-fill:var(--chip-target-interaction-bg)] title-interaction:hover:text-tab-live focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:[--capsule-fill:var(--chip-target-interaction-bg)] data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:-outline-offset-1 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
           'title-interaction:[&.page-chip-context-menu-open]:[--capsule-fill:var(--chip-target-interaction-bg)] title-interaction:[&.page-chip-context-menu-open]:text-tab-live',
           pageChipTargetCursorClass(variantActivation?.kind === 'activate' ? variantActivation.target : undefined),
           row.active && '[--capsule-fill:color-mix(in_oklab,var(--color-neutral-600)_7.5%,transparent)] text-tab-live',
@@ -1527,14 +1527,14 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', groupContinue
         {variantFocusTarget}
         {variantActionSlotCount > 0 && (
           <span className={cn(
-            'chip-title-variant-actions group/title-variant-actions absolute top-0 bottom-0 z-2 my-auto flex h-5 items-center gap-0.5',
+            'chip-title-variant-actions group/title-variant-actions absolute top-0 bottom-0 z-2 my-auto flex h-4.5 items-center gap-0.5',
             variantActionSlotCount === 1 && '-left-6.5',
             variantActionSlotCount > 1 && '-left-12',
           )}
           >
             {variantShowSavedHint && (
               <span
-                className="chip-title-variant-saved-hint pointer-events-none inline-flex size-5 cursor-default items-center justify-center rounded-full border-0 bg-transparent p-0 text-(--accent-amber) opacity-0 title-interaction:group-hover/title-variant-actions:pointer-events-auto title-interaction:group-hover/title-variant-actions:opacity-100"
+                className="chip-title-variant-saved-hint pointer-events-none inline-flex h-4.5 w-5 cursor-default items-center justify-center rounded-full border-0 bg-transparent p-0 text-(--accent-amber) opacity-0 title-interaction:group-hover/title-variant-actions:pointer-events-auto title-interaction:group-hover/title-variant-actions:opacity-100"
                 aria-hidden="true"
               >
                 <SavedPageIcon saved className="size-3.5" />
@@ -1543,13 +1543,13 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', groupContinue
             {variantCanClose && (
               <span
                 data-tabout-part="variant-close-hit-owner"
-                className="chip-title-variant-close-hit-owner group/title-variant-close-owner relative inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full"
+                className="chip-title-variant-close-hit-owner group/title-variant-close-owner relative inline-flex h-4.5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full"
               >
                 <button
                   type="button"
                   data-tabout-part="variant-close-button"
                   className={cn(
-                    'chip-title-variant-action pointer-events-none absolute inset-0 inline-flex size-5 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground opacity-0 title-interaction:group-hover/title-variant-close-owner:pointer-events-auto title-interaction:group-hover/title-variant-close-owner:opacity-100 title-interaction:hover:bg-neutral-600/10 title-interaction:hover:text-foreground title-interaction:hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber)',
+                    'chip-title-variant-action pointer-events-none absolute inset-0 inline-flex h-4.5 w-5 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-muted-foreground opacity-0 title-interaction:group-hover/title-variant-close-owner:pointer-events-auto title-interaction:group-hover/title-variant-close-owner:opacity-100 title-interaction:hover:bg-neutral-600/10 title-interaction:hover:text-foreground title-interaction:hover:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber)',
                     row.actions.close?.destructive && DESTRUCTIVE_ICON_ACTION_CLASS_NAME,
                   )}
                   aria-label={row.actions.close?.label}
@@ -1567,7 +1567,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', groupContinue
             )}
             {singleTarget && row.pagePinned && (
               <span className={cn(
-                'chip-title-variant-page-pin-slot pointer-events-none inline-flex size-5 shrink-0 items-center justify-center',
+                'chip-title-variant-page-pin-slot pointer-events-none inline-flex h-4.5 w-5 shrink-0 items-center justify-center',
                 variantCanClose && 'absolute top-0 right-0 title-interaction:group-hover/title-variant-actions:opacity-0 group-focus-within/title-variant-actions:opacity-0',
               )}
               >
@@ -1588,7 +1588,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', groupContinue
   function titleVariantListNode(mode: ChipTextRenderMode) {
     if (!isTitleVariantGroup) return null
     return (
-      <span className="chip-title-variant-list flex w-full max-w-full flex-col items-stretch">
+      <span className="chip-title-variant-list flex w-full max-w-full flex-col items-stretch gap-px">
         {sameTitleRows.map((row, index) => titleVariantNode(row, index, mode))}
       </span>
     )
@@ -1831,7 +1831,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', groupContinue
       data-loading={chip.loading ? 'true' : undefined}
       className={cn(
         "page-chip group/page-chip relative flex items-start gap-2 rounded-page-chip border-0 [--capsule-fill:transparent] bg-(--capsule-fill) pt-1.25 pl-3 text-left text-[13px] leading-tight text-tab-live font-[inherit] [corner-shape:superellipse(1.7)] transition-[color] duration-100 after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-(--chip-hover-fade-width) after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--chip-hover-fade-bg)_34%,var(--chip-hover-fade-bg)_100%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none",
-        isTitleVariantGroup ? 'pr-[2.5px] pb-[2.5px]' : 'pr-1 pb-1.25',
+        isTitleVariantGroup ? 'pr-[4.5px] pb-[4.5px]' : 'pr-1 pb-1.25',
         !chip.iconOnly && 'w-full',
         chipCursorClass,
         parentInteractive && 'clickable focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:[--capsule-fill:var(--chip-interaction-bg)] data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-2 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',

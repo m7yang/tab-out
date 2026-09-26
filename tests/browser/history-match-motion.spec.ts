@@ -127,7 +127,7 @@ test('midpoint corners follow both frames at intermediate animation sizes', asyn
     expect((await frame.boundingBox())!.height).toBeGreaterThan(34)
     await expect(frame).toHaveCSS('border-shape', 'none')
     await expect(frame).toHaveCSS('corner-shape', 'superellipse(1.7)')
-    await expect(frame).toHaveCSS('border-radius', selector === frameSelector ? '38.5px' : '18.65px')
+    await expect(frame).toHaveCSS('border-radius', selector === frameSelector ? '38.5px' : '20.5px')
     if (selector === pageFrameSelector) await expect(frame.locator('svg')).toBeHidden()
   }
 })
@@ -257,7 +257,7 @@ test('the page outline moves within a card and retargets across cards without a 
     const style = getComputedStyle(element)
     const transform = new DOMMatrix(style.transform)
     return { stroke: style.outlineWidth, offset: style.outlineOffset, radius: style.borderTopLeftRadius, scaleX: transform.a, scaleY: transform.d }
-  })).toEqual({ stroke: '1px', offset: '1px', radius: '18.65px', scaleX: 1, scaleY: 1 })
+  })).toEqual({ stroke: '1px', offset: '1px', radius: '20.5px', scaleX: 1, scaleY: 1 })
   await page.screenshot({ path: test.info().outputPath('page-frame-midpoint.png') })
 
   await pointAt(historyChip(page, 'History Charlie'))
