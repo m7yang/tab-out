@@ -242,6 +242,22 @@ test('history hover keeps both adjacent matching dashboard outlines above neighb
     await neighbor.evaluate((element) => { element.style.visibility = 'hidden' })
     const unobstructed = await page.screenshot({ clip, animations: 'disabled' })
     await neighbor.evaluate((element) => { element.style.visibility = '' })
-    expect(actual.equals(unobstructed), `${edge} outline should remain visible beside another matching tab`).toBe(true)
+    const samples = await page.evaluate(async (images) => Promise.all(images.map(async (encoded) => {
+      const image = new Image()
+      image.src = `data:image/png;base64,${encoded}`
+      await image.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = image.width
+      canvas.height = image.height
+      const context = canvas.getContext('2d')!
+      context.drawImage(image, 0, 0)
+      return Array.from(context.getImageData(0, 0, canvas.width, canvas.height).data)
+    })), [actual.toString('base64'), unobstructed.toString('base64')])
+    // Fractional capsule strokes partially cover this row. The neighboring
+    // background can change antialiased pixels by 2 levels without covering
+    // the outline; retain a tight bound and verify the reference contains ink.
+    expect(Math.min(...samples[1]!)).toBeLessThan(160)
+    const maximumDifference = Math.max(...samples[0]!.map((value, index) => Math.abs(value - samples[1]![index]!)))
+    expect(maximumDifference, `${edge} outline should remain visible beside another matching tab`).toBeLessThanOrEqual(3)
   }
 })

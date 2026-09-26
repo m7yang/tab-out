@@ -33,11 +33,11 @@ const GROUP_LINE = 'color-mix(in srgb, var(--color-neutral-600) 22%, transparent
 
 test('chip-trim: plain chips get the translucent fill, the shared hover line, and no resting trim', () => {
   const trim = chipTrim(facts())
-  assert.match(trim.chipClasses, /hover:bg-\(--chip-interaction-bg\)/)
-  assert.match(trim.chipClasses, /\[&\.page-chip-expanded\]:bg-\(--chip-interaction-bg\)/)
+  assert.match(trim.chipClasses, /hover:\[--capsule-fill:var\(--chip-interaction-bg\)\]/)
+  assert.match(trim.chipClasses, /\[&\.page-chip-expanded\]:\[--capsule-fill:var\(--chip-interaction-bg\)\]/)
   assert.match(trim.chipClasses, /\[&\.page-chip-expanded:has\(\.chip-actions\)::after\]:opacity-100/)
-  assert.match(trim.chipClasses, /\[&\.page-chip-context-menu-open\]:bg-\(--chip-interaction-bg\)/)
-  assert.match(trim.chipClasses, /\[&\.page-chip-tooltip-open\]:bg-\(--chip-interaction-bg\)/)
+  assert.match(trim.chipClasses, /\[&\.page-chip-context-menu-open\]:\[--capsule-fill:var\(--chip-interaction-bg\)\]/)
+  assert.match(trim.chipClasses, /\[&\.page-chip-tooltip-open\]:\[--capsule-fill:var\(--chip-interaction-bg\)\]/)
   assert.match(trim.chipClasses, OUTLINE_TRIO)
   assert.match(trim.chipClasses, EXPANDED_OUTLINE_TRIO)
   assert.equal(trim.styleVars.hoverBorder, GROUP_LINE)
@@ -65,7 +65,7 @@ test('chip-trim: saved-closed chips carry the marker and the interaction outline
 
 test('chip-trim: read-only filter results share the closed fill and outline treatment', () => {
   const trim = chipTrim(facts({ readOnlyFilterResult: true }))
-  assert.match(trim.chipClasses, /hover:bg-\(--chip-interaction-bg\)/)
+  assert.match(trim.chipClasses, /hover:\[--capsule-fill:var\(--chip-interaction-bg\)\]/)
   assert.match(trim.chipClasses, OUTLINE_TRIO)
   assert.doesNotMatch(trim.chipClasses, /text-tab-closed/)
   assert.doesNotMatch(trim.chipClasses, new RegExp(`\\b${RegExp.escape(CHIP_TRIM_TOKENS.savedClosed)}\\b`))
@@ -122,7 +122,7 @@ test('chip-trim: an active frame suppresses the group outline', () => {
 
 test('chip-trim: the three frame flavours resolve by precedence', () => {
   const activeOther = chipTrim(facts({ activeChipFrame: true, activeInOtherWindow: true }))
-  assert.match(activeOther.chipClasses, /bg-\(--chip-rest-bg\)/)
+  assert.match(activeOther.chipClasses, /\[--capsule-fill:var\(--chip-rest-bg\)\]/)
   assert.doesNotMatch(activeOther.chipClasses, /current-active-chip|current-tab-out-chip/)
   assert.ok(activeOther.frame)
   assert.match(activeOther.frame.classes, /rgba\(115,115,115,0\.2\)/)
@@ -263,7 +263,7 @@ test('chip-trim: icon-only slots never join vertical seam runs', () => {
 
   const active = chipTrim(facts({ iconOnly: true, activeChipFrame: true }))
   assert.match(active.iconChipClasses, /\[outline:1px_solid_rgba\(82,82,82,0\.32\)\]/)
-  assert.match(active.iconChipClasses, /bg-\(--chip-rest-bg\)/)
+  assert.match(active.iconChipClasses, /\[--capsule-fill:var\(--chip-rest-bg\)\]/)
 })
 
 /* The module is single-language: the seam rules ride in the emitted class

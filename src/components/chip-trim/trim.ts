@@ -10,7 +10,7 @@ import { PAGE_CHIP_CURRENT_CLASSES, PAGE_CHIP_PAINT } from '../page-chip-paint'
    through CHIP_TRIM_TOKENS. */
 
 const FADE_INTERACTION_CLASSES = 'title-interaction:[&:has(.chip-actions):hover::after]:opacity-100 [&.page-chip-expanded:has(.chip-actions)::after]:opacity-100 title-interaction:[&.page-chip-context-menu-open:has(.chip-actions)::after]:opacity-100 title-interaction:[&.page-chip-tooltip-open:has(.chip-actions)::after]:opacity-100'
-const SURFACE_INTERACTION_CLASSES = 'title-interaction:hover:bg-(--chip-interaction-bg) [&.page-chip-expanded]:bg-(--chip-interaction-bg) title-interaction:[&.page-chip-context-menu-open]:bg-(--chip-interaction-bg) title-interaction:[&.page-chip-tooltip-open]:bg-(--chip-interaction-bg)'
+const SURFACE_INTERACTION_CLASSES = 'title-interaction:hover:[--capsule-fill:var(--chip-interaction-bg)] [&.page-chip-expanded]:[--capsule-fill:var(--chip-interaction-bg)] title-interaction:[&.page-chip-context-menu-open]:[--capsule-fill:var(--chip-interaction-bg)] title-interaction:[&.page-chip-tooltip-open]:[--capsule-fill:var(--chip-interaction-bg)]'
 // The 1px interaction line, across the same states the fill responds to.
 // The color rides --chip-hover-border (per-kind value via styleVars) — an
 // interpolated color-mix() class would not survive Tailwind's extractor.
@@ -78,7 +78,7 @@ export type ChipTrim = {
   expandedFill: null | { classes: string, top: string, bottom: string, background: string }
 }
 
-const EXPANDED_FILL_CLASSES = 'page-chip-expanded-fill pointer-events-none absolute inset-x-0 -z-1 rounded-[inherit] opacity-0 [corner-shape:squircle] title-interaction:group-hover/page-chip:opacity-100 group-focus-visible/page-chip:opacity-100 group-[.page-chip-expanded]/page-chip:opacity-100 title-interaction:group-[.page-chip-context-menu-open]/page-chip:opacity-100 title-interaction:group-[.page-chip-tooltip-open]/page-chip:opacity-100'
+const EXPANDED_FILL_CLASSES = 'page-chip-expanded-fill bg-(--capsule-fill) pointer-events-none absolute inset-x-0 -z-1 rounded-[inherit] opacity-0 [corner-shape:squircle] title-interaction:group-hover/page-chip:opacity-100 group-focus-visible/page-chip:opacity-100 group-[.page-chip-expanded]/page-chip:opacity-100 title-interaction:group-[.page-chip-context-menu-open]/page-chip:opacity-100 title-interaction:group-[.page-chip-tooltip-open]/page-chip:opacity-100'
 
 export function chipTrim(facts: ChipTrimFacts): ChipTrim {
   const hasActiveChipFrame = facts.activeChipFrame || facts.activeInOtherWindow
@@ -95,7 +95,7 @@ export function chipTrim(facts: ChipTrimFacts): ChipTrim {
     isPlainClickable && !facts.iconOnly && HOVER_OUTLINE_CLASSES,
     facts.closedSavedPage && 'text-tab-closed',
     facts.closedSavedPage && !isGroupKind && `${CHIP_TRIM_TOKENS.savedClosed} ${GROUP_INTERACTION_CLASSES}`,
-    hasActiveChipFrame && !isCurrentActiveFrame && !isCurrentTabOutFrame && 'bg-(--chip-rest-bg) text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.04)]',
+    hasActiveChipFrame && !isCurrentActiveFrame && !isCurrentTabOutFrame && '[--capsule-fill:var(--chip-rest-bg)] text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.04)]',
     isCurrentActiveFrame && `current-active-chip ${PAGE_CHIP_CURRENT_CLASSES}`,
     isCurrentTabOutFrame && `current-tab-out-chip ${PAGE_CHIP_CURRENT_CLASSES}`,
     hasActiveChipFrame && !isCurrentActiveFrame && !isCurrentTabOutFrame && ACTIVE_OTHER_INTERACTION_CLASSES,
@@ -107,7 +107,7 @@ export function chipTrim(facts: ChipTrimFacts): ChipTrim {
         facts.isApp
           ? 'overflow-visible border border-[rgba(115,115,115,0.32)] outline-none'
           : 'overflow-hidden border-0 [outline:1px_solid_rgba(115,115,115,0.18)] outline-offset-1',
-        hasActiveChipFrame && 'bg-(--chip-rest-bg) [outline:1px_solid_rgba(82,82,82,0.32)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.22)]',
+        hasActiveChipFrame && '[--capsule-fill:var(--chip-rest-bg)] [outline:1px_solid_rgba(82,82,82,0.32)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.22)]',
       ].filter(Boolean).join(' ')
     : ''
 

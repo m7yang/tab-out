@@ -9,7 +9,7 @@ const FRAME_OPTIONS = {
     attribute: 'data-history-match-frame',
     part: 'history-match-frame',
     outset: 8,
-    className: 'pointer-events-none absolute top-0 left-0 box-border rounded-[40px] border border-neutral-600/35 contain-strict [corner-shape:squircle]',
+    className: 'pointer-events-none absolute top-0 left-0 box-border rounded-history-match-card border border-neutral-600/35 contain-strict [corner-shape:squircle]',
   },
   'page-chip': {
     selector: '.page-chip-hover-match, .page-chip-overflow-hover-match',
@@ -95,8 +95,11 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
       const y = bounds.top - container.top - root.clientTop + root.scrollTop - options.outset
       const width = bounds.width + options.outset * 2
       const height = bounds.height + options.outset * 2
-      capsule = kind === 'page-chip' && next.matches('[data-tabout-part="overflow-expander"]')
-      const nextDestination = `${x},${y},${width},${height}`
+      capsule = kind === 'page-chip' && next.hasAttribute('data-capsule-ready')
+      const targetStyle = kind === 'page-chip' ? getComputedStyle(next) : undefined
+      const targetRadius = targetStyle?.borderRadius ?? ''
+      const targetCorner = targetStyle?.getPropertyValue('corner-shape') ?? ''
+      const nextDestination = `${x},${y},${width},${height},${capsule},${targetRadius},${targetCorner}`
       if (next === target && nextDestination === destination) return
 
       const previous = frame.hidden && departedBounds ? departedBounds : frame.getBoundingClientRect()
@@ -117,9 +120,8 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
       frame.style.width = `${width}px`
       frame.style.height = `${height}px`
       if (kind === 'page-chip') {
-        const targetStyle = getComputedStyle(next)
-        frame.style.borderRadius = targetStyle.borderRadius
-        frame.style.setProperty('corner-shape', targetStyle.getPropertyValue('corner-shape'))
+        frame.style.borderRadius = targetRadius
+        frame.style.setProperty('corner-shape', targetCorner)
         paintCapsule(move ? previous.width : width, move ? previous.height : height)
       }
       root.setAttribute(options.attribute, '')
@@ -176,7 +178,7 @@ export function HistoryMatchFrame({ scrollRegionRef, kind = 'card' }: { scrollRe
       if (records.some((record) =>
         !(record.target instanceof Element && record.target.matches('[data-tabout-part="history-match-frame"], [data-tabout-part="history-page-match-frame"]')))) schedule()
     })
-    mutations.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style'] })
+    mutations.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'data-capsule-ready'] })
     document.addEventListener('pointerover', onPointer, true)
     document.addEventListener('keydown', onKeyboard, true)
     document.addEventListener('focusin', onKeyboard, true)

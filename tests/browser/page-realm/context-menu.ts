@@ -159,7 +159,7 @@ export function readPageChipVisualState(params: { label: string }) {
   }
   const expandedFill = chip.querySelector('.page-chip-expanded-fill')
   return {
-    backgroundColor: styles.backgroundColor,
+    backgroundColor: window.getComputedStyle(chip.matches('[data-capsule-ready]') ? chip.querySelector(':scope > .capsule-fill')! : chip).backgroundColor,
     className: chip.className,
     contextMenuOpen: chip.classList.contains('page-chip-context-menu-open'),
     expanded: chip.classList.contains('page-chip-expanded'),
@@ -170,7 +170,7 @@ export function readPageChipVisualState(params: { label: string }) {
     duplicateStack: readPart(chip.querySelector('.chip-favicon-stack')),
     expandedFill: expandedFill instanceof HTMLElement
       ? {
-          backgroundColor: window.getComputedStyle(expandedFill).backgroundColor,
+          backgroundColor: window.getComputedStyle(expandedFill.matches('[data-capsule-ready]') ? expandedFill.querySelector(':scope > .capsule-fill')! : expandedFill).backgroundColor,
           opacity: window.getComputedStyle(expandedFill).opacity,
         }
       : null,

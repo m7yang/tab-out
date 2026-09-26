@@ -357,7 +357,7 @@ export function DomainCard({ group, vm, filter = '', highlightTerms }: DomainCar
           // History matches already include folded and collapsed pages. Frame
           // their owning card, including its header, without changing layout.
           // HistoryMatchFrame replaces this paint only for a unique match.
-          "after:pointer-events-none after:absolute after:-inset-2 after:rounded-[40px] after:border after:border-neutral-600/35 after:opacity-0 after:[corner-shape:squircle] after:content-[''] has-[.page-chip-hover-match,.page-chip-overflow-hover-match]:after:opacity-100",
+          "after:pointer-events-none after:absolute after:-inset-2 after:rounded-history-match-card after:border after:border-neutral-600/35 after:opacity-0 after:[corner-shape:squircle] after:content-[''] has-[.page-chip-hover-match,.page-chip-overflow-hover-match]:after:opacity-100",
           // The pinned-domain drag controller publishes reorder feedback to
           // the domain-reorder-feedback store; this card renders its share as
           // the data attributes above, and the indicator bar with its

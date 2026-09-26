@@ -202,7 +202,7 @@ export function readExpandedEntryLayering(params: { label: string }) {
   const indexStyles = row?.firstElementChild instanceof HTMLElement ? window.getComputedStyle(row.firstElementChild) : null
   const scrollbarStyles = scrollbar ? window.getComputedStyle(scrollbar) : null
   return {
-    backgroundColor: styles?.backgroundColor || '',
+    backgroundColor: entry ? window.getComputedStyle(entry.matches('[data-capsule-ready]') ? entry.querySelector(':scope > .capsule-fill')! : entry).backgroundColor : '',
     expandedZIndex: styles?.zIndex || '',
     expandedInsideHistoryList: !!entry?.closest('.history-entry-list'),
     expandedInsidePanel: !!entry?.closest('.tab-history-panel'),

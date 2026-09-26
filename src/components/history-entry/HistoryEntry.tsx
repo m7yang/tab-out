@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import type { MouseEvent, ReactNode } from 'react'
 import { EyeOff, X } from 'lucide-react'
 import { audioStateForTab, nextMutedForAudioState } from '../../extension/tab-audio.js'
@@ -14,6 +14,7 @@ import type { ContextMenuChangeEventDetails } from '../context-menu-outside-pres
 import { DefaultFavicon } from '../DefaultFavicon'
 import { FaviconImage } from '../FaviconImage'
 import { faviconLivenessClassName } from '../liveness-dim'
+import { attachPageChipBorder } from '../capsule-border'
 import { PAGE_CHIP_CURRENT_CLASSES, PAGE_CHIP_PAINT } from '../page-chip-paint'
 import { TabAudioButton } from '../TabAudioButton'
 import { TabLoadingIndicator } from '../TabLoadingIndicator'
@@ -38,13 +39,13 @@ import { useHistoryEntryExpansion } from './use-history-entry-expansion.js'
 import { startHistoryEntryRemoval, uniqueUrls, useHistoryEntryActions, workingSetUrls } from './use-history-entry-actions.js'
 import type { HistoryEntryProps } from './types.js'
 
-const HISTORY_ENTRY_INTERACTION_CLASSES = 'title-interaction:hover:bg-(--history-entry-interaction-bg) title-interaction:focus-within:bg-(--history-entry-interaction-bg) [&.history-entry-expanded-open]:bg-(--history-entry-interaction-bg) title-interaction:group-data-context-menu-open/history-slot:bg-(--history-entry-interaction-bg) title-interaction:hover:after:opacity-100 [&.history-entry-expanded-open]:after:opacity-100 title-interaction:group-data-context-menu-open/history-slot:after:opacity-100'
+const HISTORY_ENTRY_INTERACTION_CLASSES = 'title-interaction:hover:[--capsule-fill:var(--history-entry-interaction-bg)] title-interaction:focus-within:[--capsule-fill:var(--history-entry-interaction-bg)] [&.history-entry-expanded-open]:[--capsule-fill:var(--history-entry-interaction-bg)] title-interaction:group-data-context-menu-open/history-slot:[--capsule-fill:var(--history-entry-interaction-bg)] title-interaction:hover:after:opacity-100 [&.history-entry-expanded-open]:after:opacity-100 title-interaction:group-data-context-menu-open/history-slot:after:opacity-100'
 // Unframed rows share the closed-page fill and rim regardless of liveness.
 // Keyboard focus retains its stronger outer outline. Paint values use CSS
 // variables so Tailwind sees complete class literals for every selector.
 const HISTORY_ENTRY_HOVER_OUTLINE_CLASSES = 'title-interaction:hover:outline title-interaction:hover:outline-1 title-interaction:hover:-outline-offset-1 title-interaction:hover:outline-(--history-entry-hover-border) [&.history-entry-expanded-open]:outline [&.history-entry-expanded-open]:outline-1 [&.history-entry-expanded-open]:-outline-offset-1 [&.history-entry-expanded-open]:outline-(--history-entry-hover-border) title-interaction:group-data-context-menu-open/history-slot:outline title-interaction:group-data-context-menu-open/history-slot:outline-1 title-interaction:group-data-context-menu-open/history-slot:-outline-offset-1 title-interaction:group-data-context-menu-open/history-slot:outline-(--history-entry-hover-border)'
 const HISTORY_ENTRY_OUTLINED_INTERACTION_CLASSES = `${HISTORY_ENTRY_INTERACTION_CLASSES} ${HISTORY_ENTRY_HOVER_OUTLINE_CLASSES}`
-const HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_CLASSES = `bg-(--history-entry-rest-bg) text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.04)] ${HISTORY_ENTRY_INTERACTION_CLASSES}`
+const HISTORY_ENTRY_ACTIVE_OTHER_INTERACTION_CLASSES = `[--capsule-fill:var(--history-entry-rest-bg)] text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.04)] ${HISTORY_ENTRY_INTERACTION_CLASSES}`
 
 const EMPTY_HIGHLIGHT_TERMS: readonly string[] = []
 
@@ -369,6 +370,17 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
     onForgetClosedGhost?.(closedTab)
   }
 
+  // Stable ref identity retains the measured contour across passive refreshes.
+  // react-doctor-disable-next-line react-doctor/react-compiler-no-manual-memoization -- ref identity preserves the capsule observer and its cleanup across rerenders.
+  const attachEntrySurface = useCallback((element: HTMLDivElement | null) => {
+    entryRef.current = element
+    const cleanup = attachPageChipBorder(element)
+    return () => {
+      cleanup?.()
+      entryRef.current = null
+    }
+  }, [entryRef])
+
   const activeInOtherWindow = !!entry.activeInOtherWindow && !entry.current
   const isActiveEntry = entry.active || entry.activeInOtherWindow
   // Liveness controls title/icon dimming independently of the shared hover paint.
@@ -478,7 +490,7 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
         data-next-target={entry.nextTarget ? 'true' : undefined}
         aria-hidden={expanded ? true : undefined}
         className={cn(
-          "history-entry group/history-entry relative min-w-0 flex-auto rounded-page-chip border-0 bg-transparent text-tab-live [--history-entry-fade-bg:var(--card-bg)] [corner-shape:squircle] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-0 after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--history-entry-fade-bg)_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] group-has-[.history-entry-main:focus-visible]/history-row:outline-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-offset-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-(--accent-amber) focus-within:after:opacity-100",
+          "history-entry group/history-entry relative min-w-0 flex-auto rounded-page-chip border-0 [--capsule-fill:transparent] bg-(--capsule-fill) text-tab-live [--history-entry-fade-bg:var(--card-bg)] [corner-shape:squircle] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-0 after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--history-entry-fade-bg)_50%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] group-has-[.history-entry-main:focus-visible]/history-row:outline-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-offset-2 group-has-[.history-entry-main:focus-visible]/history-row:outline-(--accent-amber) focus-within:after:opacity-100",
           entryCursorClass,
           entryClosed && 'history-entry-closed text-tab-closed',
           titleExpanded && 'history-entry-expanded-open',
@@ -494,16 +506,17 @@ export function HistoryEntry({ entry, kind, layoutKey, indexLabel, workingSetIte
           hoverMatched && !expanded && 'z-3',
         )}
         style={expanded ? entryOverlayStyle : entryBaseStyle}
-        ref={expanded ? undefined : entryRef}
+        ref={expanded ? attachPageChipBorder : attachEntrySurface}
       >
         {expanded && plainClickableEntry && (
           <span
-            className="history-entry-expanded-fill pointer-events-none absolute inset-x-0 -z-1 rounded-[inherit] [corner-shape:squircle]"
+            ref={attachPageChipBorder}
+            className="history-entry-expanded-fill bg-(--capsule-fill) pointer-events-none absolute inset-x-0 -z-1 rounded-[inherit] [corner-shape:squircle]"
             style={{
               top: entryExpansionGeometry.y === 'up' ? expandedGrowingEdgeInset : '1px',
               bottom: entryExpansionGeometry.y === 'down' ? expandedGrowingEdgeInset : '1px',
-              backgroundColor: historyEntryInteractionBg,
-            }}
+              '--capsule-fill': historyEntryInteractionBg,
+            } as CSSVariableProperties}
             aria-hidden="true"
           />
         )}

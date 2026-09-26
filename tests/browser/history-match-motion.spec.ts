@@ -143,7 +143,7 @@ test('the frame travels, resizes without scaling its stroke, and retargets from 
     const style = getComputedStyle(element)
     const transform = new DOMMatrix(style.transform)
     return { stroke: style.borderTopWidth, radius: style.borderTopLeftRadius, scaleX: transform.a, scaleY: transform.d }
-  })).toEqual({ stroke: '1px', radius: '40px', scaleX: 1, scaleY: 1 })
+  })).toEqual({ stroke: '1px', radius: '50px', scaleX: 1, scaleY: 1 })
   await page.screenshot({ path: test.info().outputPath('history-frame-midpoint.png') })
 
   await pointAt(historyChip(page, 'History Delta'))
@@ -224,12 +224,12 @@ test('the page outline moves within a card and retargets across cards without a 
   expect(midway.y).toBeLessThan(Math.max(start.y, end.y))
   expect(await cardFrame.boundingBox()).toEqual(cardBounds)
   expect(await cardFrame.evaluate((element) => element.getAnimations().length)).toBe(0)
-  await expect(bravo.locator('.page-chip-hover-match-outline')).toHaveCSS('visibility', 'hidden')
+  await expect(bravo.locator('..').locator('.page-chip-hover-match-outline')).toHaveCSS('visibility', 'hidden')
   expect(await frame.evaluate((element) => {
     const style = getComputedStyle(element)
     const transform = new DOMMatrix(style.transform)
     return { stroke: style.outlineWidth, offset: style.outlineOffset, radius: style.borderTopLeftRadius, scaleX: transform.a, scaleY: transform.d }
-  })).toEqual({ stroke: '1px', offset: '1px', radius: '17px', scaleX: 1, scaleY: 1 })
+  })).toEqual({ stroke: '1px', offset: '1px', radius: '23px', scaleX: 1, scaleY: 1 })
   await page.screenshot({ path: test.info().outputPath('page-frame-midpoint.png') })
 
   await pointAt(historyChip(page, 'History Charlie'))
@@ -254,18 +254,18 @@ test('multiple page matches and expanded surfaces retain their local outlines', 
   await pointAt(historyChip(page, 'History Alpha'))
   const chip = dashboardChip(page, 'History Alpha')
   await expectAligned(frame, chip, 0)
-  await chip.evaluate((element) => element.after(element.cloneNode(true)))
+  await chip.evaluate((element) => element.parentElement!.after(element.parentElement!.cloneNode(true)))
   await expect(frame).toBeHidden()
-  expect(await chip.locator('.page-chip-hover-match-outline').evaluateAll((elements) => (
+  expect(await chip.locator('..').locator('.page-chip-hover-match-outline').evaluateAll((elements) => (
     elements.map((element) => getComputedStyle(element).visibility)
   ))).toEqual(['visible', 'visible'])
-  await chip.last().evaluate((element) => element.remove())
+  await chip.last().evaluate((element) => element.parentElement!.remove())
   await expect(frame).toBeVisible()
   // An expanded target owns a higher stacking context. Exercise that marker
   // independently of the history source's own title-expansion interaction.
   await chip.evaluate((element) => element.classList.add('page-chip-expanded'))
   await expect(frame).toBeHidden()
-  await expect(chip.locator('.page-chip-hover-match-outline')).toHaveCSS('visibility', 'visible')
+  await expect(chip.locator('..').locator('.page-chip-hover-match-outline')).toHaveCSS('visibility', 'visible')
   await chip.evaluate((element) => element.classList.remove('page-chip-expanded'))
   await expectAligned(frame, chip, 0)
 })
@@ -284,7 +284,7 @@ test('hovering during a card pin flight keeps both outlines local until the card
       await new Promise(requestAnimationFrame)
       if (!element.classList.contains('layout-moving')) break
       const chip = element.querySelector('.page-chip-hover-match')
-      const outline = chip?.querySelector('.page-chip-hover-match-outline')
+      const outline = chip?.parentElement?.querySelector('.page-chip-hover-match-outline')
       const cardFrame = document.querySelector<HTMLElement>('[data-tabout-part="history-match-frame"]')
       const pageFrame = document.querySelector<HTMLElement>('[data-tabout-part="history-page-match-frame"]')
       if (!chip || !outline || !cardFrame || !pageFrame) continue
@@ -333,7 +333,7 @@ test('an intra-card move releases only the page overlay and resumes without stal
   })
   await expect(pageFrame).toBeHidden()
   await expect(page.locator(frameSelector)).toBeVisible()
-  await expect(chip.locator('.page-chip-hover-match-outline')).toHaveCSS('visibility', 'visible')
+  await expect(chip.locator('..').locator('.page-chip-hover-match-outline')).toHaveCSS('visibility', 'visible')
   await chip.evaluate((element) => {
     const slot = element.closest<HTMLElement>('.chip-slot')
     if (!slot) throw new Error('Page Chip slot is missing')
@@ -351,7 +351,7 @@ test('multiple matches retain every local frame and removing a target clears the
   const card = page.locator('[data-tabout="domain-card"][data-tabout-domain="alpha.test"]')
   // Model duplicate card surfaces in companion results without changing the
   // fixture's data resolver: the existing match markers remain authoritative.
-  await card.evaluate((element) => element.after(element.cloneNode(true)))
+  await card.evaluate((element) => element.parentElement!.after(element.parentElement!.cloneNode(true)))
   await expect(frame).toBeHidden()
   expect(await card.evaluateAll((elements) => elements.map((element) => getComputedStyle(element, '::after').opacity))).toEqual(['1', '1'])
   await card.last().evaluate((element) => element.remove())

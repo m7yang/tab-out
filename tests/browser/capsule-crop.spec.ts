@@ -69,11 +69,20 @@ for (const deviceScaleFactor of [1, 2, 3]) {
       }
     })
 
-    for (const selector of ['.open-tabs-badge', '.pathgroup-header .chip-pathgroup', '.page-chip-expanded .chip-strip-indicator', '.title-suppression-token', '.page-chip-expanded .chip-title-suppression-marker', '[data-tabout-part="overflow-expander"]', '[data-tabout="toast"] [data-tabout-part="action-button"]', '[data-slot="menu-item"]', '[data-slot="context-menu-item"]', '[data-tabout-part="close-suspended-button"]']) {
+    for (const selector of ['.page-chip:not(.page-chip-icon-only)', '.chip-title-variant-list .chip-title-variant', '.history-entry', '.open-tabs-badge', '.pathgroup-header .chip-pathgroup', '.page-chip-expanded .chip-strip-indicator', '.title-suppression-token', '.page-chip-expanded .chip-title-suppression-marker', '[data-tabout-part="overflow-expander"]', '[data-tabout="toast"] [data-tabout-part="action-button"]', '[data-slot="menu-item"]', '[data-slot="context-menu-item"]', '[data-tabout-part="close-suspended-button"]']) {
       test(`${selector} retains its native shoulders at fractional pixel positions`, async ({ page }) => {
         await page.goto(selector === '[data-tabout-part="close-suspended-button"]'
           ? '/tests/fixtures/tab-actions-popup.html'
-          : '/tests/fixtures/dashboard-resize.html?motion=1')
+          : selector === '.history-entry'
+            ? '/tests/fixtures/dashboard-resize.html?historyHoverFrame&historyFrameMotion'
+            : selector.includes('.chip-title-variant-list')
+              ? '/tests/fixtures/dashboard-resize.html?filter=Plain%20Title%20Variant'
+              : '/tests/fixtures/dashboard-resize.html?motion=1')
+        if (selector.includes('.chip-title-variant-list')) {
+          await page.evaluate(async () => {
+            await Reflect.get(window, '__tabOutSmokeAddPlainTitleVariantTabs')?.()
+          })
+        }
         if (selector === '[data-slot="menu-item"]') {
           const trigger = page.locator('[data-tabout="domain-card"][data-tabout-domain="tab-out-smoke-02.com"] [data-tabout-part="card-menu"]')
           await trigger.focus()
@@ -96,10 +105,20 @@ for (const deviceScaleFactor of [1, 2, 3]) {
           }, `/extension/dist/assets/${chunk}`)
           await expect(page.locator('[data-tabout="toast"]')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)')
         }
-        const capsule = page.locator(selector).first()
+        const capsule = selector === '.page-chip:not(.page-chip-icon-only)'
+          ? page.locator(selector).filter({ hasText: 'Short title' }).first()
+          : page.locator(selector).first()
         await expect(capsule).toBeVisible()
+        if (selector.includes('.chip-title-variant-list')) await capsule.scrollIntoViewIfNeeded()
         await capsule.evaluate((element, selector) => {
           if (selector === '.open-tabs-badge') element.textContent = '3 closed'
+          if (element.matches('.page-chip, .history-entry, .chip-title-variant')) {
+            // Isolate surface pixels without changing its layout or ancestry.
+            for (const child of element.children) {
+              if (child instanceof HTMLElement && !child.matches('.capsule-fill')) child.style.visibility = 'hidden'
+            }
+            element.style.outline = 'none'
+          }
           element.style.setProperty('--capsule-fill', 'black')
           element.style.setProperty('--capsule-border-color', 'black')
           element.style.setProperty('--capsule-shadow', 'none')
@@ -246,3 +265,36 @@ test('capsule paint preserves token hover, focus, marker tones, and overflow dec
   await expect(expander).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
   expect(await expander.evaluate((element) => getComputedStyle(element, '::before').width)).toBe('2px')
 })
+
+for (const context of ['domain-card', 'activation-history']) {
+  test(`${context} Page Chip keeps capsule paint through hover, resize, and tall fallback`, async ({ page }) => {
+    await page.goto('/tests/fixtures/dashboard-resize.html?historyHoverFrame&historyFrameMotion')
+    const chip = page.locator(`[data-tabout="page-chip"][data-tabout-context="${context}"]`).filter({ hasText: 'History Alpha' }).first()
+    await expect(chip).toHaveAttribute('data-capsule-ready', '')
+    const fill = chip.locator(':scope > .capsule-fill')
+    await expect(fill).toHaveCount(1)
+    await expect(fill).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    const restBox = await chip.boundingBox()
+    await chip.hover()
+    await expect(fill).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)')
+    expect(await chip.boundingBox()).toEqual(restBox)
+    await page.screenshot({ path: test.info().outputPath(`${context}-hover.png`) })
+
+    const initialPath = await chip.evaluate((element) => element.style.getPropertyValue('border-shape'))
+    await page.setViewportSize({ width: 900, height: 900 })
+    await expect.poll(() => chip.evaluate((element) => element.style.getPropertyValue('border-shape'))).not.toBe(initialPath)
+    await expect(fill).toHaveCount(1)
+
+    // The new 23px fallback must not turn a normal two-line chip into a capsule.
+    for (const height of [42.5, 80]) {
+      await chip.evaluate((element, height) => { element.style.height = `${height}px` }, height)
+      await expect(chip).not.toHaveAttribute('data-capsule-ready')
+      await expect(chip).toHaveCSS('border-shape', 'none')
+      await expect(chip).toHaveCSS('border-top-left-radius', '23px')
+      await expect(fill).toBeHidden()
+    }
+    await chip.evaluate((element) => element.style.removeProperty('height'))
+    await expect(chip).toHaveAttribute('data-capsule-ready', '')
+    await expect(fill).toHaveCount(1)
+  })
+}

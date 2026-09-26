@@ -15,7 +15,7 @@ for (const surface of ['page-chip', 'history-entry']) {
       const close = visibleSurface.querySelector('[data-tabout-part="close-button"]')
       const frame = element.querySelector('.active-chip-frame, .active-history-entry-frame')
       return {
-        background: style.backgroundColor,
+        background: getComputedStyle(element.matches('[data-capsule-ready]') ? element.querySelector(':scope > .capsule-fill')! : element).backgroundColor,
         outline: `${style.outlineStyle} ${style.outlineWidth} ${style.outlineColor}`,
         fade: getComputedStyle(element, '::after').opacity,
         close: close ? getComputedStyle(close).opacity : null,

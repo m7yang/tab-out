@@ -31,7 +31,7 @@ import { SavedPageIcon } from './SavedPageIcon'
 import { TabAudioButton } from './TabAudioButton'
 import { TabLoadingIndicator } from './TabLoadingIndicator'
 import { ProgressiveFoldedEnvList } from './ProgressiveFoldedEnvList'
-import { attachCapsuleBorder } from './capsule-border'
+import { attachCapsuleBorder, attachPageChipBorder } from './capsule-border'
 import { cn } from '@/lib/utils'
 import { omitUndefined } from '@/lib/omit-undefined'
 import type { CSSVariableProperties } from '@/lib/css-properties'
@@ -1453,6 +1453,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
     const variantFocusButton = (
       <button
         type="button"
+        ref={attachCapsuleBorder}
         id={hasFilter ? row.filterCandidate.domId : undefined}
         data-tabout-retained-page-identity={row.sourceType === 'retained-page' ? row.retainedPageIdentity : undefined}
         data-tabout-retained-page-closure-token={row.sourceType === 'retained-page' ? row.retainedPageClosureToken : undefined}
@@ -1465,12 +1466,12 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
         data-tabout-removal-key={row.removalKey}
         data-tabout-default-variant={row.id === sameTitlePageChipView?.defaultRowId ? 'true' : undefined}
         className={cn(
-          'chip-title-variant clickable flex w-full max-w-full min-w-0 items-center gap-1 rounded-[7px] border-0 bg-transparent px-1.5 py-0.75 [font-size:inherit] leading-tight font-normal text-tab-live [corner-shape:squircle] title-interaction:hover:bg-(--chip-target-interaction-bg) title-interaction:hover:text-tab-live focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-target-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-1 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
-          'title-interaction:[&.page-chip-context-menu-open]:bg-(--chip-target-interaction-bg) title-interaction:[&.page-chip-context-menu-open]:text-tab-live',
+          'chip-title-variant clickable flex w-full max-w-full min-w-0 items-center gap-1 rounded-full border-0 bg-(--capsule-fill) [--capsule-fill:transparent] px-1.5 py-0.75 [font-size:inherit] leading-tight font-normal text-tab-live title-interaction:hover:[--capsule-fill:var(--chip-target-interaction-bg)] title-interaction:hover:text-tab-live focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:[--capsule-fill:var(--chip-target-interaction-bg)] data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:-outline-offset-1 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
+          'title-interaction:[&.page-chip-context-menu-open]:[--capsule-fill:var(--chip-target-interaction-bg)] title-interaction:[&.page-chip-context-menu-open]:text-tab-live',
           pageChipTargetCursorClass(variantActivation?.kind === 'activate' ? variantActivation.target : undefined),
-          row.active && 'bg-neutral-600/7.5 text-tab-live',
-          row.current && 'bg-neutral-600/10 text-tab-live',
-          variantHoverMatched && 'bg-(--chip-target-interaction-bg) text-tab-live',
+          row.active && '[--capsule-fill:color-mix(in_oklab,var(--color-neutral-600)_7.5%,transparent)] text-tab-live',
+          row.current && '[--capsule-fill:color-mix(in_oklab,var(--color-neutral-600)_10%,transparent)] text-tab-live',
+          variantHoverMatched && '[--capsule-fill:var(--chip-target-interaction-bg)] text-tab-live',
         )}
         aria-label={row.ariaLabel}
         onClick={(e) => onTitleVariantFocus(e, row)}
@@ -1509,7 +1510,8 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       return (
         <span
           key={row.id}
-          className="chip-title-variant inline-flex max-w-full items-center gap-1 rounded-md bg-neutral-500/4.5 px-1.5 py-0.5 leading-tight font-normal text-tab-live [corner-shape:squircle]"
+          ref={attachCapsuleBorder}
+          className="chip-title-variant inline-flex max-w-full items-center gap-1 rounded-full bg-(--capsule-fill) px-1.5 py-0.5 leading-tight font-normal text-tab-live [--capsule-fill:color-mix(in_oklab,var(--color-neutral-500)_4.5%,transparent)]"
         >
           {labelContent}
         </span>
@@ -1585,7 +1587,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
   function titleVariantListNode(mode: ChipTextRenderMode) {
     if (!isTitleVariantGroup) return null
     return (
-      <span className="chip-title-variant-list flex w-full max-w-full flex-col items-stretch pr-[2.5px] pb-[1.5px]">
+      <span className="chip-title-variant-list flex w-full max-w-full flex-col items-stretch">
         {sameTitleRows.map((row, index) => titleVariantNode(row, index, mode))}
       </span>
     )
@@ -1804,8 +1806,17 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       } as const
     : {}
 
+  const hoverMatchOutline = hoverMatched && !chip.iconOnly ? (
+    <span
+      ref={attachPageChipBorder}
+      className="page-chip-hover-match-outline pointer-events-none absolute inset-0 z-3 rounded-page-chip outline-1 outline-offset-1 outline-(--accent-amber) [corner-shape:squircle] [--capsule-fill:transparent]"
+      aria-hidden="true"
+    />
+  ) : null
+
   const chipElement = (
     <div
+      ref={chip.iconOnly ? undefined : attachPageChipBorder}
       role={parentInteractive ? 'button' : 'group'}
       id={hasFilter && parentInteractive ? chipFilterResultCandidate.domId : undefined}
       data-tabout="page-chip"
@@ -1818,10 +1829,11 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       data-title-collapsed={shouldExpandChip && !chipExpanded ? '' : undefined}
       data-loading={chip.loading ? 'true' : undefined}
       className={cn(
-        "page-chip group/page-chip relative flex items-start gap-2 rounded-page-chip border-0 bg-transparent py-1.25 pr-1 pl-3 text-left text-[13px] leading-tight text-tab-live font-[inherit] [corner-shape:squircle] transition-[color] duration-100 before:pointer-events-none before:absolute before:top-1.75 before:bottom-1.75 before:left-1 before:w-0.5 before:rounded-[1px] before:bg-(--group-color,transparent) before:[corner-shape:squircle] before:content-[''] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-(--chip-hover-fade-width) after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--chip-hover-fade-bg)_34%,var(--chip-hover-fade-bg)_100%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none",
+        "page-chip group/page-chip relative flex items-start gap-2 rounded-page-chip border-0 [--capsule-fill:transparent] bg-(--capsule-fill) pt-1.25 pl-3 text-left text-[13px] leading-tight text-tab-live font-[inherit] [corner-shape:squircle] transition-[color] duration-100 before:pointer-events-none before:absolute before:top-1.75 before:bottom-1.75 before:left-1 before:w-0.5 before:rounded-[1px] before:bg-(--group-color,transparent) before:[corner-shape:squircle] before:content-[''] after:pointer-events-none after:absolute after:top-0 after:right-0 after:bottom-0 after:z-1 after:w-(--chip-hover-fade-width) after:rounded-r-[inherit] after:bg-[linear-gradient(to_right,transparent,var(--chip-hover-fade-bg)_34%,var(--chip-hover-fade-bg)_100%)] after:opacity-0 after:[corner-shape:squircle] after:content-[''] [&.closing]:pointer-events-none [&.closing]:opacity-0 [&.closing]:transform-[scale(0.96)] motion-reduce:[&.closing]:transform-none",
+        isTitleVariantGroup ? 'pr-[2.5px] pb-[2.5px]' : 'pr-1 pb-1.25',
         !chip.iconOnly && 'w-full',
         chipCursorClass,
-        parentInteractive && 'clickable focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:bg-(--chip-interaction-bg) data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-2 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
+        parentInteractive && 'clickable focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--accent-amber) data-[tabout-filter-result-selected=true]:[--capsule-fill:var(--chip-interaction-bg)] data-[tabout-filter-result-selected=true]:outline-1 data-[tabout-filter-result-selected=true]:outline-offset-2 data-[tabout-filter-result-selected=true]:outline-(--accent-amber)',
         chipTooltipOpen && CHIP_TRIM_TOKENS.tooltipOpen,
         chipExpanded && 'page-chip-expanded absolute z-30 min-w-0 max-w-(--page-chip-expanded-max-width) overflow-visible! transition-none! w-(--page-chip-expanded-width)',
         chipExpanded && chipExpansionOverflowsSlot && '[&.page-chip-expanded]:shadow-[0_3px_10px_rgba(10,10,10,0.055)]',
@@ -1833,7 +1845,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
         hoverMatched && CHIP_TRIM_TOKENS.hoverMatch,
         hoverMatched && chip.iconOnly && 'outline-1 outline-offset-1 outline-(--accent-amber)',
         suppressionHighlighted && cn('page-chip-suppression-highlighted', titleSuppressionChipHighlightClass(activeSuppressionTone)),
-        chip.iconOnly && 'page-chip-icon-only h-6 min-h-6 w-6 min-w-6 items-center justify-center gap-0 rounded-xl bg-transparent p-0 [corner-shape:squircle] before:hidden after:hidden',
+        chip.iconOnly && 'page-chip-icon-only h-6 min-h-6 w-6 min-w-6 items-center justify-center gap-0 rounded-xl [--capsule-fill:transparent] p-0 [corner-shape:squircle] before:hidden after:hidden',
         trim.iconChipClasses,
       )}
       aria-label={chipLabel}
@@ -1851,23 +1863,19 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       {trim.expandedFill && (
         <span
           aria-hidden="true"
+          ref={attachPageChipBorder}
           className={trim.expandedFill.classes}
           style={{
             top: trim.expandedFill.top,
             bottom: trim.expandedFill.bottom,
-            backgroundColor: trim.expandedFill.background,
-          }}
+            '--capsule-fill': trim.expandedFill.background,
+          } as CSSVariableProperties}
         />
       )}
       {trim.frame && (
         <span className={trim.frame.classes} aria-hidden="true" />
       )}
-      {hoverMatched && !chip.iconOnly && (
-        <span
-          className="page-chip-hover-match-outline pointer-events-none absolute inset-0 z-3 rounded-[inherit] outline-1 outline-offset-1 outline-(--accent-amber) [corner-shape:squircle]"
-          aria-hidden="true"
-        />
-      )}
+      {chipExpanded && hoverMatchOutline}
       {showFaviconFrame && (
         <ChipFaviconFrame
           chip={chip}
@@ -1964,6 +1972,7 @@ function usePageChipElement({ chip, filter = '', layoutScope = '', suppressedTit
       {...variantGroupInteractionProps}
     >
       {renderedChipElement}
+      {!chipExpanded && hoverMatchOutline}
     </div>
   )
 }

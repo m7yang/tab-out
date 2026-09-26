@@ -1179,7 +1179,7 @@ test('same-title URL groups share hover paint with and without filter results', 
     return row.evaluate((element) => {
       const style = getComputedStyle(element)
       return {
-        backgroundColor: style.backgroundColor,
+        backgroundColor: getComputedStyle(element, element.matches('[data-capsule-ready]') ? '::before' : null).backgroundColor,
         color: style.color,
       }
     })
@@ -1189,7 +1189,7 @@ test('same-title URL groups share hover paint with and without filter results', 
     return group.evaluate((element) => {
       const style = getComputedStyle(element)
       return {
-        backgroundColor: style.backgroundColor,
+        backgroundColor: getComputedStyle(element.matches('[data-capsule-ready]') ? element.querySelector(':scope > .capsule-fill')! : element).backgroundColor,
         outlineColor: style.outlineColor,
         outlineStyle: style.outlineStyle,
         outlineWidth: style.outlineWidth,
@@ -1261,6 +1261,22 @@ test('truncated same-title URL labels fade at rest and use ellipsis when expande
   const labels = chip.locator('.chip-title-variant-label')
   await expect(labels).toHaveCount(2)
 
+  const lastVariant = chip.locator('.chip-title-variant').last()
+  const checkNestedSpacing = async () => {
+    await expect(lastVariant).toHaveAttribute('data-capsule-ready', '')
+    const gaps = await lastVariant.evaluate((row) => {
+      const chip = row.closest('.page-chip')!
+      const parent = chip.getBoundingClientRect()
+      const rect = row.getBoundingClientRect()
+      return { right: parent.right - rect.right, bottom: parent.bottom - rect.bottom, height: rect.height, radius: getComputedStyle(chip).borderRadius }
+    })
+    expect(gaps.right).toBeCloseTo(2.5, 1)
+    expect(gaps.bottom).toBeCloseTo(2.5, 1)
+    expect(gaps.height).toBe(21)
+    expect(gaps.radius).toBe('23px')
+  }
+  await checkNestedSpacing()
+
   await expect.poll(async () => labels.evaluateAll((elements) => elements.map((element) => (
     element.classList.contains('chip-title-variant-label-truncated')
   )))).toContain(true)
@@ -1286,6 +1302,7 @@ test('truncated same-title URL labels fade at rest and use ellipsis when expande
   await page.setViewportSize({ width: 430, height: 900 })
   await chip.locator('.chip-title-row').hover()
   await expect(chip).toHaveAttribute('data-expanded', 'true')
+  await checkNestedSpacing()
   await expect.poll(async () => labels.evaluateAll((elements) => elements.some((element) => {
     const style = getComputedStyle(element)
     return (
@@ -1415,15 +1432,28 @@ test('ordinary dashboard renders keep masonry observers attached', async ({ page
 
     const NativeResizeObserver = window.ResizeObserver
     window.ResizeObserver = class extends NativeResizeObserver {
+      private expandedFill = false
+      override observe(target: Element, options?: ResizeObserverOptions) {
+        this.expandedFill ||= target.matches('.page-chip-expanded-fill, .history-entry-expanded-fill')
+        super.observe(target, options)
+      }
+
       override disconnect() {
-        counters.resizeDisconnects += 1
+        // Expansion-only decorative paint mounts and unmounts by design.
+        if (!this.expandedFill) counters.resizeDisconnects += 1
         super.disconnect()
       }
     }
     const NativeMutationObserver = window.MutationObserver
     window.MutationObserver = class extends NativeMutationObserver {
+      private expandedFill = false
+      override observe(target: Node, options?: MutationObserverInit) {
+        this.expandedFill ||= target instanceof Element && target.matches('.page-chip-expanded-fill, .history-entry-expanded-fill')
+        super.observe(target, options)
+      }
+
       override disconnect() {
-        counters.mutationDisconnects += 1
+        if (!this.expandedFill) counters.mutationDisconnects += 1
         super.disconnect()
       }
     }
@@ -1459,7 +1489,7 @@ test('Page Chip closes its expansion and interaction chrome as soon as the point
     const expandedFill = element.querySelector<HTMLElement>('.page-chip-expanded-fill')
     return {
       root: {
-        backgroundColor: style.backgroundColor,
+        backgroundColor: getComputedStyle(element.matches('[data-capsule-ready]') ? element.querySelector(':scope > .capsule-fill')! : element).backgroundColor,
         boxShadow: style.boxShadow,
         outline: style.outline,
       },
@@ -1581,11 +1611,11 @@ for (const { kind, selector, titles, paintTitle } of [
           // Sample the middle of the left end, before any glyph ink. DOM rectangles
           // cannot detect the different pixel snapping of CSS backgrounds and paths.
           const clip = { x: Math.floor(resting.x - 3), y: Math.floor(resting.y + resting.height / 2), width: 6, height: 1 }
-          const before = await page.screenshot({ clip, animations: 'disabled' })
+          const before = await page.screenshot({ clip, animations: 'disabled', path: test.info().outputPath('marker-before.png') })
           await chip.locator('.chip-text').hover()
           await expect(chip).toHaveAttribute('data-expanded', 'true')
           await expect(marker).toHaveAttribute('data-capsule-ready', '')
-          const after = await page.screenshot({ clip, animations: 'disabled' })
+          const after = await page.screenshot({ clip, animations: 'disabled', path: test.info().outputPath('marker-after.png') })
           const edges = await page.evaluate(async (images) => Promise.all(images.map(async (encoded) => {
             const response = await fetch(`data:image/png;base64,${encoded}`)
             const bitmap = await createImageBitmap(await response.blob())
@@ -1601,7 +1631,7 @@ for (const { kind, selector, titles, paintTitle } of [
             ))
             const background = pixels[channel]!
             const fill = pixels[(bitmap.width - 1) * 4 + channel]!
-            if (background - fill < 8) throw new Error('Title-marker paint contrast is unavailable')
+            if (background - fill < 8) throw new Error(`Title-marker paint contrast is unavailable: ${background} -> ${fill}`)
             // Normalize the hover background away and integrate antialiased coverage
             // to find the edge in CSS pixels, including fractions of a device pixel.
             let coverage = 0
@@ -1657,7 +1687,7 @@ test('Page Chip keeps hydrated title details and interaction chrome in one expan
         return glyph ? getComputedStyle(glyph).display : null
       }),
       paint: {
-        backgroundColor: style.backgroundColor,
+        backgroundColor: getComputedStyle(surface.matches('[data-capsule-ready]') ? surface.querySelector(':scope > .capsule-fill')! : surface).backgroundColor,
         boxShadow: style.boxShadow,
         outline: style.outline,
         expandedFillOpacity: expandedFill ? getComputedStyle(expandedFill).opacity : null,
@@ -2456,7 +2486,7 @@ test('filter keyboard navigation starts in the input and selects the first true 
     const selectedStyle = getComputedStyle(element)
     const paletteStyle = getComputedStyle(paletteProbe)
     const palette = {
-      selectedBackground: selectedStyle.backgroundColor,
+      selectedBackground: getComputedStyle(element.matches('[data-capsule-ready]') ? element.querySelector(':scope > .capsule-fill')! : element).backgroundColor,
       selectedOutline: selectedStyle.outlineColor,
       hoverBackground: paletteStyle.backgroundColor,
       originalOutline: paletteStyle.outlineColor,
@@ -2831,7 +2861,7 @@ test('filter keyboard selection keeps its identity when a higher-priority compan
       element.append(closedProbe, openProbe, outlineProbe)
 
       const selectedStyle = getComputedStyle(element)
-      const selectedBackground = selectedStyle.backgroundColor
+      const selectedBackground = getComputedStyle(element.matches('[data-capsule-ready]') ? element.querySelector(':scope > .capsule-fill')! : element).backgroundColor
       const palette = {
         backgroundMatchesClosed: selectedBackground === getComputedStyle(closedProbe).backgroundColor,
         backgroundMatchesOpen: selectedBackground === getComputedStyle(openProbe).backgroundColor,

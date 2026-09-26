@@ -44,19 +44,19 @@ const TITLE_SUPPRESSION_TOKEN_TONES: Record<TitleSuppressionTone, { base: string
 
 const TITLE_SUPPRESSION_HIGHLIGHT_TONES: Record<TitleSuppressionTone, { chip: string, badge: string }> = {
   amber: {
-    chip: 'bg-yellow-50 ring-1 ring-inset ring-yellow-50',
+    chip: '[--capsule-fill:var(--color-yellow-50)] ring-1 ring-inset ring-yellow-50',
     badge: 'border-yellow-50 bg-yellow-50',
   },
   teal: {
-    chip: 'bg-teal-50 ring-1 ring-inset ring-teal-50',
+    chip: '[--capsule-fill:var(--color-teal-50)] ring-1 ring-inset ring-teal-50',
     badge: 'border-teal-50 bg-teal-50',
   },
   sky: {
-    chip: 'bg-sky-50 ring-1 ring-inset ring-sky-50',
+    chip: '[--capsule-fill:var(--color-sky-50)] ring-1 ring-inset ring-sky-50',
     badge: 'border-sky-50 bg-sky-50',
   },
   rose: {
-    chip: 'bg-rose-50 ring-1 ring-inset ring-rose-50',
+    chip: '[--capsule-fill:var(--color-rose-50)] ring-1 ring-inset ring-rose-50',
     badge: 'border-rose-50 bg-rose-50',
   },
 }
@@ -70,7 +70,7 @@ export function titleSuppressionTokenToneClass(index: number, enabled: boolean, 
 }
 
 export function titleSuppressionChipHighlightClass(tone: TitleSuppressionTone | '') {
-  return tone ? TITLE_SUPPRESSION_HIGHLIGHT_TONES[tone].chip : 'bg-yellow-50 ring-1 ring-inset ring-yellow-50'
+  return tone ? TITLE_SUPPRESSION_HIGHLIGHT_TONES[tone].chip : '[--capsule-fill:var(--color-yellow-50)] ring-1 ring-inset ring-yellow-50'
 }
 
 export function titleSuppressionOverflowHighlightClass(tone: TitleSuppressionTone | '') {

@@ -10,4 +10,4 @@ export const PAGE_CHIP_PAINT = {
   activeOtherInteractionBg: 'color-mix(in srgb, var(--card-bg) 88%, var(--color-neutral-600) 12%)',
 }
 
-export const PAGE_CHIP_CURRENT_CLASSES = 'bg-neutral-100 text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.07)] ring-1 ring-inset ring-neutral-400'
+export const PAGE_CHIP_CURRENT_CLASSES = '[--capsule-fill:var(--color-neutral-100)] text-tab-live shadow-[0_1px_2px_rgba(10,10,10,0.07)] ring-1 ring-inset ring-neutral-400'

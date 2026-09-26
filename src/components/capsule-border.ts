@@ -14,22 +14,29 @@ function roundFallbackGeometry(width: number, height: number, borderWidth: numbe
 
 /** Owns measured contour, paint placement and cleanup; callers own theme/state. */
 export function attachCapsuleBorder(element: HTMLElement | null) {
-  return attachBorder(element, false)
+  return attachBorder(element, 'capsule')
+}
+
+/** Compact Page Chips use capsules; tall content retains its existing corners. */
+export function attachPageChipBorder(element: HTMLElement | null) {
+  return attachBorder(element, 'page-chip')
 }
 
 /** Menu rows keep capsule-sized corners when their content wraps. */
 export function attachMenuItemBorder(element: HTMLElement | null) {
-  return attachBorder(element, true)
+  return attachBorder(element, 'menu-item')
 }
 
-function attachBorder(element: HTMLElement | null, menuItem: boolean) {
+function attachBorder(element: HTMLElement | null, kind: 'capsule' | 'menu-item' | 'page-chip') {
   if (!element || !CSS.supports('border-shape', 'path("M0 0L1 0L1 1Z")')) return
 
+  const menuItem = kind === 'menu-item'
+  const pageChip = kind === 'page-chip'
   const roundMarkerFallback = element.matches('.chip-strip-indicator, .chip-title-suppression-marker')
-  // Overflow expanders reserve both pseudos for their own decoration. Keep the
+  // Page Chips and overflow expanders reserve their pseudos for decoration. Keep the
   // exceptional paint node outside the caller's React children and remove it
   // with this attachment. Ordinary labels keep their existing pseudo paint.
-  const fill = element.matches('[data-tabout-part="overflow-expander"]')
+  const fill = pageChip || element.matches('[data-tabout-part="overflow-expander"]')
     ? element.ownerDocument.createElement('span')
     : null
   element.dataset.capsulePaint = fill ? 'child' : 'pseudo'
@@ -45,6 +52,7 @@ function attachBorder(element: HTMLElement | null, menuItem: boolean) {
     element?.style.removeProperty('border-shape')
     element?.style.removeProperty('--capsule-fill-shape')
     element?.style.removeProperty('--capsule-border-width')
+    element?.style.removeProperty('--capsule-surface-shape')
     if (element) delete element.dataset.capsuleReady
   }
 
@@ -62,7 +70,11 @@ function attachBorder(element: HTMLElement | null, menuItem: boolean) {
     const singleLineHeight = Number.parseFloat(style.lineHeight) +
       Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom) +
       borderWidth + Number.parseFloat(style.borderBottomWidth)
-    const multiline = menuItem && height > Math.max(singleLineHeight, Number.parseFloat(style.minHeight) || 0) + 1
+    // Keep the compact-height cutoff independent of the fitted squircle radius.
+    // A full-height capsule would crowd multi-line titles and grouped lists.
+    const multiline = pageChip
+      ? height > 34
+      : menuItem && height > Math.max(singleLineHeight, Number.parseFloat(style.minHeight) || 0) + 1
     if (menuItem) element.toggleAttribute('data-menu-multiline', multiline)
     const size = `${width}:${height}:${borderWidth}:${multiline}`
     if (size === previousSize) return
@@ -73,6 +85,7 @@ function attachBorder(element: HTMLElement | null, menuItem: boolean) {
     if (geometry) {
       // The default half-border-box origin supplies the package's half-stroke inset.
       element.style.setProperty('border-shape', `path("${geometry.surfacePath}")`)
+      if (pageChip) element.style.setProperty('--capsule-surface-shape', `path("${geometry.surfacePath}")`)
       // Both contours contain only absolute M/L/C coordinates. Translate
       // them into the padded paint box, retaining the half-stroke inset.
       const paddedPath = geometry.surfacePath.replace(/-?\d*\.?\d+/g, (value) => String(Number(value) + 1 + geometry.inset))

@@ -1,5 +1,9 @@
 # Nested radius audit — 2026-09-22
 
+For the current Page Chip and card-outline rules, see the
+[September 26 verification](nested-radius-audit-2026-09-26.md), which supersedes
+the fixed card-radius compromise recorded below.
+
 Audited the current working tree against Fleet commit `2b1d622`,
 `agent-tools/guides/nested-corners.md` and its calculation reference. This report
 supersedes the recommendations in the [September 21 audit](nested-radius-audit.md)
@@ -301,3 +305,111 @@ row to avoid the cap. Taller rows use the full 26px. This is a geometric
 approximation for visual continuity, not an identical contour or a calibrated
 perceptual match. The shared click/context menu's 24.25px single-line reference
 scales the same fit to 21.193px, selecting **21px** with the same overlap rule.
+
+## Group Page Chip variant capsules — 2026-09-26
+
+This supersedes the 7px title-variant row shape above. Rows in
+`chip-title-variant-list` now use the shared measured continuous capsule,
+including live rows during expansion and inline tooltip labels. State paint
+moves to the capsule painter; keyboard and filter outlines retain their widths
+and offsets. Measurement clones retain the same text insets and row dimensions.
+
+The matching corner is the last full-width row's bottom-right corner. Its
+bottom-left corner is indented 36px, and earlier rows do not follow a container
+corner. Fixture measurements give a 21px row height, 17px group radius and equal
+6.5px right/bottom box gaps. The group's 1px inward hover outline leaves a
+5.5px straight band; a row's 2px keyboard outline with 1px outward offset leaves
+2.5px when both treatments are present. Filter selection extends only 2px.
+
+The matching-squircle shortcut no longer applies. Following Fleet's general
+painted-contour rule, native Chromium 153 masks were sampled at 16× and 32×.
+The outer mask used the 17px squircle and its 1px inward outline; the inner mask
+used the actual zero-border 296.828125×21px capsule path, also sampled with the
+2px/1px keyboard outline. Interpolated 128/255 coverage crossings and nearest
+polyline-segment distances give:
+
+| Treatment | Clear band, including adjacent straight edges |
+| --- | --- |
+| Hover fill | 5.50–8.28px |
+| Hover plus keyboard focus outline | 2.50–5.43px |
+
+Both masks remain contained; the extrema changed by less than 0.02px between
+sampling scales. **Containment passes; uniform corner spacing does not.** The
+new capsule shoulder creates a larger corner gap than the former 7px squircle.
+Retain the established parent radius and compact layout for this row-shape
+change, as the guide says not to resize ancestor radii automatically. This is a
+recorded geometric limitation, not a claim that the prior optical fit survives
+or that the new band has constant thickness. A future uniform-band adjustment
+must explicitly include the group surface geometry.
+
+Verification uses HTTP fixtures for normal, filtered, expanded and focused
+rows, plus native silhouette comparisons at 1×, 2× and 3×. Live-extension visual
+inspection remains unavailable because the browser security policy blocked its
+extension URL in the preceding Page Chip check.
+
+
+## Applied capsule nesting correction — 2026-09-26
+
+The user's follow-up explicitly includes the outer surfaces, superseding the
+retained-radius limitation above and the earlier 40px History-frame compromise.
+Keep the 21px variant rows, 26.25px ordinary compact Page Chips, existing gaps
+and stroke styles fixed; fit only the two outer squircle radius tokens using
+the general painted-contour distance rule.
+
+The same native Chromium 153 mask method was evaluated at 16× and 32×. Sweep
+outer radii from 28–32px for groups and 44–54px for card outlines in 0.5px steps;
+refine the minima in 0.1px steps at 32×. The minimax objective includes adjacent
+straight edges and minimizes the largest absolute deviation from their clear
+paint spacing. Best sampled radii are approximately 29.3px and 49.9px. Apply the
+nearest-half-pixel token policy: **29.5px** and **50px**, respectively.
+
+| Pair | Box gap | Straight clear gap | Clear corner/edge range at selected token |
+| --- | --- | --- | --- |
+| Group inward hover rim → variant capsule | 6.5px | 5.5px | 5.26–5.70px |
+| Same group rim → variant keyboard outline | 6.5px | 2.5px | 2.15–2.62px |
+| Card's inner border → compact Page Chip match outline | 16px | 13px | 12.46–13.52px |
+
+The group radius is scoped to same-title groups on their slot, so the root,
+active trim, expansion backing and sibling match outline share it. Ordinary
+Page Chips retain the 17px tall fallback. Both the static and traveling card
+frames use the same 50px token. No layout spacing or control dimensions change.
+
+These mixed capsule/squircle contours have a small residual error; scalar radii
+cannot make them exact offsets. The card token follows ordinary compact chips.
+Short cards still use CSS overlap reduction, and tall non-capsule chips or
+collapsed overflow controls have different contours; this does not claim a
+constant 13px band for those geometries. Keep their existing compact layout and
+verify containment and transitions when the frame moves between them.
+
+
+Additional 16× containment checks with the 50px card token measured match-outline
+clearance of 11.57–13.00px for a 42.5px-high/17px-radius tall chip and
+12.97–14.38px for a 72px-high/29.5px-radius variant group. An 82.25px-high short
+card clamps its outer radius to 41.125px and gives 12.90–15.53px around the compact
+capsule. All remain contained. The short-card case is dimension-constrained;
+no larger used radius is feasible without enlarging that card.
+
+
+## Non-capsule Page Chip curve alignment — 2026-09-26
+
+The user requested a closer curve match between tall and compact Page Chips.
+Fit the ordinary 26.25px-high zero-border capsule profile at coincident box
+edges (`g = 0`) to an ideal squircle using the general convex-contour function.
+At 90, 180 and 360 subdivisions, the fitted radius converges to 22.9405px;
+nearest-half-pixel rounding selects **23px**. The maximum modeled contour
+deviation is approximately 0.25px, compared with 1.59px at 17px. This is a
+similar-curve objective, not a nested band or a claim of identical curvature.
+
+Keep the capsule-height cutoff fixed at 34px. Two-line 42.5px chips remain
+squircles and CSS caps their used radius to 21.25px (approximately 0.63px
+maximum deviation from the compact reference); taller chips can use the full
+23px. Existing text insets, height and focus paint remain unchanged. Apply the
+shared token to Domain Card and Activation History Page Chips and their
+coincident trim. Same-title groups retain the separately fitted 29.5px radius;
+icon-only chips retain their existing shapes. The 50px card-outline token and
+its compact-capsule fit remain unchanged.
+
+A native Chromium 153 check at 16× confirms that the 42.5px tall chip's used
+21.25px radius remains inside the 50px card frame: match-outline clearance is
+12.44–13.00px, and keyboard-outline clearance is 11.33–12.00px. This also
+improves the previous 17px tall-chip match band's 11.57px minimum.
